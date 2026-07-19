@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from datetime import datetime
+from datetime import datetime, time
 from bson import ObjectId
 
 from config.db import get_db
@@ -7,6 +7,19 @@ from utils.json import to_jsonable
 from utils.validators import require_fields
 
 admin_exams_bp = Blueprint("admin_exams", __name__)
+
+
+def _parse_validity_date(value, end_of_day=False):
+    if value in (None, ""):
+        return None
+    try:
+        raw = str(value).strip().replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(raw)
+        if len(raw) == 10:
+            parsed = datetime.combine(parsed.date(), time.max if end_of_day else time.min)
+        return parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+    except (TypeError, ValueError):
+        raise ValueError("Validity dates must use YYYY-MM-DD format")
 
 @admin_exams_bp.route("", methods=["GET"])
 @admin_exams_bp.route("/", methods=["GET"])
@@ -34,9 +47,14 @@ def list_exams():
             summary["colleges"].add(college_name)
 
     out = []
+    now = datetime.utcnow()
     for e in exams:
         exam_key = str(e["_id"])
         summary = assignment_summary.get(exam_key, {"userIds": set(), "colleges": set()})
+        available_from = e.get("availableFrom") or e.get("createdAt")
+        valid_until = e.get("validUntil")
+        stored_status = e.get("status", "draft")
+        effective_status = "expired" if valid_until and valid_until < now else "upcoming" if available_from and available_from > now else stored_status
         out.append({
             "id": exam_key,
             "name": e.get("name"),
@@ -46,7 +64,14 @@ def list_exams():
             "passingPercentage": int(e.get("passingPercentage", 40)),
             "createdAt": e.get("createdAt").isoformat() if e.get("createdAt") else None,
             "updatedAt": e.get("updatedAt").isoformat() if e.get("updatedAt") else None,
-            "status": e.get("status", "draft"),
+            "status": effective_status,
+            "availableFrom": available_from,
+            "validUntil": valid_until,
+            "categoryId": e.get("categoryId"),
+            "categoryName": e.get("categoryName"),
+            "subcategoryId": e.get("subcategoryId"),
+            "subcategoryName": e.get("subcategoryName"),
+            "stage": e.get("stage"),
             "assignmentCount": len(summary["userIds"]),
             "assignedColleges": sorted(summary["colleges"]),
         })
@@ -75,6 +100,19 @@ def create_exam():
 
     db = get_db()
 
+    category_id = str(payload.get("categoryId") or "").strip()
+    subcategory_id = str(payload.get("subcategoryId") or "").strip()
+    stage = str(payload.get("stage") or "").strip()
+    if not category_id or not subcategory_id or not stage:
+        return jsonify({"error": "Category, subcategory and stage are required"}), 400
+    try:
+        category = db.exam_categories.find_one({"_id": ObjectId(category_id), "isActive": {"$ne": False}})
+    except Exception:
+        category = None
+    subcategory = next((item for item in (category or {}).get("subcategories", []) if item.get("id") == subcategory_id and item.get("isActive", True)), None)
+    if not category or not subcategory or stage not in subcategory.get("stages", []):
+        return jsonify({"error": "Select a valid category, subcategory and stage"}), 400
+
     testName = str(payload["testName"]).strip()
     duration = int(payload["duration"])
     passing_percentage = int(payload.get("passingPercentage", 40))
@@ -98,6 +136,13 @@ def create_exam():
         return jsonify({"error": "questions must be a non-empty list"}), 400
 
     now = datetime.utcnow()
+    try:
+        available_from = _parse_validity_date(payload.get("availableFrom")) or now
+        valid_until = _parse_validity_date(payload.get("validUntil"), end_of_day=True)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if valid_until and valid_until < available_from:
+        return jsonify({"error": "Valid until date must be on or after the start date"}), 400
 
     exam_doc = {
         "name": testName,
@@ -108,6 +153,13 @@ def create_exam():
         "questionCount": len(questions),
         "createdAt": now,
         "updatedAt": now,
+        "availableFrom": available_from,
+        "validUntil": valid_until,
+        "categoryId": category_id,
+        "categoryName": category.get("name"),
+        "subcategoryId": subcategory_id,
+        "subcategoryName": subcategory.get("name"),
+        "stage": stage,
     }
 
     exam_res = db.exams.insert_one(exam_doc)
@@ -145,6 +197,11 @@ def create_exam():
             "sections": exam_doc["sections"],
             "createdAt": exam_doc["createdAt"].isoformat(),
             "status": exam_doc["status"],
+            "availableFrom": exam_doc["availableFrom"],
+            "validUntil": exam_doc["validUntil"],
+            "categoryId": exam_doc["categoryId"],
+            "subcategoryId": exam_doc["subcategoryId"],
+            "stage": exam_doc["stage"],
         })
     }), 201
 
@@ -188,6 +245,13 @@ def get_exam(exam_id: str):
             "questions": out_questions,
             "createdAt": exam.get("createdAt"),
             "updatedAt": exam.get("updatedAt"),
+            "availableFrom": exam.get("availableFrom") or exam.get("createdAt"),
+            "validUntil": exam.get("validUntil"),
+            "categoryId": exam.get("categoryId"),
+            "categoryName": exam.get("categoryName"),
+            "subcategoryId": exam.get("subcategoryId"),
+            "subcategoryName": exam.get("subcategoryName"),
+            "stage": exam.get("stage"),
         })
     })
 
@@ -210,11 +274,29 @@ def update_exam(exam_id: str):
     if not exam:
         return jsonify({"error": "Exam not found"}), 404
 
+    category_id = str(payload.get("categoryId") or "").strip()
+    subcategory_id = str(payload.get("subcategoryId") or "").strip()
+    stage = str(payload.get("stage") or "").strip()
+    try:
+        category = db.exam_categories.find_one({"_id": ObjectId(category_id), "isActive": {"$ne": False}})
+    except Exception:
+        category = None
+    subcategory = next((item for item in (category or {}).get("subcategories", []) if item.get("id") == subcategory_id and item.get("isActive", True)), None)
+    if not category or not subcategory or stage not in subcategory.get("stages", []):
+        return jsonify({"error": "Select a valid category, subcategory and stage"}), 400
+
     passing_percentage = int(payload.get("passingPercentage", 40))
     if not (1 <= passing_percentage <= 100):
         return jsonify({"error": "passingPercentage must be between 1 and 100"}), 400
 
     now = datetime.utcnow()
+    try:
+        available_from = _parse_validity_date(payload.get("availableFrom")) or exam.get("availableFrom") or exam.get("createdAt") or now
+        valid_until = _parse_validity_date(payload.get("validUntil"), end_of_day=True)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if valid_until and valid_until < available_from:
+        return jsonify({"error": "Valid until date must be on or after the start date"}), 400
     sections_input = payload.get("sections") or []
 
     sections = []
@@ -232,6 +314,13 @@ def update_exam(exam_id: str):
         "sections": sections,
         "questionCount": len(payload.get("questions") or []),
         "updatedAt": now,
+        "availableFrom": available_from,
+        "validUntil": valid_until,
+        "categoryId": category_id,
+        "categoryName": category.get("name"),
+        "subcategoryId": subcategory_id,
+        "subcategoryName": subcategory.get("name"),
+        "stage": stage,
     }
 
     db.exams.update_one({"_id": oid}, {"$set": update})

@@ -20,6 +20,30 @@ from services.scoring import compute_result
 
 answerer_bp = Blueprint("answerer", __name__)
 
+
+def _exam_availability(exam, now=None):
+    now = now or datetime.utcnow()
+    start = exam.get("availableFrom") or exam.get("createdAt")
+    end = exam.get("validUntil")
+    if end and end < now:
+        return "expired"
+    if start and start > now:
+        return "upcoming"
+    return exam.get("status", "draft")
+
+
+def _candidate_access_error(db, user_id):
+    user = db.users.find_one({"userId": user_id, "role": "answerer"})
+    if not user:
+        return "Candidate account not found"
+    now = datetime.utcnow()
+    if user.get("validUntil") and user["validUntil"] < now:
+        db.users.update_one({"_id": user["_id"]}, {"$set": {"isActive": False, "statusReason": "validity_expired", "statusUpdatedAt": now}})
+        return "Your account validity has expired"
+    if not user.get("isActive", True):
+        return "Your account is blocked"
+    return None
+
 DEFAULT_SMTP_HOST = "smtp.gmail.com"
 DEFAULT_SMTP_PORT = 587
 DEFAULT_SMTP_USERNAME = "saplearning989@gmail.com"
@@ -37,6 +61,94 @@ SAP_ODATA_USERNAME = "AITEST1"
 SAP_ODATA_PASSWORD = "Naxrita@2026"
 SAP_UNLOCK_ACTION = "UnLock"
 SAP_UNLOCK_WINDOW_MINUTES = 5
+
+
+@answerer_bp.get("/notifications")
+def get_notifications():
+    """Return notifications derived from the candidate's real portal activity."""
+    user_id = (request.args.get("userId") or "").strip()
+    if not user_id:
+        return jsonify({"error": "userId is required"}), 400
+
+    db = get_db()
+    assignments = list(db.exam_assignments.find({"userId": user_id}))
+    exam_ids = [item.get("examId") for item in assignments if item.get("examId")]
+    exams = list(db.exams.find({"_id": {"$in": exam_ids}, "status": "active"})) if exam_ids else []
+    submitted_exam_ids = set(db.attempts.distinct("examId", {"userId": user_id, "status": "submitted"}))
+    available = [exam for exam in exams if exam.get("_id") not in submitted_exam_ids and _exam_availability(exam) == "active"]
+
+    items = []
+    if available:
+        newest = max((exam.get("updatedAt") or exam.get("createdAt") or datetime.utcnow() for exam in available))
+        items.append({
+            "id": "available-tests", "type": "test", "title": f"{len(available)} tests available",
+            "message": "Your assigned Banking and SSC mock exams are ready to attempt.",
+            "target": "tests", "createdAt": newest,
+        })
+
+    latest_result = db.results.find_one({"userId": user_id}, sort=[("submittedAt", -1)])
+    if latest_result:
+        attempt_key = str(latest_result.get("attemptId") or latest_result.get("_id"))
+        items.append({
+            "id": f"result-{attempt_key}", "type": "result", "title": "Your latest report is ready",
+            "message": "Open Reports to view your score and section performance.",
+            "target": "report", "createdAt": latest_result.get("submittedAt") or datetime.utcnow(),
+        })
+
+    latest_document_assignment = db.document_assignments.find_one({"userId": user_id}, sort=[("createdAt", -1)])
+    if latest_document_assignment:
+        document = db.documents.find_one({"_id": latest_document_assignment.get("documentId")}) or {}
+        items.append({
+            "id": f"document-{latest_document_assignment.get('documentId')}", "type": "document",
+            "title": "New document assigned", "message": document.get("title", "A new learning resource is available."),
+            "target": "documents", "createdAt": latest_document_assignment.get("createdAt") or datetime.utcnow(),
+        })
+
+    latest_announcement_assignment = db.announcement_assignments.find_one({"userId": user_id}, sort=[("createdAt", -1)])
+    if latest_announcement_assignment:
+        announcement = db.announcements.find_one({"_id": latest_announcement_assignment.get("announcementId")}) or {}
+        items.append({
+            "id": f"announcement-{latest_announcement_assignment.get('announcementId')}", "type": "announcement",
+            "title": announcement.get("title", "New announcement"), "message": announcement.get("message", "Open Announcements to view this update."),
+            "target": "announcements", "createdAt": latest_announcement_assignment.get("createdAt") or datetime.utcnow(),
+        })
+
+    read_ids = set(db.notification_reads.distinct("notificationId", {"userId": user_id}))
+    for item in items:
+        item["read"] = item["id"] in read_ids
+    items.sort(key=lambda item: item["createdAt"], reverse=True)
+    return jsonify({"notifications": to_jsonable(items), "unreadCount": sum(not item["read"] for item in items)})
+
+
+@answerer_bp.post("/notifications/read")
+def read_notification():
+    payload = request.get_json(silent=True) or {}
+    user_id = str(payload.get("userId") or "").strip()
+    notification_id = str(payload.get("notificationId") or "").strip()
+    if not user_id or not notification_id:
+        return jsonify({"error": "userId and notificationId are required"}), 400
+
+    db = get_db()
+    if notification_id == "all":
+        assignments = list(db.exam_assignments.find({"userId": user_id}))
+        if assignments:
+            db.notification_reads.update_one({"userId": user_id, "notificationId": "available-tests"}, {"$set": {"readAt": datetime.utcnow()}}, upsert=True)
+        latest_result = db.results.find_one({"userId": user_id}, sort=[("submittedAt", -1)])
+        if latest_result:
+            result_id = f"result-{str(latest_result.get('attemptId') or latest_result.get('_id'))}"
+            db.notification_reads.update_one({"userId": user_id, "notificationId": result_id}, {"$set": {"readAt": datetime.utcnow()}}, upsert=True)
+        latest_document = db.document_assignments.find_one({"userId": user_id}, sort=[("createdAt", -1)])
+        if latest_document:
+            db.notification_reads.update_one({"userId": user_id, "notificationId": f"document-{latest_document.get('documentId')}"}, {"$set": {"readAt": datetime.utcnow()}}, upsert=True)
+        latest_announcement = db.announcement_assignments.find_one({"userId": user_id}, sort=[("createdAt", -1)])
+        if latest_announcement:
+            db.notification_reads.update_one({"userId": user_id, "notificationId": f"announcement-{latest_announcement.get('announcementId')}"}, {"$set": {"readAt": datetime.utcnow()}}, upsert=True)
+    else:
+        db.notification_reads.update_one(
+            {"userId": user_id, "notificationId": notification_id},
+            {"$set": {"readAt": datetime.utcnow()}}, upsert=True,
+        )
+    return jsonify({"message": "Notification status updated"})
 
 def _normalize_user_id(value: str) -> str:
     return str(value or "").strip()
@@ -197,6 +309,7 @@ def get_account_security():
             "collegeEmail": user.get("collegeEmail"),
             "isActive": user.get("isActive", True),
             "lastLoginAt": user.get("lastLoginAt"),
+            "validUntil": user.get("validUntil"),
             "unlockMethod": "college_email_otp",
             "collegeEmailMasked": _mask_email(user.get("collegeEmail", "")),
         })
@@ -459,7 +572,7 @@ def get_history():
         exam_name = exam.get("name", "Unknown Test") if exam else "Unknown Test"
         
         history.append({
-            "attemptId": str(r.get("_id")),
+            "attemptId": str(r.get("attemptId") or r.get("_id")),
             "examId": str(r.get("examId")),
             "testName": exam_name,
             "submittedAt": r.get("submittedAt").isoformat() if r.get("submittedAt") else None,
@@ -497,7 +610,7 @@ def list_assigned_tests():
         qs = list(db.questions.find({"examId": e["_id"]}))
         
         # Calculate total marks from actual questions
-        total_marks = sum(int(q.get("marks", 1)) for q in qs) if qs else int(e.get("questionCount", 0))
+        total_marks = sum(float(q.get("marks", 1)) for q in qs) if qs else int(e.get("questionCount", 0))
         
         # Determine question types
         question_types = set()
@@ -518,13 +631,22 @@ def list_assigned_tests():
             "status": "submitted"
         }) is not None
         
+        available_from = e.get("availableFrom") or e.get("createdAt")
+        valid_until = e.get("validUntil")
         out.append({
             "id": str(e["_id"]),
             "name": e.get("name"),
             "duration": int(e.get("duration", 0)),
             "questions": int(e.get("questionCount", 0)),
             "sections": e.get("sections", []),
-            "status": e.get("status", "draft"),
+            "status": _exam_availability(e),
+            "availableFrom": available_from,
+            "validUntil": valid_until,
+            "categoryId": e.get("categoryId"),
+            "categoryName": e.get("categoryName"),
+            "subcategoryId": e.get("subcategoryId"),
+            "subcategoryName": e.get("subcategoryName"),
+            "stage": e.get("stage"),
             "totalMarks": total_marks,
             "passingPercentage": passing_percentage,
             "questionTypes": question_types_str,
@@ -637,6 +759,17 @@ def get_test_for_taker(exam_id: str):
     exam = db.exams.find_one({"_id": oid})
     if not exam:
         return jsonify({"error": "Exam not found"}), 404
+    if userId:
+        access_error = _candidate_access_error(db, userId)
+        if access_error:
+            return jsonify({"error": access_error}), 403
+    availability = _exam_availability(exam)
+    if availability == "expired":
+        return jsonify({"error": "This test has expired"}), 410
+    if availability == "upcoming":
+        return jsonify({"error": "This test is not available yet"}), 403
+    if availability != "active":
+        return jsonify({"error": "This test is not active"}), 403
 
     passing_percentage = int(exam.get("passingPercentage", 40))
 
@@ -648,7 +781,7 @@ def get_test_for_taker(exam_id: str):
     qs = list(db.questions.find({"examId": oid}))
     
     # Calculate total marks and question types
-    total_marks = sum(int(q.get("marks", 1)) for q in qs) if qs else int(exam.get("questionCount", 0))
+    total_marks = sum(float(q.get("marks", 1)) for q in qs) if qs else int(exam.get("questionCount", 0))
     
     question_types = set()
     for q in qs:
@@ -673,7 +806,8 @@ def get_test_for_taker(exam_id: str):
             # multi-select questions without leaking the actual correct answer.
             "correctAnswer": [] if isinstance(q.get("correctAnswer"), list) else "",
             "section": q.get("section"),
-            "marks": int(q.get("marks", 0)),
+            "marks": float(q.get("marks", 0)),
+            "negativeMarks": float(q.get("negativeMarks", 0) or 0),
         })
 
     return jsonify({
@@ -682,6 +816,8 @@ def get_test_for_taker(exam_id: str):
             "testName": exam.get("name"),
             "duration": int(exam.get("duration", 0)),
             "sections": exam.get("sections", []),
+            "sectionConfig": exam.get("sectionConfig", []),
+            "timerMode": exam.get("timerMode", "overall"),
             "questions": out_questions,
             "totalMarks": total_marks,
             "passingPercentage": passing_percentage,
@@ -704,10 +840,24 @@ def start_attempt():
 
     db = get_db()
     userId = str(payload["userId"]).strip()
+    access_error = _candidate_access_error(db, userId)
+    if access_error:
+        return jsonify({"error": access_error}), 403
     try:
         exam_oid = ObjectId(payload["examId"])
     except Exception:
         return jsonify({"error": "Invalid examId"}), 400
+
+    exam = db.exams.find_one({"_id": exam_oid})
+    if not exam:
+        return jsonify({"error": "Exam not found"}), 404
+    availability = _exam_availability(exam)
+    if availability == "expired":
+        return jsonify({"error": "This test has expired"}), 410
+    if availability == "upcoming":
+        return jsonify({"error": "This test is not available yet"}), 403
+    if availability != "active":
+        return jsonify({"error": "This test is not active"}), 403
 
     # verify assignment
     if not db.exam_assignments.find_one({"examId": exam_oid, "userId": userId}):
@@ -741,6 +891,7 @@ def start_attempt():
         "updatedAt": now,
         "submittedAt": None,
         "timeSpentSec": 0,
+        "questionTimes": {},
     }
     res = db.attempts.insert_one(attempt_doc)
     return jsonify({"attemptId": str(res.inserted_id)})
@@ -775,6 +926,8 @@ def save_attempt(attempt_id: str):
     }
     if payload.get("timeSpentSec") is not None:
         update["timeSpentSec"] = int(payload.get("timeSpentSec") or 0)
+    if isinstance(payload.get("questionTimes"), dict):
+        update["questionTimes"] = {str(key): max(0, int(value or 0)) for key, value in payload.get("questionTimes", {}).items()}
 
     db.attempts.update_one({"_id": oid}, {"$set": update})
     return jsonify({"message": "Saved"})
@@ -791,6 +944,7 @@ def submit_attempt(attempt_id):
     attempt = db.attempts.find_one({"_id": ObjectId(attempt_id)})
     if not attempt:
         return jsonify({"error": "Attempt not found"}), 404
+    question_times = payload.get("questionTimes") if isinstance(payload.get("questionTimes"), dict) else (attempt.get("questionTimes") or {})
 
     # ✅ ADD THIS BLOCK
     if attempt.get("status") == "submitted":
@@ -816,11 +970,15 @@ def submit_attempt(attempt_id):
     question_review = [
         {
             "questionId": item["questionId"],
+            "question": item.get("question"),
+            "type": item.get("type"),
+            "options": item.get("options", []),
             "isCorrect": item["isCorrect"],
             "userAnswer": item["userAnswer"],
             "correctAnswer": item["correctAnswer"],
             "marks": item["marks"],
             "section": item["section"],
+            "timeSpentSec": max(0, int(question_times.get(str(item["questionId"]), 0) or 0)),
         }
         for item in computed["review"]
     ]
@@ -838,6 +996,7 @@ def submit_attempt(attempt_id):
         "questionReview": question_review,
         "submittedAt": datetime.utcnow(),
         "timeSpentSec": time_spent,
+        "questionTimes": question_times,
     }
 
     # Insert into database (this adds _id field)
@@ -860,7 +1019,9 @@ def submit_attempt(attempt_id):
         "passed": result_doc["passed"],
         "percentile": result_doc["percentile"],
         "sectionWise": result_doc["sectionWise"],
-        "questionReview": result_doc["questionReview"],
+        # Detailed review remains in MongoDB for Reports. Correct answers are
+        # intentionally not exposed on the immediate submission response.
+        "questionReview": [],
         # Don't include submittedAt and timeSpentSec in response if not needed
         # or convert datetime to string if needed:
         # "submittedAt": result_doc["submittedAt"].isoformat(),
@@ -877,11 +1038,46 @@ def get_result(attempt_id: str):
     except Exception:
         return jsonify({"error": "Invalid attempt id"}), 400
 
-    res = db.results.find_one({"attemptId": oid})
+    # Older results stored attemptId as ObjectId; current submissions store the
+    # route id as a string. Support both representations during migration.
+    res = db.results.find_one({"attemptId": {"$in": [oid, attempt_id]}})
     if not res:
         return jsonify({"error": "Result not found"}), 404
 
     out = {**res}
+    # Hydrate legacy result documents created before question text/options were
+    # stored in the review payload, so all attempts render as an exam paper.
+    review = out.get("questionReview") or []
+    if review and out.get("examId"):
+        question_docs = list(db.questions.find({"examId": out["examId"]}))
+        question_map = {}
+        for question in question_docs:
+            for raw_id in (question.get("qid"), question.get("_id")):
+                if raw_id is not None:
+                    question_map[str(raw_id)] = question
+        for item in review:
+            question = question_map.get(str(item.get("questionId")))
+            if question:
+                item.setdefault("question", question.get("question"))
+                item.setdefault("type", question.get("type"))
+                item.setdefault("options", question.get("options", []))
+                item.setdefault("correctAnswer", question.get("correctAnswer"))
+                item.setdefault("section", question.get("section"))
+        cohort = list(db.results.find({"examId": out["examId"]}, {"questionReview": 1, "percentage": 1, "userId": 1}))
+        topper = max(cohort, key=lambda row: float(row.get("percentage", 0)), default=None)
+        topper_times = {str(item.get("questionId")): int(item.get("timeSpentSec", 0) or 0) for item in (topper or {}).get("questionReview", [])}
+        cohort_times = {}
+        for result in cohort:
+            for result_item in result.get("questionReview", []):
+                seconds = int(result_item.get("timeSpentSec", 0) or 0)
+                if seconds > 0:
+                    cohort_times.setdefault(str(result_item.get("questionId")), []).append(seconds)
+        for item in review:
+            qid = str(item.get("questionId")); values = cohort_times.get(qid, [])
+            item["avgTimeSec"] = round(sum(values) / len(values)) if values else 0
+            item["topperTimeSec"] = topper_times.get(qid, 0)
+            item["topperUserId"] = (topper or {}).get("userId", "")
+        out["questionReview"] = review
     out["id"] = str(out.pop("_id"))
     out["attemptId"] = str(out.get("attemptId"))
     out["examId"] = str(out.get("examId"))

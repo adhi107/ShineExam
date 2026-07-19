@@ -31,6 +31,10 @@ def login():
         return jsonify({"error": "Invalid userId/role"}), 401
     if user.get("password") != password:
         return jsonify({"error": "Invalid password"}), 401
+    valid_until = user.get("validUntil")
+    if role == "answerer" and valid_until and valid_until < datetime.utcnow():
+        db.users.update_one({"_id": user["_id"]}, {"$set": {"isActive": False, "statusReason": "validity_expired", "statusUpdatedAt": datetime.utcnow()}})
+        return jsonify({"error": "Your account validity has expired. Please contact your administrator."}), 403
     if role == "answerer" and not user.get("isActive", True):
         return jsonify({"error": "Your account is inactive. Please contact your administrator."}), 403
 

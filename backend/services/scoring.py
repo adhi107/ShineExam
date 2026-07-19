@@ -38,10 +38,10 @@ def compute_result(
                 q_by_id[str(raw_id)] = q
 
     total_marks = 0
-    scored_marks = 0
+    scored_marks = 0.0
 
     section_totals: Dict[str, int] = {}
-    section_scored: Dict[str, int] = {}
+    section_scored: Dict[str, float] = {}
 
     review: List[Dict[str, Any]] = []
 
@@ -52,7 +52,7 @@ def compute_result(
             continue
         counted_questions.add(canonical_qid)
 
-        marks = int(q.get("marks", 0))
+        marks = float(q.get("marks", 0))
         section = q.get("section", "General")
         total_marks += marks
         section_totals[section] = section_totals.get(section, 0) + marks
@@ -85,12 +85,17 @@ def compute_result(
         else:
             is_correct = _normalize_answer(user_ans) == _normalize_answer(correct)
 
-        marks = int(q.get("marks", 0))
+        marks = float(q.get("marks", 0))
+        negative_marks = float(q.get("negativeMarks", 0) or 0)
         section = q.get("section", "General")
+        attempted = user_ans not in (None, "", [])
 
         if is_correct:
             scored_marks += marks
             section_scored[section] = section_scored.get(section, 0) + marks
+        elif attempted and negative_marks > 0:
+            scored_marks -= negative_marks
+            section_scored[section] = section_scored.get(section, 0) - negative_marks
         else:
             section_scored.setdefault(section, section_scored.get(section, 0))
 
@@ -100,7 +105,8 @@ def compute_result(
                 "question": q.get("question"),
                 "type": qtype,
                 "section": section,
-                "marks": marks if is_correct else 0,
+                "marks": marks if is_correct else (-negative_marks if attempted else 0),
+                "negativeMarks": negative_marks,
                 "options": q.get("options", []),
                 "correctAnswer": correct,
                 "userAnswer": user_ans,

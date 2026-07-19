@@ -1,6 +1,6 @@
 #admin_users.py
 from flask import Blueprint, jsonify, request
-from datetime import datetime
+from datetime import datetime, time
 from bson import ObjectId
 from typing import Optional
 from config.db import get_db
@@ -8,6 +8,18 @@ from utils.json import to_jsonable
 from utils.validators import require_fields
 
 admin_users_bp = Blueprint("admin_users", __name__)
+
+
+def _parse_valid_until(value):
+    if value in (None, ""):
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+        if len(str(value).strip()) == 10:
+            parsed = datetime.combine(parsed.date(), time.max)
+        return parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+    except (TypeError, ValueError):
+        raise ValueError("Validity date must use YYYY-MM-DD format")
 
 
 def _merge_registration_fields(user: dict, registration: Optional[dict]) -> dict:
@@ -45,41 +57,22 @@ def _merge_registration_fields(user: dict, registration: Optional[dict]) -> dict
 @admin_users_bp.route("/", methods=["GET"])
 def list_users():
     db = get_db()
+    now = datetime.utcnow()
+    db.users.update_many(
+        {"role": "answerer", "validUntil": {"$lt": now}, "isActive": {"$ne": False}},
+        {"$set": {"isActive": False, "statusReason": "validity_expired", "statusUpdatedAt": now}},
+    )
     users = list(db.users.find({"role": "answerer"}, {"password": 0}))
     out = []
     for u in users:
-        reg = None
-        lookup_keys = [u.get("naxUnid"), u.get("userId"), u.get("studentId"), u.get("email")]
-        for key in filter(None, lookup_keys):
-            reg = db.student_registrations.find_one({
-                "$or": [
-                    {"naxUnid": key},
-                    {"studentId": key},
-                    {"email": str(key).strip().lower()},
-                ]
-            })
-            if reg:
-                break
-
-        merged = _merge_registration_fields(u, reg)
         out.append({
-            "id": str(merged["_id"]),
-            "name": merged.get("name"),
-            "email": merged.get("email"),
-            "userId": merged.get("userId"),
-            "role": merged.get("role"),
-            "createdAt": merged.get("createdAt"),
-            "isActive": merged.get("isActive", True),
-            "naxUnid": merged.get("naxUnid"),
-            "mobile": merged.get("mobile"),
-            "gender": merged.get("gender"),
-            "collegeName": merged.get("collegeName"),
-            "collegeEmail": merged.get("collegeEmail"),
-            "collegeRollNumber": merged.get("collegeRollNumber"),
-            "courseStream": merged.get("courseStream"),
-            "cgpa": merged.get("cgpa"),
-            "sapCertification": merged.get("sapCertification"),
-            "studentId": merged.get("studentId"),
+            "id": str(u["_id"]), "name": u.get("name") or u.get("userId"),
+            "email": u.get("email", ""), "userId": u.get("userId"),
+            "createdAt": u.get("createdAt"), "lastLoginAt": u.get("lastLoginAt"),
+            "isActive": u.get("isActive", True),
+            "validUntil": u.get("validUntil"),
+            "isExpired": bool(u.get("validUntil") and u.get("validUntil") < now),
+            "attempts": db.results.count_documents({"userId": u.get("userId")}),
         })
     return jsonify({"users": to_jsonable(out)})
 
@@ -90,7 +83,6 @@ def list_users():
 @admin_users_bp.route("/", methods=["POST"])
 def create_user():
     payload = request.get_json(silent=True) or {}
-    print("CREATE USER PAYLOAD:", payload)
     ok, msg = require_fields(payload, ["name", "email", "userId", "password"])
     if not ok:
         return jsonify({"error": msg}), 400
@@ -100,6 +92,10 @@ def create_user():
     if db.users.find_one({"userId": userId}):
         return jsonify({"error": "userId already exists"}), 409
     
+    try:
+        valid_until = _parse_valid_until(payload.get("validUntil"))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     doc = {
         "name": payload["name"].strip(),
         "email": payload["email"].strip().lower(),
@@ -109,6 +105,7 @@ def create_user():
         "createdAt": datetime.utcnow(),
         "lastLoginAt": None,
         "isActive": True,
+        "validUntil": valid_until,
     }
     res = db.users.insert_one(doc)
     return jsonify({
@@ -120,6 +117,7 @@ def create_user():
             "role": doc["role"],
             "createdAt": doc["createdAt"],
             "isActive": doc["isActive"], 
+            "validUntil": doc["validUntil"],
         })
     }), 201
 
@@ -203,13 +201,20 @@ def update_user_status(user_id: str):
     if not user:
         return jsonify({"error": "User not found"}), 404
 
+    status_updates = {
+        "isActive": bool(payload["isActive"]),
+        "statusUpdatedAt": datetime.utcnow()
+    }
+    if status_updates["isActive"] and user.get("validUntil") and user.get("validUntil") < datetime.utcnow():
+        status_updates["validUntil"] = None
+        status_updates["statusReason"] = "manually_unblocked"
+    elif not status_updates["isActive"]:
+        status_updates["statusReason"] = "manually_blocked"
+
     db.users.update_one(
         {"_id": user["_id"]},
         {
-            "$set": {
-                "isActive": bool(payload["isActive"]),
-                "statusUpdatedAt": datetime.utcnow()
-            }
+            "$set": status_updates
         }
     )
 
@@ -256,12 +261,13 @@ def update_user(user_id: str):
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    allowed = [
-        "name", "email", "mobile", "gender", "collegeName", "collegeEmail",
-        "collegeRollNumber", "courseStream", "cgpa", "sapCertification",
-        "naxUnid", "studentId"
-    ]
+    allowed = ["name", "email"]
     updates = {k: payload[k] for k in allowed if k in payload}
+    if "validUntil" in payload:
+        try:
+            updates["validUntil"] = _parse_valid_until(payload.get("validUntil"))
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
     updates["updatedAt"] = datetime.utcnow()
 
     db.users.update_one({"_id": user["_id"]}, {"$set": updates})
@@ -269,9 +275,5 @@ def update_user(user_id: str):
     updated = db.users.find_one({"_id": user["_id"]}, {"password": 0})
     return jsonify({"user": to_jsonable({
         "id": str(updated["_id"]),
-        **{k: updated.get(k) for k in [
-            "name","email","userId","role","createdAt","isActive",
-            "naxUnid","mobile","gender","collegeName","collegeEmail",
-            "collegeRollNumber","courseStream","cgpa","sapCertification","studentId"
-        ]}
+        **{k: updated.get(k) for k in ["name", "email", "userId", "createdAt", "lastLoginAt", "isActive", "validUntil"]}
     })})

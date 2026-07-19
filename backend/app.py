@@ -11,6 +11,8 @@ from routes.admin_courses import admin_courses_bp
 from routes.answerer import answerer_bp
 from routes.master_data import master_data_bp, public_bp
 from routes.offer_letter import offer_letter_bp
+from routes.exam_categories import admin_exam_categories_bp, answerer_exam_categories_bp
+from routes.learning_resources import admin_documents_bp, admin_announcements_bp, answerer_resources_bp
 
 
 def create_app() -> Flask:
@@ -32,6 +34,11 @@ def create_app() -> Flask:
     app.register_blueprint(admin_results_bp, url_prefix="/admin/results")
     app.register_blueprint(admin_courses_bp, url_prefix="/admin/courses")
     app.register_blueprint(answerer_bp, url_prefix="/answerer")
+    app.register_blueprint(admin_exam_categories_bp, url_prefix="/admin/exam-categories")
+    app.register_blueprint(answerer_exam_categories_bp, url_prefix="/answerer/exam-categories")
+    app.register_blueprint(admin_documents_bp, url_prefix="/admin/documents")
+    app.register_blueprint(admin_announcements_bp, url_prefix="/admin/announcements")
+    app.register_blueprint(answerer_resources_bp, url_prefix="/answerer")
     app.register_blueprint(master_data_bp, url_prefix="/admin/master-data")
     app.register_blueprint(public_bp,      url_prefix="/public")
     app.register_blueprint(offer_letter_bp, url_prefix="/admin/offer-letter")
