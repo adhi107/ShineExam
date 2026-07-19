@@ -1,10 +1,10 @@
-/* ═══════════════════════════════════════════════════════════
-   DataMaintenance.css — SAP-style configuration grid
+/* Shine Exam master data maintenance workspace.
+   DataMaintenance.css — registration dropdown configuration grid
    ═══════════════════════════════════════════════════════════ */
 
 .data-maintenance { max-width: 80rem; }
 
-/* ── Page Header ── */
+/* Master data page header. */
 .dm-page-header {
   display: flex;
   justify-content: space-between;
@@ -53,8 +53,8 @@
 }
 .dm-refresh-btn:hover { background: #f7f9fb; border-color: #0070f2; color: #0070f2; }
 
-/* ═══════════════════════════════════════════════════════════
-   SAP-style Grid
+/* Master data table and filter layout.
+   registration dropdown grid
    ═══════════════════════════════════════════════════════════ */
 
 .dm-grid-container {
@@ -65,7 +65,7 @@
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
-/* Row number column width */
+/* Registration dropdown row number column width. */
 .dm-row-num-header,
 .dm-row-num,
 .dm-row-num-add,
@@ -75,7 +75,7 @@
   flex-shrink: 0;
 }
 
-/* ── Column Header ── */
+/* Master data table column headers. */
 .dm-grid-header {
   display: flex;
   background: #f0f4f8;
@@ -138,7 +138,7 @@
   flex-shrink: 0;
 }
 
-/* Per-column search */
+/* Per-column search for registration dropdown values. */
 .dm-col-search-wrap {
   position: relative;
   display: flex;
@@ -171,7 +171,7 @@
 }
 .dm-col-search::placeholder { color: #c0c4c8; }
 
-/* ── Add Row ── */
+/* Inline row for adding registration dropdown values. */
 .dm-add-row {
   display: flex;
   background: #fafcff;
@@ -219,7 +219,7 @@
   background: #f0f9ff;
 }
 
-/* Inline input when adding */
+/* Inline input used while adding a master data value. */
 .dm-inline-input-wrap {
   display: flex;
   align-items: center;
@@ -264,7 +264,7 @@
 }
 .dm-inline-btn.cancel:hover { background: #fee2e2; color: #dc2626; border-color: #fecaca; }
 
-/* ── Data Body ── */
+/* Master data value rows. */
 .dm-grid-body { }
 
 .dm-loading-row,
@@ -366,7 +366,7 @@
 .dm-data-row:hover .dm-delete-btn { color: #dc2626; }
 .dm-delete-btn:hover { background: #fee2e2; color: #dc2626; }
 
-/* ── Footer ── */
+/* Master data table footer and record count. */
 .dm-grid-footer {
   display: flex;
   background: #f7f9fb;
@@ -400,7 +400,7 @@
   color: #0070f2;
 }
 
-/* ── Info Note ── */
+/* Master data guidance note for administrators. */
 .dm-info-note {
   display: flex;
   align-items: flex-start;
@@ -415,7 +415,7 @@
 }
 .dm-info-note svg { flex-shrink: 0; margin-top: 0.05rem; }
 
-/* ── Responsive ── */
+/* Responsive master data layout. */
 @media (max-width: 900px) {
   .dm-grid-container { overflow-x: auto; }
   .dm-grid-header,
@@ -426,7 +426,7 @@
   }
 }
 
-/* ── Edit Button ── */
+/* Master data edit action button. */
 .dm-edit-btn {
   display: inline-flex;
   align-items: center;
@@ -444,7 +444,7 @@
 .dm-data-row:hover .dm-edit-btn { color: #0070f2; }
 .dm-edit-btn:hover { background: #ebf5ff; color: #0070f2; }
 
-/* ── Edit Modal ── */
+/* Master data edit modal. */
 .dm-modal-backdrop {
   position: fixed;
   inset: 0;

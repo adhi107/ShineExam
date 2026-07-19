@@ -1,7 +1,8 @@
-// TestBuilder.tsx
-import React, { useState } from 'react';
+// Shine Exam test builder for creating and publishing question papers.
+import React, { useEffect, useState } from 'react';
 import './TestBuilder.css';
-import { apiPost } from "../services/api";
+import { apiGet, apiPost } from "../services/api";
+import type { ExamCategory } from "./ExamCategoryManagement";
 
 interface Question {
   id: string;
@@ -22,15 +23,25 @@ interface TestBuilderProps {
   onBack: () => void;
 }
 
+const dateInputValue = (date: Date) => date.toISOString().slice(0, 10);
+const defaultValidUntil = () => { const date = new Date(); date.setFullYear(date.getFullYear() + 1); return dateInputValue(date); };
+
 const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
   const [testName, setTestName] = useState('');
   const [duration, setDuration] = useState(60);
   const [passingPercentage, setPassingPercentage] = useState(40);
+  const [availableFrom, setAvailableFrom] = useState(dateInputValue(new Date()));
+  const [validUntil, setValidUntil] = useState(defaultValidUntil);
+  const [categories, setCategories] = useState<ExamCategory[]>([]);
+  const [categoryId, setCategoryId] = useState('');
+  const [subcategoryId, setSubcategoryId] = useState('');
+  const [stage, setStage] = useState('');
   const [sections, setSections] = useState<Section[]>([
     { id: 'general', name: 'General' }
   ]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [showQuestionForm, setShowQuestionForm] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [newSection, setNewSection] = useState('');
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [questionForm, setQuestionForm] = useState({
@@ -42,6 +53,12 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
     section: sections[0]?.id || '',
     marks: 1,
   });
+
+  useEffect(() => { apiGet<{categories:ExamCategory[]}>("/admin/exam-categories").then(res => { const items=res.categories||[];setCategories(items);const first=items[0];const sub=first?.subcategories[0];setCategoryId(first?.id||'');setSubcategoryId(sub?.id||'');setStage(sub?.stages[0]||''); }).catch(console.error); }, []);
+  const selectedCategory=categories.find(item=>item.id===categoryId);
+  const selectedSubcategory=selectedCategory?.subcategories.find(item=>item.id===subcategoryId);
+  const changeCategory=(value:string)=>{const category=categories.find(item=>item.id===value);const sub=category?.subcategories[0];setCategoryId(value);setSubcategoryId(sub?.id||'');setStage(sub?.stages[0]||'')};
+  const changeSubcategory=(value:string)=>{const sub=selectedCategory?.subcategories.find(item=>item.id===value);setSubcategoryId(value);setStage(sub?.stages[0]||'')};
 
   const addSection = () => {
     const name = newSection.trim();
@@ -68,10 +85,30 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
   };
 
   const addQuestion = () => {
+    if (!questionForm.question.trim()) {
+      alert('Question text is required');
+      return;
+    }
+    if (!questionForm.section) {
+      alert('Please select a section');
+      return;
+    }
+    if (questionForm.marks <= 0) {
+      alert('Question marks must be greater than zero');
+      return;
+    }
     if (questionForm.type === 'mcq' || questionForm.type === 'multiple') {
       const validOptions = questionForm.options.filter(opt => opt.trim());
       if (validOptions.length < 2) {
         alert('Please add at least 2 options');
+        return;
+      }
+      if (questionForm.type === 'mcq' && !questionForm.correctAnswer) {
+        alert('Please select the correct answer');
+        return;
+      }
+      if (questionForm.type === 'multiple' && questionForm.correctAnswers.length === 0) {
+        alert('Please select at least one correct answer');
         return;
       }
     }
@@ -139,8 +176,14 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
       alert("Passing score must be between 1 and 100");
       return;
     }
+    if (!availableFrom || !validUntil || validUntil < availableFrom) {
+      alert("Choose a valid test start date and an end date on or after it");
+      return;
+    }
+    if (!categoryId || !subcategoryId || !stage) { alert("Select an exam category, subcategory and stage"); return; }
 
     try {
+      setIsSaving(true);
       const sectionNames = sections.map(s => s.name);
       const questionsWithSectionNames = questions.map(q => {
         const sectionObj = sections.find(s => s.id === q.section);
@@ -151,6 +194,11 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
         testName,
         duration,
         passingPercentage,
+        availableFrom,
+        validUntil,
+        categoryId,
+        subcategoryId,
+        stage,
         sections: sectionNames,
         questions: questionsWithSectionNames,
       });
@@ -160,21 +208,36 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
     } catch (err) {
       console.error(err);
       alert("Failed to save test");
+    } finally {
+      setIsSaving(false);
     }
   };
 
   return (
     <div className="test-builder page-with-topbar">
       <div className="page-header">
-        <h2>Create New Test</h2>
+        <div>
+          <span className="page-eyebrow">TEST MANAGEMENT</span>
+          <h2>Create New Test</h2>
+          <p>Configure the paper, organise sections and add answer-ready questions.</p>
+        </div>
         <button className="secondary-btn" onClick={onBack}>
           ← Back to Tests
         </button>
       </div>
 
+      <div className="builder-progress" aria-label="Test creation steps">
+        <div className="progress-step active"><span>1</span><div><strong>Test details</strong><small>Name, timing and score</small></div></div>
+        <div className={`progress-step ${sections.length ? 'active' : ''}`}><span>2</span><div><strong>Sections</strong><small>{sections.length} configured</small></div></div>
+        <div className={`progress-step ${questions.length ? 'active' : ''}`}><span>3</span><div><strong>Questions</strong><small>{questions.length} added</small></div></div>
+      </div>
+
       {/* ── Test Details ── */}
       <div className="form-card">
-        <h3>Test Details</h3>
+        <div className="card-heading">
+          <div className="card-heading-icon">📝</div>
+          <div><h3>Test Details</h3><p>Set the basic rules students will see for this examination.</p></div>
+        </div>
         <div className="form-row">
           <div className="form-group">
             <label>Test Name *</label>
@@ -208,9 +271,22 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
           </div>
         </div>
 
+        <div className="hierarchy-row">
+          <div className="validity-copy"><span>EXAM CLASSIFICATION</span><strong>My Tests location</strong><p>This controls where the test appears in the candidate sidebar.</p></div>
+          <div className="form-group"><label>Category *</label><select value={categoryId} onChange={e=>changeCategory(e.target.value)}><option value="">Select category</option>{categories.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
+          <div className="form-group"><label>Subcategory *</label><select value={subcategoryId} onChange={e=>changeSubcategory(e.target.value)}><option value="">Select subcategory</option>{selectedCategory?.subcategories.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
+          <div className="form-group"><label>Stage *</label><select value={stage} onChange={e=>setStage(e.target.value)}><option value="">Select stage</option>{selectedSubcategory?.stages.map(item=><option key={item} value={item}>{item}</option>)}</select></div>
+        </div>
+
+        <div className="validity-row">
+          <div className="validity-copy"><span>TEST AVAILABILITY</span><strong>Validity window</strong><p>Students can start this paper only within these dates.</p></div>
+          <div className="form-group"><label>Available from *</label><input type="date" value={availableFrom} onChange={e => setAvailableFrom(e.target.value)} /></div>
+          <div className="form-group"><label>Valid until *</label><input type="date" min={availableFrom} value={validUntil} onChange={e => setValidUntil(e.target.value)} /></div>
+        </div>
+
         {/* ── Sections ── */}
         <div className="section-management">
-          <h4>Sections</h4>
+          <div className="subsection-heading"><div><h4>Paper Sections</h4><p>Group questions into subjects such as Reasoning or English.</p></div><span>{sections.length} sections</span></div>
           <div className="section-tags">
             {sections.map(section => (
               <div key={section.id} className="section-chip">
@@ -265,7 +341,7 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
       {/* ── Questions ── */}
       <div className="questions-section">
         <div className="section-header">
-          <h3>Questions ({questions.length})</h3>
+          <div><h3>Question Bank</h3><p>{questions.length} questions • {questions.reduce((sum, q) => sum + q.marks, 0)} total marks</p></div>
           <button className="primary-btn" onClick={() => setShowQuestionForm(!showQuestionForm)}>
             {showQuestionForm ? 'Cancel' : '+ Add Question'}
           </button>
@@ -399,8 +475,11 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
       </div>
 
       {questions.length > 0 && (
-        <div className="form-actions">
-          <button className="primary-btn large" onClick={handleSaveTest}>Save Test</button>
+        <div className="builder-save-bar">
+          <div><strong>Ready to publish?</strong><span>{questions.length} questions across {sections.length} sections</span></div>
+          <button className="primary-btn large" onClick={handleSaveTest} disabled={isSaving}>
+            {isSaving ? 'Saving Test…' : 'Save & Publish Test'}
+          </button>
         </div>
       )}
     </div>

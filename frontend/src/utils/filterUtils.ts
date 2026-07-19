@@ -33,7 +33,6 @@ export interface PortalUserLike {
   isActive?: boolean;
   cgpa?: number | null;
   createdAt: string;
-  [key: string]: unknown;
 }
 
 export interface AssignableStudentLike {
@@ -53,10 +52,13 @@ export interface AdminTestLike {
   sections?: Array<string | { name: string }>;
   createdAt: string;
   updatedAt?: string;
-  status: "active" | "draft" | "completed";
+  status: "active" | "draft" | "completed" | "upcoming" | "expired";
   passingPercentage?: number;
   assignmentCount?: number;
   assignedColleges?: string[];
+  categoryName?: string;
+  subcategoryName?: string;
+  stage?: string;
 }
 
 export interface UserResultLike {
@@ -76,6 +78,7 @@ export interface MasterItemLike {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+export const normalizeSearchText = (value: unknown) => String(value ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
 
 const startOfLocalDay = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate());
 
@@ -211,7 +214,7 @@ export const filterPortalUsers = <T extends PortalUserLike>(
 
   const next = users.filter((user) => {
     if (filters.search.trim()) {
-      const q = filters.search.trim().toLowerCase();
+      const q = normalizeSearchText(filters.search);
       const matches = [
         user.name,
         user.email,
@@ -223,7 +226,7 @@ export const filterPortalUsers = <T extends PortalUserLike>(
         user.studentId,
       ]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q));
+        .some((value) => normalizeSearchText(value).includes(q));
       if (!matches) return false;
     }
 
@@ -285,7 +288,7 @@ export const filterAdminTests = <T extends AdminTestLike>(
   tests: T[],
   filters: {
     search: string;
-    status: "" | "active" | "draft" | "completed";
+    status: "" | "active" | "draft" | "completed" | "upcoming" | "expired";
     durationBand: TestDurationBand;
     section: string;
     questionBand: TestQuestionBand;
@@ -321,7 +324,7 @@ export const filterAdminTests = <T extends AdminTestLike>(
   },
   now: Date = new Date()
 ) => {
-  const term = filters.search.trim().toLowerCase();
+  const term = normalizeSearchText(filters.search);
   const minCutoffValue = parseNumericInput(filters.minCutoff);
   const maxCutoffValue = parseNumericInput(filters.maxCutoff);
   const minDurationValue = parseNumericInput(filters.minDuration);
@@ -362,18 +365,19 @@ export const filterAdminTests = <T extends AdminTestLike>(
     if (createdTo && (!createdAt || createdAt > createdTo)) return false;
 
     if (term) {
-      const haystack = [
+      const haystack = normalizeSearchText([
         test.name,
         `${test.duration} min`,
         `${test.questions}`,
         `${cutoff}%`,
         `${assignmentCount}`,
         test.status,
+        test.categoryName,
+        test.subcategoryName,
+        test.stage,
         ...(test.assignedColleges || []),
         ...sectionNames,
-      ]
-        .join(" ")
-        .toLowerCase();
+      ].join(" "));
       if (!haystack.includes(term)) return false;
     }
 

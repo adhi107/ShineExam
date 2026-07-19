@@ -119,7 +119,7 @@ def get_tests_with_results():
     for exam in exams:
         exam_id = exam["_id"]
         
-        # Get all results for this exam
+        # Load all submitted attempts for this Shine Exam test.
         results = list(db.results.find({"examId": exam_id}))
         
         total_attempts = len(results)
@@ -135,7 +135,7 @@ def get_tests_with_results():
             })
             continue
         
-        # Calculate statistics
+        # Calculate admin analytics for average score and pass rate.
         total_percentage = sum(r.get("percentage", 0) for r in results)
         avg_score = total_percentage / total_attempts if total_attempts > 0 else 0
         
@@ -165,15 +165,15 @@ def get_test_user_results(exam_id: str):
     except Exception:
         return jsonify({"error": "Invalid exam id"}), 400
     
-    # Verify exam exists
+    # Confirm the selected Shine Exam test exists before loading students.
     exam = db.exams.find_one({"_id": oid})
     if not exam:
         return jsonify({"error": "Exam not found"}), 404
     
-    # Get all results for this exam
+    # Load each candidate result submitted for this test.
     results = list(db.results.find({"examId": oid}))
     
-    # Calculate percentiles
+    # Rank candidates by score to calculate test percentiles.
     sorted_results = sorted(results, key=lambda r: r.get("percentage", 0), reverse=True)
     percentile_map = {}
     for idx, result in enumerate(sorted_results):
@@ -185,10 +185,10 @@ def get_test_user_results(exam_id: str):
         user = _find_user_with_profile(db, result.get("userId"))
         user_name = user.get("name", result.get("userId")) if user else result.get("userId")
         
-        # Format submittedAt with explicit UTC 'Z' suffix
+        # Format the submitted time for the analytics UI.
         submitted_at = None
         if result.get("submittedAt"):
-            # Ensure the datetime is treated as UTC and formatted with 'Z'
+            # Keep submission timestamps consistent for browser parsing.
             submitted_at = result.get("submittedAt").isoformat() + 'Z' if not result.get("submittedAt").isoformat().endswith('Z') else result.get("submittedAt").isoformat()
         
         user_results.append({
@@ -224,7 +224,7 @@ def get_detailed_result(result_id: str):
     user = _find_user_with_profile(db, result.get("userId"))
     user_name = user.get("name", result.get("userId")) if user else result.get("userId")
     
-    # Calculate percentile
+    # Calculate this candidate's percentile within the selected test cohort.
     exam_id = result.get("examId")
     all_results = list(db.results.find({"examId": exam_id}))
     sorted_results = sorted(all_results, key=lambda r: r.get("percentage", 0), reverse=True)
@@ -234,10 +234,10 @@ def get_detailed_result(result_id: str):
             percentile = round(((len(sorted_results) - idx) / len(sorted_results)) * 100, 1) if sorted_results else 0
             break
     
-    # Format submittedAt with explicit UTC 'Z' suffix
+    # Format the detailed report submission time for the analytics UI.
     submitted_at = None
     if result.get("submittedAt"):
-        # Ensure the datetime is treated as UTC and formatted with 'Z'
+        # Keep report timestamps consistent for browser parsing.
         submitted_at = result.get("submittedAt").isoformat() + 'Z' if not result.get("submittedAt").isoformat().endswith('Z') else result.get("submittedAt").isoformat()
     
     detailed = {

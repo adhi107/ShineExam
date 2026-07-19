@@ -28,25 +28,25 @@ def _patch_footer(xml: str) -> str:
     so footer content does not get clipped.
     """
 
-    # Reduce font size
+    # Fit Shine DevCon offer footer text inside the template footer area.
     xml = xml.replace(
         'w:sz w:val="22"',
         'w:sz w:val="18"'
     )
 
-    # Increase left textbox height
+    # Give the left footer box enough height for college and contact details.
     xml = xml.replace(
         'cx="3143250" cy="565785"',
         'cx="3143250" cy="650000"'
     )
 
-    # Move left textbox slightly upward
+    # Align the left footer block with the Shine DevCon template strip.
     xml = xml.replace(
         '<wp:posOffset>9846688</wp:posOffset>',
         '<wp:posOffset>9780000</wp:posOffset>'
     )
 
-    # Move right textbox slightly upward
+    # Align the right footer block with the Shine DevCon template strip.
     xml = xml.replace(
         '<wp:posOffset>9971961</wp:posOffset>',
         '<wp:posOffset>9790000</wp:posOffset>'
@@ -71,13 +71,11 @@ def _generate_offer_letter(
 
     os.makedirs(extract_dir, exist_ok=True)
 
-    # Extract DOCX
+    # Extract the Shine DevCon DOCX template so candidate fields can be patched.
     with zipfile.ZipFile(tmp_docx, "r") as z:
         z.extractall(extract_dir)
 
-    # =========================================================
-    # PATCH document.xml
-    # =========================================================
+    # Patch the main Shine DevCon offer letter document XML.
 
     doc_xml_path = os.path.join(
         extract_dir,
@@ -88,18 +86,14 @@ def _generate_offer_letter(
     with open(doc_xml_path, "r", encoding="utf-8") as f:
         xml = f.read()
 
-    # =========================================================
-    # 1. Replace DevCon ID
-    # =========================================================
+    # Replace the sample DevCon ID with the candidate's NAX login ID.
 
     xml = xml.replace(
         ">1500001<",
         f">{nax_unid}<"
     )
 
-    # =========================================================
-    # 2. Replace Date
-    # =========================================================
+    # Stamp the offer letter with today's issue date.
 
     current_date = datetime.now().strftime("%d-%b-%Y")
 
@@ -108,9 +102,7 @@ def _generate_offer_letter(
         f">{current_date}<"
     )
 
-    # =========================================================
-    # 3. Replace College Name Dynamically
-    # =========================================================
+    # Insert the candidate's college name into the offer template.
 
     xml = xml.replace(
         ">Sri Vasavi Engineering College <",
@@ -122,9 +114,7 @@ def _generate_offer_letter(
         f">{college_name}<"
     )
 
-    # =========================================================
-    # 4. Replace Dear Line
-    # =========================================================
+    # Personalize the greeting line for the candidate.
 
     xml = xml.replace(
         ">Yerra<",
@@ -138,9 +128,7 @@ def _generate_offer_letter(
         1
     )
 
-    # =========================================================
-    # 5. Replace Acceptance Line
-    # =========================================================
+    # Personalize the acceptance line with the candidate name.
 
     xml = xml.replace(
         ">Yerra<",
@@ -154,16 +142,14 @@ def _generate_offer_letter(
         1
     )
 
-    # Fix spacing issue
+    # Normalize spacing introduced by the template placeholder replacement.
     xml = re.sub(
         r'(<w:t[^>]*>)\s{2,}(confirm)',
         r'\1 \2',
         xml
     )
 
-    # =========================================================
-    # 6. Remove Extra Blank Paragraph
-    # =========================================================
+    # Remove the unused template paragraph so the offer layout stays compact.
 
     xml = re.sub(
         r'<w:p w14:paraId="0D0B940D".*?</w:p>',
@@ -172,22 +158,18 @@ def _generate_offer_letter(
         flags=re.DOTALL
     )
 
-    # =========================================================
-    # 7. Fix Left Strip Gap
-    # =========================================================
+    # Align the decorative left strip with the Shine DevCon letter edge.
 
     xml = xml.replace(
         '<wp:posOffset>21699</wp:posOffset>',
         '<wp:posOffset>0</wp:posOffset>'
     )
 
-    # Save updated XML
+    # Save the patched candidate-specific offer letter XML.
     with open(doc_xml_path, "w", encoding="utf-8") as f:
         f.write(xml)
 
-    # =========================================================
-    # PATCH footer1.xml
-    # =========================================================
+    # Patch the Shine DevCon footer XML when the template includes one.
 
     footer_xml_path = os.path.join(
         extract_dir,
@@ -205,9 +187,7 @@ def _generate_offer_letter(
         with open(footer_xml_path, "w", encoding="utf-8") as f:
             f.write(footer_xml)
 
-    # =========================================================
-    # REPACK DOCX
-    # =========================================================
+    # Repack the edited Shine DevCon offer letter as a DOCX.
 
     final_docx_path = os.path.join(
         tmp_dir,
@@ -233,9 +213,7 @@ def _generate_offer_letter(
 
                 zout.write(file_path, arcname)
 
-    # =========================================================
-    # CONVERT DOCX TO PDF
-    # =========================================================
+    # Convert the candidate offer letter to a downloadable PDF.
 
     result = subprocess.run(
         [
@@ -290,9 +268,7 @@ def generate_offer_letter(user_id: str):
             "error": "User not found"
         }), 404
 
-    # =========================================================
-    # USER DETAILS
-    # =========================================================
+    # Candidate details used to personalize the Shine DevCon offer letter.
 
     name = user.get("name", "Associate")
 
@@ -301,16 +277,14 @@ def generate_offer_letter(user_id: str):
         or user.get("userId", "N/A")
     )
 
-    # Dynamic college name
+    # Use the registered college name on the candidate offer letter.
     college_name = (
         user.get("collegeName")
         or user.get("college")
         or "College"
     )
 
-    # =========================================================
-    # TEMPLATE CHECK
-    # =========================================================
+    # Confirm the Shine DevCon offer template is available before generation.
 
     if not os.path.exists(TEMPLATE_PATH):
 

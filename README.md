@@ -1,4 +1,4 @@
-# EMAX Assessment & Learning Platform
+# Shine Assessment & Learning Platform
 
 Integrated learning, assessment, candidate management, and onboarding platform designed to streamline the complete candidate journey from registration to evaluation and offer generation.
 
@@ -16,7 +16,7 @@ Integrated learning, assessment, candidate management, and onboarding platform d
 
 ## Overview
 
-EMAX is a comprehensive platform that combines online assessments, learning management, candidate administration, analytics, and document generation into a single system.
+Shine is a comprehensive platform that combines online assessments, learning management, candidate administration, analytics, and document generation into a single system.
 
 The platform enables organizations to onboard candidates, deliver structured learning content, conduct assessments, monitor performance, and automate post-evaluation workflows through a centralized portal.
 

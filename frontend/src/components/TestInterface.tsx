@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 import QuestionPanel from "./QuestionPanel";
 import QuestionNavigator from "./QuestionNavigator";
-import ResultsPage from "./ResultsPage";
 import TestDetails from "./TestDetails";
 import TestInstructions from "./TestInstructions";
 import "./TestInterface.css";
-import { apiPost, apiPut } from "../services/api";
+import { apiGet, apiPost, apiPut } from "../services/api";
+import ShineLogo from "./ShineLogo";
 
 interface Question {
   id: string;
@@ -48,6 +48,8 @@ interface TestInterfaceProps {
   duration: number;
   passingPercentage?: number;
   questions: Question[];
+  timerMode?: "overall" | "sectional";
+  sectionConfig?: Array<{ name: string; duration: number; questionCount: number; marks: number }>;
   onExit: () => void;
 }
 
@@ -58,6 +60,8 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
   duration,
   passingPercentage = 40,
   questions,
+  timerMode = "overall",
+  sectionConfig = [],
   onExit,
 }) => {
   const getInitialAnswer = (question: Question): string | string[] => {
@@ -66,8 +70,9 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
     return isMultipleChoice ? [] : "";
   };
 
-  const [testStep, setTestStep] = useState<"details" | "instructions" | "exam" | "results">("details");
+  const [testStep, setTestStep] = useState<"details" | "instructions" | "exam" | "confirm" | "submitted">("details");
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [visited, setVisited] = useState<Set<number>>(() => new Set([0]));
 
   const [answers, setAnswers] = useState<Answer[]>(
     questions.map((q) => ({
@@ -80,29 +85,86 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
   const [timeLeft, setTimeLeft] = useState(duration * 60);
   const [currentSection, setCurrentSection] = useState<string>(questions[0]?.section || "");
   const sections = Array.from(new Set(questions.map((q) => q.section)));
+  const isSectional = timerMode === "sectional" && sectionConfig.length > 0;
+  const [sectionTimes, setSectionTimes] = useState<Record<string, number>>(() =>
+    Object.fromEntries(sectionConfig.map((section) => [section.name, section.duration * 60]))
+  );
+  const currentSectionTime = isSectional ? (sectionTimes[currentSection] ?? 0) : timeLeft;
 
   const currentQuestion = questions[currentQuestionIndex];
   const isLastQuestion = currentQuestionIndex === questions.length - 1;
 
-  // attempt id from backend
+  // Current Shine Exam attempt id returned by the backend.
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [submitResult, setSubmitResult] = useState<ResultPayload | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [questionTimes, setQuestionTimes] = useState<Record<string, number>>({});
+  const [bookmarkedQuestions, setBookmarkedQuestions] = useState<Set<string>>(new Set());
 
-  // timer
   useEffect(() => {
-    if (testStep !== "exam") return;
+    apiGet<{ bookmarks: Array<{ type: string; questionId?: string }> }>(`/answerer/bookmarks?userId=${encodeURIComponent(userId)}`)
+      .then(result => setBookmarkedQuestions(new Set((result.bookmarks || []).filter(item => item.type === "question" && item.questionId).map(item => item.questionId!))))
+      .catch(() => setBookmarkedQuestions(new Set()));
+  }, [userId]);
 
-    if (timeLeft > 0) {
-      const timer = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
-      return () => clearInterval(timer);
-    }
+  useEffect(() => {
+    if (testStep !== "exam" || !currentQuestion?.id) return;
+    const timer = window.setInterval(() => setQuestionTimes(current => ({ ...current, [currentQuestion.id]: (current[currentQuestion.id] || 0) + 1 })), 1000);
+    return () => window.clearInterval(timer);
+  }, [testStep, currentQuestion?.id]);
 
-    if (timeLeft === 0) {
-      // autosubmit
-      handleSubmit();
-    }
+  const toggleQuestionBookmark = async () => {
+    if (!currentQuestion) return;
+    const result = await apiPost<{ bookmarked: boolean }>("/answerer/bookmarks/toggle", {
+      userId, type: "question", testId: examId, questionId: currentQuestion.id,
+      title: testName, question: currentQuestion.question,
+    });
+    setBookmarkedQuestions(current => {
+      const next = new Set(current);
+      if (result.bookmarked) next.add(currentQuestion.id); else next.delete(currentQuestion.id);
+      return next;
+    });
+  };
+
+  // Shine Exam timer mode: banking tests use sequential section timers,
+  // while SSC tests use the overall test timer.
+  useEffect(() => {
+    if (testStep !== "exam" && testStep !== "confirm") return;
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => Math.max(0, prev - 1));
+      if (isSectional) {
+        setSectionTimes((prev) => ({
+          ...prev,
+          [currentSection]: Math.max(0, (prev[currentSection] ?? 0) - 1),
+        }));
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [testStep, isSectional, currentSection]);
+
+  useEffect(() => {
+    if ((testStep === "exam" || testStep === "confirm") && timeLeft === 0) handleSubmit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft, testStep]);
+
+  useEffect(() => {
+    if ((testStep !== "exam" && testStep !== "confirm") || !isSectional || currentSectionTime !== 0) return;
+    const activeIndex = sectionConfig.findIndex((section) => section.name === currentSection);
+    const nextSection = [...sectionConfig.slice(activeIndex + 1), ...sectionConfig.slice(0, activeIndex)]
+      .find((section) => (sectionTimes[section.name] ?? 0) > 0);
+    if (!nextSection) {
+      handleSubmit();
+      return;
+    }
+    const firstQuestion = questions.findIndex((q) => q.section === nextSection.name);
+    setCurrentSection(nextSection.name);
+    if (firstQuestion >= 0) {
+      setCurrentQuestionIndex(firstQuestion);
+      setVisited(prev => new Set(prev).add(firstQuestion));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSectionTime, testStep, isSectional, currentSection, sectionTimes]);
 
   const formatTime = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
@@ -130,30 +192,43 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
   };
 
   const handleNext = () => {
-    if (currentQuestionIndex < questions.length - 1) {
-      const ni = currentQuestionIndex + 1;
-      setCurrentQuestionIndex(ni);
-      setCurrentSection(questions[ni].section);
+    if (currentQuestionIndex >= questions.length - 1) {
+      setTestStep("confirm");
+      return;
     }
+    let nextIndex = currentQuestionIndex + 1;
+    if (isSectional && (sectionTimes[questions[nextIndex].section] ?? 0) <= 0) {
+      const availableIndex = questions.findIndex((question, index) => index > currentQuestionIndex && (sectionTimes[question.section] ?? 0) > 0);
+      if (availableIndex < 0) { setTestStep("confirm"); return; }
+      nextIndex = availableIndex;
+    }
+    setCurrentQuestionIndex(nextIndex);
+    setVisited(prev => new Set(prev).add(nextIndex));
+    setCurrentSection(questions[nextIndex].section);
   };
 
   const handlePrevious = () => {
     if (currentQuestionIndex > 0) {
       const pi = currentQuestionIndex - 1;
+      if (isSectional && (sectionTimes[questions[pi].section] ?? 0) <= 0) return;
       setCurrentQuestionIndex(pi);
+      setVisited(prev => new Set(prev).add(pi));
       setCurrentSection(questions[pi].section);
     }
   };
 
   const handleQuestionSelect = (index: number) => {
+    if (isSectional && (sectionTimes[questions[index].section] ?? 0) <= 0) return;
     setCurrentQuestionIndex(index);
+    setVisited(prev => new Set(prev).add(index));
     setCurrentSection(questions[index].section);
   };
 
   const handleSectionChange = (section: string) => {
+    if (isSectional && (sectionTimes[section] ?? 0) <= 0) return;
     setCurrentSection(section);
     const first = questions.findIndex((q) => q.section === section);
-    if (first !== -1) setCurrentQuestionIndex(first);
+    if (first !== -1) { setCurrentQuestionIndex(first); setVisited(prev => new Set(prev).add(first)); }
   };
 
   const getQuestionStatus = (index: number) => {
@@ -164,16 +239,7 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
     return hasAnswer ? "answered" : "unanswered";
   };
 
-  const areAllQuestionsAnswered = () => {
-    return answers.every((a) => {
-      if (Array.isArray(a.answer)) {
-        return a.answer.length > 0;
-      }
-      return a.answer !== "";
-    });
-  };
-
-  // Create attempt when user enters EXAM step
+  // Create the candidate attempt when the test-taking screen opens.
   const startAttempt = async () => {
     const res = await apiPost<{ attemptId: string }>("/answerer/attempts/start", {
       userId,
@@ -189,12 +255,15 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
     await apiPut(`/answerer/attempts/${attemptId}/save`, {
       answers,
       timeSpentSec,
+      questionTimes,
     });
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
-      // ensure attempt exists
+      // Ensure the candidate has a saved attempt before persisting answers.
       let currentAttemptId = attemptId;
       if (!currentAttemptId) {
         const start = await apiPost<{ attemptId: string }>("/answerer/attempts/start", {
@@ -210,33 +279,36 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
       const result = await apiPost<ResultPayload>(`/answerer/attempts/${currentAttemptId}/submit`, {
         answers,
         timeSpentSec,
+        questionTimes,
       });
 
       setSubmitResult(result);
-      setTestStep("results");
+      setTestStep("submitted");
     } catch (e) {
       console.error(e);
       alert("Failed to submit attempt to backend");
+      setIsSubmitting(false);
     }
   };
 
-  // Auto-save every 15 seconds during exam
+  // Auto-save candidate answers every 15 seconds during the test.
   useEffect(() => {
-    if (testStep !== "exam") return;
+    if (testStep !== "exam" && testStep !== "confirm") return;
     const t = setInterval(() => {
       saveProgress().catch(() => {});
     }, 15000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [testStep, attemptId, timeLeft, answers]);
+  }, [testStep, attemptId, timeLeft, answers, questionTimes]);
 
-  // Screens
+  // Candidate test-taking screen states.
   if (testStep === "details") {
     return (
       <TestDetails
         testName={testName}
         questionCount={questions.length}
         duration={duration}
+        passingPercentage={passingPercentage}
         onContinue={() => setTestStep("instructions")}
         onBack={onExit}
       />
@@ -246,8 +318,11 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
   if (testStep === "instructions") {
     return (
       <TestInstructions
+        userId={userId}
         testName={testName}
         duration={duration}
+        timerMode={timerMode}
+        sectionConfig={sectionConfig}
         onStart={async () => {
           try {
             await startAttempt();
@@ -262,34 +337,17 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
     );
   }
 
-  if (testStep === "results" && submitResult) {
-    return (
-      <ResultsPage
-        testName={testName}
-        questions={questions}
-        answers={answers}
-        passingPercentage={passingPercentage}
-        backendResult={submitResult}
-        onBackToDashboard={onExit}
-      />
-    );
-  }
+  if (testStep === "confirm") return <SubmissionConfirmation testName={testName} userId={userId} questions={questions} answers={answers} visited={visited} sections={sections} time={formatTime(timeLeft)} submitting={isSubmitting} onConfirm={handleSubmit} onCancel={() => setTestStep("exam")} />;
 
-  if (testStep === "results" && !submitResult) {
-    return <div style={{ padding: "2rem" }}>Loading results...</div>;
-  }
+  if (testStep === "submitted" && submitResult) return <div className="submission-complete"><ShineLogo /><div className="submission-check">✓</div><h1>Exam submitted successfully</h1><p>Your responses have been securely recorded.</p><div className="submission-reference"><span>Exam</span><strong>{testName}</strong><span>Attempt reference</span><strong>{submitResult.attemptId}</strong></div><p className="submission-note">Answers are not displayed after submission. Your performance report is available from the Reports page.</p><button onClick={onExit}>Return to My Tests</button></div>;
 
   return (
     <div className="test-interface">
       {/* ===== TOP HEADER (matching TestDetails/Instructions) ===== */}
       <header className="test-header">
         <div className="test-header-left">
-          <img
-            src="/assets/emax-logo.png"
-            alt="Emax Technologies"
-            className="topbar-logo"
-          />
-          <span className="test-portal-title">Online Exam Portal</span>
+          <ShineLogo inverse />
+          <span className="test-portal-title">Secure Assessment</span>
         </div>
 
         <div className="test-header-right">
@@ -302,10 +360,11 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
             | Logged in as : {userId}
           </span>
           <div className="test-timer">
-            <span>Time remaining:</span>
-            <span className={`timer-value ${timeLeft < 300 ? "timer-warning" : ""}`}>
-              {formatTime(timeLeft)}
+            <span>{isSectional ? `${currentSection} time:` : "Time remaining:"}</span>
+            <span className={`timer-value ${currentSectionTime < 300 ? "timer-warning" : ""}`}>
+              {formatTime(currentSectionTime)}
             </span>
+            {isSectional && <small>Overall {formatTime(timeLeft)}</small>}
           </div>
         </div>
       </header>
@@ -313,9 +372,9 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
       {/* ===== SUB HEADER ===== */}
       <div className="test-subheader">
         <h3 className="test-title">{testName}</h3>
-        <span className="question-info">
+        <div className="question-subheader-actions"><button className={`exam-bookmark-button ${bookmarkedQuestions.has(currentQuestion.id) ? "saved" : ""}`} onClick={() => void toggleQuestionBookmark()}>{bookmarkedQuestions.has(currentQuestion.id) ? "★ Bookmarked" : "☆ Bookmark question"}</button><span className="question-info">
           {currentQuestionIndex + 1} of {questions.length}
-        </span>
+        </span></div>
       </div>
 
       {/* ===== MAIN CONTENT ===== */}
@@ -341,6 +400,9 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
           onQuestionSelect={handleQuestionSelect}
           onSectionChange={handleSectionChange}
           getQuestionStatus={getQuestionStatus}
+          onSubmit={() => {
+            setTestStep("confirm");
+          }}
         />
 
         {/* ===== NAVIGATION CONTROLS ===== */}
@@ -360,39 +422,32 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
             {answers[currentQuestionIndex].marked ? "Unmark Review" : "Mark for Review"}
           </button>
 
-          {!isLastQuestion && (
-            <button
-              className="nav-btn primary"
-              onClick={handleNext}
-            >
-              Next Question &gt;
-            </button>
-          )}
+          <button className="nav-btn primary save-next-btn" onClick={handleNext}>
+            {isLastQuestion ? "Save & Review" : "Save & Next"} &gt;
+          </button>
 
-          {isLastQuestion && !areAllQuestionsAnswered() && (
-            <div style={{ color: "#d32f2f", marginTop: "8px", fontSize: "0.9rem" }}>
-              ⚠️ Please answer all questions before submitting the test.
-            </div>
-          )}
-
-          {isLastQuestion && (
-            <button
-              className="nav-btn submit-btn"
-              onClick={handleSubmit}
-              disabled={!areAllQuestionsAnswered()}
-              title={
-                areAllQuestionsAnswered()
-                  ? "Submit test"
-                  : "Please answer all questions before submitting"
-              }
-            >
-              Submit Test
-            </button>
-          )}
         </div>
       </div>
     </div>
   );
+};
+
+const hasResponse = (answer: Answer) => Array.isArray(answer.answer) ? answer.answer.length > 0 : answer.answer !== "";
+
+const SubmissionConfirmation = ({ testName, userId, questions, answers, visited, sections, time, submitting, onConfirm, onCancel }: { testName: string; userId: string; questions: Question[]; answers: Answer[]; visited: Set<number>; sections: string[]; time: string; submitting: boolean; onConfirm: () => void; onCancel: () => void }) => {
+  const rows = sections.map(section => {
+    const indexes = questions.map((question, index) => question.section === section ? index : -1).filter(index => index >= 0);
+    return {
+      section, total: indexes.length,
+      answered: indexes.filter(index => hasResponse(answers[index]) && !answers[index].marked).length,
+      notAnswered: indexes.filter(index => visited.has(index) && !hasResponse(answers[index]) && !answers[index].marked).length,
+      notVisited: indexes.filter(index => !visited.has(index)).length,
+      review: indexes.filter(index => answers[index].marked && !hasResponse(answers[index])).length,
+      answeredReview: indexes.filter(index => answers[index].marked && hasResponse(answers[index])).length,
+    };
+  });
+  const totals = rows.reduce((sum, row) => ({ total: sum.total + row.total, answered: sum.answered + row.answered, notAnswered: sum.notAnswered + row.notAnswered, notVisited: sum.notVisited + row.notVisited, review: sum.review + row.review, answeredReview: sum.answeredReview + row.answeredReview }), { total: 0, answered: 0, notAnswered: 0, notVisited: 0, review: 0, answeredReview: 0 });
+  return <div className="submit-confirmation"><header><div><strong>{testName}</strong><small>Shine Secure Examination</small></div><div><span>Candidate: {userId}</span><b>Time Left: {time}</b></div></header><main><h2>Submission Summary</h2><p>Review the status of every section before submitting the online examination.</p><div className="submit-table-wrap"><table><thead><tr><th>Section Name</th><th>Total Questions</th><th>Answered</th><th>Not Answered</th><th>Not Visited</th><th>Marked for Review</th><th>Answered & Marked for Review</th></tr></thead><tbody>{rows.map(row => <tr key={row.section}><td>{row.section}</td><td>{row.total}</td><td>{row.answered}</td><td>{row.notAnswered}</td><td>{row.notVisited}</td><td>{row.review}</td><td>{row.answeredReview}</td></tr>)}<tr className="total-row"><td>Total</td><td>{totals.total}</td><td>{totals.answered}</td><td>{totals.notAnswered}</td><td>{totals.notVisited}</td><td>{totals.review}</td><td>{totals.answeredReview}</td></tr></tbody></table></div><h3>Do you want to submit the online exam?</h3><div className="submit-confirm-actions"><button disabled={submitting} onClick={onConfirm}>{submitting ? "Submitting…" : "Yes, Submit"}</button><button disabled={submitting} onClick={onCancel}>No, Return to Exam</button></div><p className="submit-warning">After final submission, responses cannot be changed and answers will not be displayed.</p></main></div>;
 };
 
 export default TestInterface;

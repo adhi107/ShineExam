@@ -1,330 +1,51 @@
-import React, { useState, useEffect } from 'react';
-import UserManagement from './UserManagement';
-import TestBuilder from './TestBuilder';
-import TestEditor from './TestEditor';
-import TestList from './TestList';
-import TestResults from './TestResults';
-import DataMaintenance from './DataMaintenance';
-import CourseManagement from './CourseManagement';
-import './AdminDashboard.css';
-import { apiGet, apiPost } from '../services/api';
-import { useNavigate, useLocation } from 'react-router-dom';
-import AppIcon from './AppIcons';
+import React, { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import UserManagement from "./UserManagement";
+import TestBuilder from "./TestBuilder";
+import TestEditor from "./TestEditor";
+import TestList from "./TestList";
+import TestResults from "./TestResults";
+import ExamCategoryManagement from "./ExamCategoryManagement";
+import DocumentManagement from "./DocumentManagement";
+import AnnouncementManagement from "./AnnouncementManagement";
+import ShineLogo from "./ShineLogo";
+import AppIcon from "./AppIcons";
+import { apiGet, apiPost } from "../services/api";
+import "./AdminDashboard.css";
+import "./AdminPolish.css";
 
-type AdminView = 'dashboard' | 'users' | 'create-test' | 'edit-test' | 'tests' | 'results' | 'data-maintenance' | 'courses';
+type AdminView="dashboard"|"users"|"categories"|"documents"|"announcements"|"tests"|"create-test"|"edit-test"|"results";
+const paths:Record<AdminView,string>={dashboard:"/admin",users:"/admin/users",categories:"/admin/exam-categories",documents:"/admin/documents",announcements:"/admin/announcements",tests:"/admin/tests","create-test":"/admin/tests/create","edit-test":"/admin/tests/edit",results:"/admin/results"};
+const views:Record<string,AdminView>={"/admin":"dashboard","/admin/users":"users","/admin/exam-categories":"categories","/admin/documents":"documents","/admin/announcements":"announcements","/admin/tests":"tests","/admin/tests/create":"create-test","/admin/tests/edit":"edit-test","/admin/results":"results"};
+interface RecentAttempt{id:string;userId:string;testName:string;percentage:number;passed:boolean;submittedAt:string}
+interface DashboardStats{totalUsers:number;activeUsers:number;blockedUsers:number;totalTests:number;activeTests:number;totalAttempts:number;completedAttempts:number;averageScore:number;passRate:number;recentAttempts:RecentAttempt[]}
+interface Props{adminName:string;onLogout:()=>void}
+const initialStats:DashboardStats={totalUsers:0,activeUsers:0,blockedUsers:0,totalTests:0,activeTests:0,totalAttempts:0,completedAttempts:0,averageScore:0,passRate:0,recentAttempts:[]};
 
-const viewToPath: Record<AdminView, string> = {
-  'dashboard':        '/admin',
-  'users':            '/admin/users',
-  'tests':            '/admin/tests',
-  'create-test':      '/admin/tests/create',
-  'edit-test':        '/admin/tests/edit',
-  'results':          '/admin/results',
-  'data-maintenance': '/admin/data-maintenance',
-  'courses':          '/admin/courses',
+const AdminDashboard:React.FC<Props>=({adminName,onLogout})=>{
+  const navigate=useNavigate();const location=useLocation();const currentView=views[location.pathname]||"dashboard";
+  const go=(view:AdminView)=>navigate(paths[view]);
+  const [editingTestId,setEditingTestId]=useState<string|null>(null);
+  const [stats,setStats]=useState(initialStats);
+  const [showPassword,setShowPassword]=useState(false);const [oldPassword,setOldPassword]=useState("");const [newPassword,setNewPassword]=useState("");const [confirmPassword,setConfirmPassword]=useState("");const [savingPassword,setSavingPassword]=useState(false);
+  useEffect(()=>{if(currentView==="dashboard")apiGet<DashboardStats>("/admin/dashboard-stats").then(setStats).catch(console.error)},[currentView]);
+  const closePassword=()=>{setShowPassword(false);setOldPassword("");setNewPassword("");setConfirmPassword("")};
+  const changePassword=async()=>{if(!oldPassword||newPassword.length<4||newPassword!==confirmPassword){alert("Enter the current password and matching new passwords of at least 4 characters.");return}setSavingPassword(true);try{await apiPost("/auth/change-password",{userId:adminName,role:"admin",oldPassword,newPassword});closePassword();alert("Password changed successfully.")}catch(error:any){alert(error?.message||"Password could not be changed.")}finally{setSavingPassword(false)}};
+  const render=()=>{if(currentView==="users")return <UserManagement/>;if(currentView==="categories")return <ExamCategoryManagement/>;if(currentView==="documents")return <DocumentManagement/>;if(currentView==="announcements")return <AnnouncementManagement/>;if(currentView==="create-test")return <TestBuilder onBack={()=>go("tests")}/>;if(currentView==="edit-test")return editingTestId?<TestEditor testId={editingTestId} onBack={()=>go("tests")}/>:<TestList onCreateNew={()=>go("create-test")} onEditTest={id=>{setEditingTestId(id);go("edit-test")}}/>;if(currentView==="tests")return <TestList onCreateNew={()=>go("create-test")} onEditTest={id=>{setEditingTestId(id);go("edit-test")}}/>;if(currentView==="results")return <TestResults/>;return <AdminHome adminName={adminName} stats={stats} go={go}/>};
+  return <div className="shine-admin-shell"><aside className="shine-admin-sidebar"><div className="admin-brand"><ShineLogo/><span>ADMIN CONSOLE</span></div><nav><Nav active={currentView==="dashboard"} icon="dashboard" label="Dashboard" onClick={()=>go("dashboard")}/><Nav active={currentView==="users"} icon="users" label="Students" onClick={()=>go("users")}/><Nav active={currentView==="categories"} icon="categories" label="Exam Categories" onClick={()=>go("categories")}/><Nav active={["tests","create-test","edit-test"].includes(currentView)} icon="tests" label="Tests" onClick={()=>go("tests")}/><Nav active={currentView==="documents"} icon="documents" label="Documents" onClick={()=>go("documents")}/><Nav active={currentView==="announcements"} icon="documents" label="Announcements" onClick={()=>go("announcements")}/><Nav active={currentView==="results"} icon="results" label="Analytics" onClick={()=>go("results")}/></nav><div className="admin-sidebar-user"><div><span>{adminName.charAt(0).toUpperCase()}</span><p><strong>{adminName}</strong><small>Administrator</small></p></div><button onClick={()=>setShowPassword(true)}>Change password</button><button className="admin-signout" onClick={onLogout}>Sign out</button></div></aside><main className="shine-admin-main">{render()}</main>{showPassword&&<div className="admin-password-backdrop" onMouseDown={closePassword}><section onMouseDown={event=>event.stopPropagation()}><header><div><span>ACCOUNT SECURITY</span><h2>Change password</h2></div><button onClick={closePassword}>×</button></header><label>Current password<input type="password" value={oldPassword} onChange={event=>setOldPassword(event.target.value)}/></label><label>New password<input type="password" value={newPassword} onChange={event=>setNewPassword(event.target.value)}/></label><label>Confirm password<input type="password" value={confirmPassword} onChange={event=>setConfirmPassword(event.target.value)}/></label><footer><button onClick={closePassword}>Cancel</button><button disabled={savingPassword} onClick={changePassword}>{savingPassword?"Updating…":"Update password"}</button></footer></section></div>}</div>;
 };
-
-const pathToView: Record<string, AdminView> = {
-  '/admin':                   'dashboard',
-  '/admin/users':             'users',
-  '/admin/tests':             'tests',
-  '/admin/tests/create':      'create-test',
-  '/admin/tests/edit':        'edit-test',
-  '/admin/results':           'results',
-  '/admin/data-maintenance':  'data-maintenance',
-  '/admin/courses':           'courses',
+const Nav=({active,icon,label,onClick}:any)=><button className={active?"active":""} onClick={onClick}><AppIcon name={icon}/><span>{label}</span></button>;
+const AdminHome=({adminName,stats,go}:{adminName:string;stats:DashboardStats;go:(view:AdminView)=>void})=>{
+  const cards=[
+    ["Students",stats.totalUsers,"Registered candidate accounts","users","users"],
+    ["Active students",stats.activeUsers,"Candidates allowed to sign in","users","users"],
+    ["Blocked students",stats.blockedUsers,"Accounts requiring attention","users","users"],
+    ["Published tests",stats.activeTests,`${stats.totalTests} tests in total`,"tests","tests"],
+    ["Completed attempts",stats.completedAttempts,`${stats.totalAttempts} attempts started`,"results","completed"],
+    ["Average score",`${stats.averageScore.toFixed(1)}%`,"Across every completed paper","results","results"],
+    ["Overall pass rate",`${stats.passRate.toFixed(1)}%`,"Candidate success rate","results","completed"],
+    ["Pending attempts",Math.max(0,stats.totalAttempts-stats.completedAttempts),"Tests currently in progress","results","tests"],
+  ] as any[];
+  return <section className="admin-home"><header><div><span>SHINE EXAM OPERATIONS</span><h1>Good day, {adminName}</h1><p>Manage students, publish papers and monitor examination performance.</p></div><div><small>{new Date().toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})}</small><button onClick={()=>go("create-test")}>+ Create test</button></div></header><div className="admin-command-bar"><button onClick={()=>go("users")}><span>01</span><div><strong>Manage students</strong><small>Edit or control candidate access</small></div><b>→</b></button><button onClick={()=>go("tests")}><span>02</span><div><strong>Manage papers</strong><small>Create, edit and assign exams</small></div><b>→</b></button><button onClick={()=>go("results")}><span>03</span><div><strong>Open analytics</strong><small>Review scores and performance</small></div><b>→</b></button></div><div className="admin-dashboard-cards">{cards.map(([label,value,help,target,icon])=><button key={label} onClick={()=>go(target)}><div><AppIcon name={icon}/><span>Open →</span></div><small>{label}</small><strong>{value}</strong><p>{help}</p></button>)}</div><div className="admin-home-lower"><article><header><div><h2>Recent student activity</h2><p>Latest completed examination attempts.</p></div><button onClick={()=>go("results")}>View all analytics →</button></header>{stats.recentAttempts.length===0?<div className="admin-no-activity">No completed attempts yet.</div>:<div className="recent-attempts">{stats.recentAttempts.map(attempt=><button key={attempt.id} onClick={()=>go("results")}><span>{attempt.userId.charAt(0).toUpperCase()}</span><div><strong>{attempt.userId}</strong><small>{attempt.testName}</small></div><b>{attempt.percentage.toFixed(1)}%</b><em className={attempt.passed?"pass":"fail"}>{attempt.passed?"Passed":"Review"}</em><time>{attempt.submittedAt?new Date(attempt.submittedAt).toLocaleDateString("en-IN"):"—"}</time></button>)}</div>}</article><aside><h2>Exam readiness</h2><div><span>Student access</span><strong>{stats.totalUsers?Math.round(stats.activeUsers/stats.totalUsers*100):0}%</strong><i><b style={{width:`${stats.totalUsers?stats.activeUsers/stats.totalUsers*100:0}%`}}/></i></div><div><span>Published papers</span><strong>{stats.totalTests?Math.round(stats.activeTests/stats.totalTests*100):0}%</strong><i><b style={{width:`${stats.totalTests?stats.activeTests/stats.totalTests*100:0}%`}}/></i></div><div><span>Attempt completion</span><strong>{stats.totalAttempts?Math.round(stats.completedAttempts/stats.totalAttempts*100):0}%</strong><i><b style={{width:`${stats.totalAttempts?stats.completedAttempts/stats.totalAttempts*100:0}%`}}/></i></div></aside></div></section>;
 };
-
-interface AdminDashboardProps {
-  adminName: string;
-  onLogout: () => void;
-}
-
-interface DashboardStats {
-  totalUsers: number;
-  activeTests: number;
-  completedTests: number;
-}
-
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminName, onLogout }) => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const currentView: AdminView = pathToView[location.pathname] ?? 'dashboard';
-  const setCurrentView = (view: AdminView) => navigate(viewToPath[view]);
-  const [editingTestId, setEditingTestId] = useState<string | null>(null);
-  const [stats, setStats] = useState<DashboardStats>({
-    totalUsers: 0,
-    activeTests: 0,
-    completedTests: 0,
-  });
-  const [showChangePassword, setShowChangePassword] = useState(false);
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [changingPassword, setChangingPassword] = useState(false);
-
-  const today = new Date().toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "2-digit",
-    year: "numeric",
-  });
-
-  useEffect(() => {
-    if (currentView === 'dashboard') {
-      loadStats();
-    }
-  }, [location.pathname]);
-
-  const loadStats = async () => {
-    try {
-      const res = await apiGet<DashboardStats>('/admin/dashboard-stats');
-      setStats(res);
-    } catch (e) {
-      console.error('Failed to load dashboard stats:', e);
-    }
-  };
-
-  const handleEditTest = (testId: string) => {
-    setEditingTestId(testId);
-    setCurrentView('edit-test');
-  };
-
-  const handleBackToTests = () => {
-    setEditingTestId(null);
-    setCurrentView('tests');
-  };
-
-  const resetPasswordModal = () => {
-    setShowChangePassword(false);
-    setOldPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    setChangingPassword(false);
-  };
-
-  const renderView = () => {
-    switch (currentView) {
-      case 'users':
-        return <UserManagement />;
-      case 'create-test':
-        return <TestBuilder onBack={() => setCurrentView('tests')} />;
-      case 'edit-test':
-        return editingTestId ? (
-          <TestEditor testId={editingTestId} onBack={handleBackToTests} />
-        ) : null;
-      case 'tests':
-        return <TestList onCreateNew={() => setCurrentView('create-test')} onEditTest={handleEditTest} />;
-      case 'results':
-        return <TestResults />;
-      case 'data-maintenance':
-        return <DataMaintenance />;
-      case 'courses':
-        return <CourseManagement />;
-      default:
-        return (
-          <>
-            <div className="dashboard-topbar">
-              <div className="dashboard-topbar-left">
-                <span className="dashboard-title">Admin Portal</span>
-              </div>
-              <div className="dashboard-topbar-right">
-                {today}
-              </div>
-            </div>
-
-            <div className="dashboard-home">
-              <h2>Welcome, {adminName}</h2>
-              <p className="subtitle">Manage tests, users, and monitor system performance</p>
-
-              <div className="stats-grid">
-                <div className="stat-card">
-                  <div className="stat-icon" aria-hidden="true">
-                    <AppIcon name="users" className="stat-icon-svg" />
-                  </div>
-                  <div className="stat-info">
-                    <h3>Total Users</h3>
-                    <p className="stat-number">{stats.totalUsers}</p>
-                  </div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-icon" aria-hidden="true">
-                    <AppIcon name="tests" className="stat-icon-svg" />
-                  </div>
-                  <div className="stat-info">
-                    <h3>Active Tests</h3>
-                    <p className="stat-number">{stats.activeTests}</p>
-                  </div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-icon" aria-hidden="true">
-                    <AppIcon name="completed" className="stat-icon-svg" />
-                  </div>
-                  <div className="stat-info">
-                    <h3>Completed Tests</h3>
-                    <p className="stat-number">{stats.completedTests}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
-        );
-    }
-  };
-
-  return (
-    <div className="admin-container">
-      <aside className="admin-sidebar">
-        <div className="sidebar-header">
-          <img
-            src="/assets/emax-logo.png"
-            alt="Emax Technologies"
-            className="sidebar-logo"
-            style={{ height: '56px', maxWidth: '140px', objectFit: 'contain', display: 'block', marginBottom: '0.75rem' }}
-          />
-          <span className="admin-badge">Admin</span>
-        </div>
-        <nav className="sidebar-nav">
-          <button
-            className={`nav-item ${currentView === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setCurrentView('dashboard')}
-          >
-            <AppIcon name="dashboard" className="nav-icon" />
-            Dashboard
-          </button>
-          <button
-            className={`nav-item ${currentView === 'users' ? 'active' : ''}`}
-            onClick={() => setCurrentView('users')}
-          >
-            <AppIcon name="users" className="nav-icon" />
-            Users
-          </button>
-          <button
-            className={`nav-item ${currentView === 'tests' || currentView === 'create-test' || currentView === 'edit-test' ? 'active' : ''}`}
-            onClick={() => setCurrentView('tests')}
-          >
-            <AppIcon name="tests" className="nav-icon" />
-            Tests
-          </button>
-          <button
-            className={`nav-item ${currentView === 'results' ? 'active' : ''}`}
-            onClick={() => setCurrentView('results')}
-          >
-            <AppIcon name="results" className="nav-icon" />
-            Test Results
-          </button>
-          <button
-            className={`nav-item ${currentView === 'courses' ? 'active' : ''}`}
-            onClick={() => setCurrentView('courses')}
-          >
-            <AppIcon name="courses" className="nav-icon" />
-            Courses
-          </button>
-          <button
-            className={`nav-item ${currentView === 'data-maintenance' ? 'active' : ''}`}
-            onClick={() => setCurrentView('data-maintenance')}
-          >
-            <AppIcon name="maintenance" className="nav-icon" />
-            Data Maintenance
-          </button>
-        </nav>
-        <div className="sidebar-footer">
-          <div className="user-profile">
-            <div className="user-avatar">{adminName.charAt(0).toUpperCase()}</div>
-            <span className="user-name">{adminName}</span>
-          </div>
-          <button
-            className="change-password-btn"
-            onClick={() => setShowChangePassword(true)}
-          >
-            Change Password
-          </button>
-          <button className="logout-btn" onClick={onLogout}>
-            Logout
-          </button>
-        </div>
-      </aside>
-      <main className="admin-main">
-        {renderView()}
-      </main>
-
-      {showChangePassword && (
-        <div className="modal-overlay">
-          <div className="modal-card">
-            <h3>Change Password</h3>
-
-            <div className="form-group">
-              <label>Current Password</label>
-              <input
-                type="password"
-                value={oldPassword}
-                onChange={(e) => setOldPassword(e.target.value)}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>New Password</label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Confirm New Password</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-            </div>
-
-            <div className="modal-actions">
-              <button className="secondary-btn" onClick={resetPasswordModal}>
-                Cancel
-              </button>
-
-              <button
-                className="primary-btn"
-                disabled={changingPassword}
-                onClick={async () => {
-                  if (!oldPassword || !newPassword || !confirmPassword) {
-                    alert('All fields are required');
-                    return;
-                  }
-
-                  if (newPassword !== confirmPassword) {
-                    alert('Passwords do not match');
-                    return;
-                  }
-
-                  try {
-                    setChangingPassword(true);
-                    await apiPost('/auth/change-password', {
-                      userId: adminName,
-                      role: 'admin',
-                      oldPassword,
-                      newPassword,
-                    });
-
-                    alert('Password changed successfully');
-                    resetPasswordModal();
-                  } catch (err: any) {
-                    alert(err?.message || 'Failed to change password');
-                  } finally {
-                    setChangingPassword(false);
-                  }
-                }}
-              >
-                {changingPassword ? 'Updating...' : 'Update Password'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
 export default AdminDashboard;

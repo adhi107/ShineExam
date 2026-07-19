@@ -523,14 +523,14 @@ def dashboard():
         return jsonify({"error": "userId is required"}), 400
 
     db = get_db()
-    # Use results collection for insights
+    # Build candidate performance insights from submitted Shine Exam results.
     results = list(db.results.find({"userId": userId}))
     testsTaken = len(results)
     testsPassed = sum(1 for r in results if r.get("passed") is True)
     bestScore = max([float(r.get("percentage", 0.0)) for r in results], default=0.0)
     avgScore = round(sum([float(r.get("percentage", 0.0)) for r in results]) / testsTaken, 2) if testsTaken else 0.0
 
-    # Simple streak: consecutive passes from most recent backwards
+    # Count the candidate's latest consecutive passed tests.
     results_sorted = sorted(results, key=lambda r: r.get("submittedAt") or datetime.min, reverse=True)
     streak = 0
     for r in results_sorted:
@@ -562,12 +562,12 @@ def get_history():
 
     db = get_db()
     
-    # Get all results for this user, sorted by submission date (most recent first)
+    # Show the candidate's submitted test history from newest to oldest.
     results = list(db.results.find({"userId": userId}).sort("submittedAt", -1))
     
     history = []
     for r in results:
-        # Get exam name
+        # Attach the Shine Exam test name to each history row.
         exam = db.exams.find_one({"_id": r.get("examId")})
         exam_name = exam.get("name", "Unknown Test") if exam else "Unknown Test"
         
@@ -606,13 +606,13 @@ def list_assigned_tests():
     for e in exams:
         passing_percentage = int(e.get("passingPercentage", 40))
 
-        # Get questions to calculate total marks and determine question types
+        # Load the assigned test questions for marks and question-type metadata.
         qs = list(db.questions.find({"examId": e["_id"]}))
         
-        # Calculate total marks from actual questions
+        # Calculate the test total from stored question marks.
         total_marks = sum(float(q.get("marks", 1)) for q in qs) if qs else int(e.get("questionCount", 0))
         
-        # Determine question types
+        # Build the candidate-facing question type summary.
         question_types = set()
         for q in qs:
             qtype = q.get("type", "")
@@ -780,7 +780,7 @@ def get_test_for_taker(exam_id: str):
 
     qs = list(db.questions.find({"examId": oid}))
     
-    # Calculate total marks and question types
+    # Calculate the total marks and question-type summary for the test screen.
     total_marks = sum(float(q.get("marks", 1)) for q in qs) if qs else int(exam.get("questionCount", 0))
     
     question_types = set()
@@ -802,8 +802,7 @@ def get_test_for_taker(exam_id: str):
             "type": q.get("type"),
             "question": q.get("question"),
             "options": q.get("options", []),
-            # Preserve only the answer shape so the client can safely detect
-            # multi-select questions without leaking the actual correct answer.
+            # Preserve only answer shape so multi-select rendering works without exposing answers.
             "correctAnswer": [] if isinstance(q.get("correctAnswer"), list) else "",
             "section": q.get("section"),
             "marks": float(q.get("marks", 0)),
@@ -859,11 +858,11 @@ def start_attempt():
     if availability != "active":
         return jsonify({"error": "This test is not active"}), 403
 
-    # verify assignment
+    # Confirm the candidate is assigned to this test before starting.
     if not db.exam_assignments.find_one({"examId": exam_oid, "userId": userId}):
         return jsonify({"error": "Exam not assigned"}), 403
 
-    # ❌ Block if already submitted
+    # Prevent a candidate from starting a test they have already submitted.
     submitted = db.attempts.find_one({
         "examId": exam_oid,
         "userId": userId,
@@ -872,7 +871,7 @@ def start_attempt():
     if submitted:
         return jsonify({"error": "Test already attempted"}), 409
 
-    # Resume in-progress attempt if exists
+    # Resume the candidate's existing in-progress attempt when available.
     existing = db.attempts.find_one({
         "examId": exam_oid,
         "userId": userId,
@@ -946,7 +945,7 @@ def submit_attempt(attempt_id):
         return jsonify({"error": "Attempt not found"}), 404
     question_times = payload.get("questionTimes") if isinstance(payload.get("questionTimes"), dict) else (attempt.get("questionTimes") or {})
 
-    # ✅ ADD THIS BLOCK
+    # Reject duplicate submissions for the same attempt.
     if attempt.get("status") == "submitted":
         return jsonify({"error": "Attempt already submitted"}), 409
 
@@ -999,16 +998,16 @@ def submit_attempt(attempt_id):
         "questionTimes": question_times,
     }
 
-    # Insert into database (this adds _id field)
+    # Store the completed test result in MongoDB.
     insert_result = db.results.insert_one(result_doc)
 
-    # Update attempt status
+    # Mark the attempt as submitted after the result is stored.
     db.attempts.update_one(
         {"_id": ObjectId(attempt_id)},
         {"$set": {"status": "submitted"}}
     )
 
-    # ✅ FIX: Convert ALL ObjectId fields to strings for JSON response
+    # Return JSON-safe identifiers and the candidate score summary.
     response_data = {
         "attemptId": str(result_doc["attemptId"]),
         "examId": str(result_doc["examId"]),
@@ -1019,13 +1018,8 @@ def submit_attempt(attempt_id):
         "passed": result_doc["passed"],
         "percentile": result_doc["percentile"],
         "sectionWise": result_doc["sectionWise"],
-        # Detailed review remains in MongoDB for Reports. Correct answers are
-        # intentionally not exposed on the immediate submission response.
+        # Keep detailed review in Reports and hide correct answers from the submission response.
         "questionReview": [],
-        # Don't include submittedAt and timeSpentSec in response if not needed
-        # or convert datetime to string if needed:
-        # "submittedAt": result_doc["submittedAt"].isoformat(),
-        # "timeSpentSec": result_doc["timeSpentSec"],
     }
 
     return jsonify(response_data)
@@ -1038,15 +1032,13 @@ def get_result(attempt_id: str):
     except Exception:
         return jsonify({"error": "Invalid attempt id"}), 400
 
-    # Older results stored attemptId as ObjectId; current submissions store the
-    # route id as a string. Support both representations during migration.
+    # Support both legacy and current Shine Exam result identifiers during migration.
     res = db.results.find_one({"attemptId": {"$in": [oid, attempt_id]}})
     if not res:
         return jsonify({"error": "Result not found"}), 404
 
     out = {**res}
-    # Hydrate legacy result documents created before question text/options were
-    # stored in the review payload, so all attempts render as an exam paper.
+    # Fill older reports with question text/options so every attempt renders like an exam paper.
     review = out.get("questionReview") or []
     if review and out.get("examId"):
         question_docs = list(db.questions.find({"examId": out["examId"]}))

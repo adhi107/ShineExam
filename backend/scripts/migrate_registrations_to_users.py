@@ -1,8 +1,8 @@
 """
 scripts/migrate_registrations_to_users.py
 
-One-time script: copies every student_registrations document that does NOT
-already have a matching user into the users collection.
+One-time Shine Exam script: creates candidate login accounts for historical
+student registrations that do not already have a matching user record.
 
 Run from the backend/ directory:
     python -m scripts.migrate_registrations_to_users
@@ -32,7 +32,7 @@ def migrate():
             skipped += 1
             continue
 
-        # Already in users?
+        # Skip registrations that already have a Shine Exam candidate account.
         existing = db.users.find_one({"$or": [{"userId": nax_unid}, {"naxUnid": nax_unid}]})
         if existing:
             print(f"  SKIP (already exists): {nax_unid}")

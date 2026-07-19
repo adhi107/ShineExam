@@ -1,10 +1,6 @@
-# backend/routes/master_data.py
-#
-# Handles:
-#   Admin:  GET/POST/DELETE  /admin/master-data  (genders, streams, certifications)
-#   Public: GET              /public/master-data  (read-only, for registration form)
-#   Public: GET              /public/next-unid    (preview next NAX_UNID)
-#   Public: POST             /public/register     (student self-registration)
+# Shine Exam master data and student registration routes.
+# Admins maintain dropdown values for student profiles, while students use the
+# public routes to register and receive their generated NAX login ID.
 
 from flask import Blueprint, jsonify, request
 from datetime import datetime
@@ -17,9 +13,7 @@ public_bp = Blueprint("public", __name__)
 
 VALID_CATEGORIES = ("genders", "streams", "certifications", "colleges")
 
-# ─────────────────────────────────────────────
-# ADMIN — read all master data
-# ─────────────────────────────────────────────
+# Admin master data list for registration dropdown management.
 @master_data_bp.get("")
 @master_data_bp.get("/")
 def get_master_data():
@@ -34,9 +28,7 @@ def get_master_data():
     return jsonify(to_jsonable(result))
 
 
-# ─────────────────────────────────────────────
-# ADMIN — add item to a category
-# ─────────────────────────────────────────────
+# Add a new Shine Exam dropdown value for student registration.
 @master_data_bp.post("/<category>")
 @master_data_bp.post("/<category>/")
 def add_master_item(category: str):
@@ -65,9 +57,7 @@ def add_master_item(category: str):
     })), 201
 
 
-# ─────────────────────────────────────────────
-# ADMIN — update item in a category
-# ─────────────────────────────────────────────
+# Rename a Shine Exam dropdown value without duplicating existing labels.
 @master_data_bp.patch("/<category>/<item_id>")
 @master_data_bp.patch("/<category>/<item_id>/")
 def update_master_item(category: str, item_id: str):
@@ -85,7 +75,7 @@ def update_master_item(category: str, item_id: str):
     except Exception:
         return jsonify({"error": "Invalid id"}), 400
 
-    # Check if new label already exists (case-insensitive, but not the same item)
+    # Keep dropdown labels unique while allowing the current item to retain its label.
     existing = db.master_data.find_one({
         "category": category,
         "label": {"$regex": f"^{label}$", "$options": "i"},
@@ -105,9 +95,7 @@ def update_master_item(category: str, item_id: str):
     })), 200
 
 
-# ─────────────────────────────────────────────
-# ADMIN — delete item from a category
-# ─────────────────────────────────────────────
+# Remove an unused dropdown value from Shine Exam registration data.
 @master_data_bp.delete("/<category>/<item_id>")
 @master_data_bp.delete("/<category>/<item_id>/")
 def delete_master_item(category: str, item_id: str):
@@ -126,9 +114,7 @@ def delete_master_item(category: str, item_id: str):
     return jsonify({"message": "Deleted"})
 
 
-# ─────────────────────────────────────────────
-# PUBLIC — read master data (for registration form)
-# ─────────────────────────────────────────────
+# Public dropdown values used by the student registration form.
 @public_bp.get("/master-data")
 @public_bp.get("/master-data/")
 def public_get_master_data():
@@ -140,9 +126,7 @@ def public_get_master_data():
     return jsonify(to_jsonable(result))
 
 
-# ─────────────────────────────────────────────
-# PUBLIC — preview next NAX_UNID
-# ─────────────────────────────────────────────
+# Preview the next generated NAX login ID for the registration page.
 @public_bp.get("/next-unid")
 @public_bp.get("/next-unid/")
 def get_next_unid():
@@ -153,9 +137,7 @@ def get_next_unid():
     return jsonify({"naxUnid": nax_unid})
 
 
-# ─────────────────────────────────────────────
-# PUBLIC — student self-registration
-# ─────────────────────────────────────────────
+# Create a new student registration and candidate login account.
 @public_bp.post("/register")
 @public_bp.post("/register/")
 def student_register():
@@ -169,13 +151,13 @@ def student_register():
 
     db = get_db()
 
-    # Duplicate checks against both collections
+    # Prevent duplicate student registrations before creating portal access.
     if db.student_registrations.find_one({"email": payload["email"].strip().lower()}):
         return jsonify({"error": "An account with this email already exists"}), 409
     if db.student_registrations.find_one({"studentId": payload["studentId"].strip()}):
         return jsonify({"error": "An account with this Student ID already exists"}), 409
 
-    # Generate sequential NAX_UNID (atomic-safe via a counter collection)
+    # Generate the student's sequential NAX login ID with a shared counter.
     counter = db.counters.find_one_and_update(
         {"_id": "nax_unid"},
         {"$inc": {"seq": 1}},
@@ -185,7 +167,7 @@ def student_register():
     seq = counter.get("seq", 1)
     nax_unid = f"NAX_{str(1500487 + seq)}"
 
-    # Validate CGPA
+    # Validate the academic score captured during registration.
     try:
         cgpa = float(payload["cgpa"])
         if not (0 <= cgpa <= 10):
@@ -200,7 +182,7 @@ def student_register():
     email = payload["email"].strip().lower()
     college_email = payload["collegeEmail"].strip().lower()
 
-    # 1. Insert into student_registrations (unchanged — keeps audit trail)
+    # Store the submitted registration profile for admin review and audit history.
     reg_doc = {
         "naxUnid": nax_unid,
         "studentName": student_name,
@@ -218,20 +200,20 @@ def student_register():
     }
     db.student_registrations.insert_one(reg_doc)
 
-    # 2. Also insert into users so the person can log in immediately
+    # Create the candidate account so the student can log in to Shine Exam immediately.
     user_doc = {
         "name": student_name,
         "email": email,
-        "userId": nax_unid,           # userId == naxUnid — single source of truth
+        "userId": nax_unid,           # Shine Exam uses the NAX ID as the candidate username.
         "naxUnid": nax_unid,
         "password": default_password,
         "role": "answerer",
         "createdAt": now,
         "lastLoginAt": None,
         "isActive": True,
-        # Student profile fields
+        # Candidate profile details shown in admin records and reports.
         "studentId": student_id,
-        "collegeRollNumber": student_id,   # roll number = studentId
+        "collegeRollNumber": student_id,   # Registration student ID is the college roll number.
         "mobile": str(payload["mobile"]).strip(),
         "gender": payload["gender"],
         "courseStream": payload["courseStream"],

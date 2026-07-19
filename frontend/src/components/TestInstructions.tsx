@@ -1,176 +1,90 @@
 import React, { useState } from "react";
+import ShineLogo from "./ShineLogo";
 import "./TestInstructions.css";
 
-interface TestInstructionsProps {
+interface SectionPattern { name: string; duration: number; questionCount: number; marks: number }
+interface Props {
+  userId: string;
   testName: string;
   duration: number;
+  timerMode?: "overall" | "sectional";
+  sectionConfig?: SectionPattern[];
   onStart: () => void;
   onBack: () => void;
 }
 
-const TestInstructions: React.FC<TestInstructionsProps> = ({
-  testName,
-  duration,
-  onStart,
-  onBack,
-}) => {
+const TestInstructions: React.FC<Props> = ({ userId, testName, duration, timerMode = "overall", sectionConfig = [], onStart, onBack }) => {
+  const [page, setPage] = useState<"general" | "paper">("general");
+  const [language, setLanguage] = useState("");
   const [agreed, setAgreed] = useState(false);
+  const totalQuestions = sectionConfig.reduce((sum, item) => sum + item.questionCount, 0);
+  const totalMarks = sectionConfig.reduce((sum, item) => sum + item.marks, 0);
+  const optionCount = testName.toLowerCase().includes("ssc") ? 4 : 5;
 
-  return (
-    // ✅ ROOT FIX (same concept as TestDetails): break out of parent padding/max-width
-    <div className="instructions-root">
-      {/* ===== TOP HEADER ===== */}
-      <header className="test-header">
-        <div className="test-header-left">
-          <img
-            src="/assets/emax-logo.png"
-            alt="Emax Technologies"
-            className="topbar-logo"
-          />
-          <h2 className="test-info">Online Exam Portal</h2>
+  return <div className="official-instructions">
+    <header className="official-brand"><ShineLogo /></header>
+    <div className="official-layout">
+      <main className="official-main">
+        <h1>{page === "general" ? "Instructions" : "Other Important Instructions"}</h1>
+        <div className="official-language">View in: <select defaultValue="English"><option>English</option><option>English & Hindi</option></select></div>
+        <div className="official-scroll">
+          {page === "general" ? <GeneralInstructions /> : <PaperInstructions testName={testName} duration={duration} totalQuestions={totalQuestions} totalMarks={totalMarks} optionCount={optionCount} timerMode={timerMode} sections={sectionConfig} />}
         </div>
-
-        <div className="user-info">
-          <span className="user-meta">
-            {new Date().toLocaleDateString("en-US", {
-              month: "short",
-              day: "2-digit",
-              year: "numeric",
-            })}{" "}
-            | Logged in as : Sample
-          </span>
-        </div>
-      </header>
-
-      {/* ===== SUB HEADER ===== */}
-      <div className="instructions-subheader">
-        <div className="instructions-meta">
-          <span>{testName}</span>
-        </div>
-
-        <div className="text-controls">
-          <button className="control-icon-btn" title="Increase font size" type="button">
-            A↑
-          </button>
-          <button className="control-icon-btn" title="Decrease font size" type="button">
-            A↓
-          </button>
-        </div>
-      </div>
-
-      {/* ===== CONTENT ===== */}
-      <div className="instructions-content">
-        <div className="instructions-card">
-          <h1 className="instructions-main-title">Welcome to {testName}</h1>
-
-          <p className="instructions-intro">
-            This is a sample of questions that are representative of the{" "}
-            <strong>{testName}</strong> certification exam.
-          </p>
-
-          <div className="instructions-disclaimer">
-            <strong>Disclaimer:</strong> These sample questions are for
-            self-evaluation purposes only and do not appear on the actual
-            certification exams. Answering the sample questions correctly is no
-            guarantee that you will pass the certification exam. The
-            certification exam covers a much broader spectrum of topics, so do
-            make sure to familiarize yourself with all topics listed in the exam
-            competency areas before taking the certification exam. At the end of
-            the sample assessment, you can see the correct answers for any
-            questions you got wrong.
-          </div>
-
-          <p>
-            The time allotted for the sample assessment is{" "}
-            {String(Math.floor(duration / 60)).padStart(2, "0")}:
-            {String(duration % 60).padStart(2, "0")} minutes. For details of the
-            time allotted for actual certification exams, please see the SAP
-            Training Shop. Answering a question correctly results in one point.
-            Answering a question incorrectly results in zero points. For
-            multiple response questions, all of the responses need to be correct
-            in order to be awarded one point.
-          </p>
-
-          <p>
-            Before starting the sample assessment, read the following
-            instructions carefully.
-          </p>
-
-          <p>
-            <strong>Good luck!</strong>
-          </p>
-
-          <h3 className="instructions-section-title">Starting the Sample Assessment</h3>
-          <ul className="instructions-list">
-            <li>
-              As soon as you select <strong>Continue</strong> at the bottom of
-              the screen, the timer begins.
-            </li>
-            <li>
-              This sample assessment includes multiple choice and multiple
-              response questions. For multiple choice questions, select one
-              single answer. For multiple response questions, select more than
-              one answer (the number of correct answers is stated in the
-              question).
-            </li>
-          </ul>
-
-          <h3 className="instructions-section-title">During the Sample Assessment</h3>
-          <ul className="instructions-list">
-            <li>
-              At the top right of the screen, a timer counts down the remaining
-              assessment time.
-            </li>
-            <li>
-              Selecting <strong>Next Question</strong> brings you forward one
-              question, <strong>Previous Question</strong> allows you to go
-              back.
-            </li>
-          </ul>
-
-          <h3 className="instructions-section-title">Ending the Sample Assessment</h3>
-          <ul className="instructions-list">
-            <li>
-              Select <strong>Submit</strong> when you have completed the exam.
-              IMPORTANT: You cannot continue with the assessment after you have
-              confirmed the Submit dialog. Selecting <strong>Submit</strong>{" "}
-              will end the sample assessment and save your results.
-            </li>
-          </ul>
-
-          <div className="agreement-section">
-            <label className="agreement-checkbox">
-              <input
-                type="checkbox"
-                checked={agreed}
-                onChange={(e) => setAgreed(e.target.checked)}
-              />
-              <span>
-                I have read and understood the instructions and agree to proceed
-                with the assessment
-              </span>
-            </label>
-          </div>
-        </div>
-
-        <footer className="instructions-footer">
-          <div className="footer-actions">
-            <button className="footer-btn secondary" onClick={onBack} type="button">
-              Back
-            </button>
-            <button
-              className="footer-btn primary"
-              onClick={onStart}
-              disabled={!agreed}
-              type="button"
-            >
-              Continue
-            </button>
-          </div>
+        {page === "paper" && <div className="official-consent">
+          <label>Choose your default language:
+            <select value={language} onChange={event => setLanguage(event.target.value)}><option value="">--Select--</option><option value="English">English</option><option value="Hindi">Hindi</option></select>
+          </label>
+          <p>Please note: questions will initially appear in your selected language. The language can be changed for an individual question where available.</p>
+          <label className="declaration"><input type="checkbox" checked={agreed} onChange={event => setAgreed(event.target.checked)} /><span>I have read and understood the instructions. I confirm that my computer is working correctly and agree to follow all examination rules. I understand that the test can be attempted only once after final submission.</span></label>
+        </div>}
+        <footer>
+          <button className="official-secondary" onClick={() => page === "paper" ? setPage("general") : onBack()}>&lt; Previous</button>
+          {page === "general" ? <button className="official-primary" onClick={() => setPage("paper")}>Next &gt;</button> : <button className="official-primary" disabled={!language || !agreed} onClick={onStart}>I am ready to begin</button>}
         </footer>
-      </div>
+      </main>
+      <aside className="official-candidate"><div className="candidate-photo">{userId.charAt(0).toUpperCase()}</div><strong>{userId}</strong><span>Shine Candidate</span></aside>
     </div>
-  );
+  </div>;
 };
+
+const GeneralInstructions = () => <div className="general-copy">
+  <h2>General Instructions:</h2>
+  <ol>
+    <li>The examination clock is controlled by the server. The countdown timer shows the remaining time. When it reaches zero, the examination is submitted automatically.</li>
+    <li>The question palette displays the status of every question:</li>
+  </ol>
+  <div className="palette-legend">
+    <Legend symbol="1" kind="not-visited" text="You have not visited the question yet." />
+    <Legend symbol="2" kind="not-answered" text="You have visited but not answered the question." />
+    <Legend symbol="3" kind="answered" text="You have answered the question." />
+    <Legend symbol="4" kind="review" text="You have not answered the question, but marked it for review." />
+    <Legend symbol="5" kind="answered-review" text="You have answered and marked the question for review; the answer will be evaluated." />
+  </div>
+  <h3>Navigation and answering</h3>
+  <ol start={3}>
+    <li>Select any section tab and question number to navigate. Your response is retained when you move to another question.</li>
+    <li>Use <b>Mark for Review</b> when you want to return to a question later. You may change or clear a response before final submission.</li>
+    <li>Do not close or refresh the browser during the examination. Progress is saved automatically.</li>
+    <li>Select <b>Submit Exam</b> to open the section summary. Final submission occurs only after you confirm it.</li>
+  </ol>
+</div>;
+
+const Legend = ({ symbol, kind, text }: { symbol: string; kind: string; text: string }) => <div><span className={`legend-shape ${kind}`}>{symbol}</span><p>{text}</p></div>;
+
+const PaperInstructions = ({ testName, duration, totalQuestions, totalMarks, optionCount, timerMode, sections }: { testName: string; duration: number; totalQuestions: number; totalMarks: number; optionCount: number; timerMode: string; sections: SectionPattern[] }) => <div className="paper-copy">
+  <h2><u>Other Important Instructions</u></h2>
+  <h3><u>{testName.toUpperCase()}</u></h3>
+  <div className="paper-facts"><b>Duration: {duration} Minutes</b><b>Maximum Marks: {totalMarks}</b></div>
+  <p>Read the following instructions carefully.</p>
+  <ol>
+    <li>The test contains {sections.length} sections having {totalQuestions} questions.</li>
+    <li>Each question has {optionCount} options, out of which only one is correct.</li>
+    <li>You must complete the examination within {duration} minutes.</li>
+    <li>Wrong answers carry the negative mark prescribed for the paper. Unattempted questions receive no negative mark.</li>
+    <li>{timerMode === "sectional" ? "Each section has its own timer. Moving between sections does not reset or increase its remaining time." : "All sections share the overall examination timer."}</li>
+    <li>You can write this test only once. Review the submission summary carefully before confirming.</li>
+  </ol>
+  <table className="official-pattern"><thead><tr><th>Section</th><th>Questions</th><th>Marks</th><th>Time</th></tr></thead><tbody>{sections.map(section => <tr key={section.name}><td>{section.name}</td><td>{section.questionCount}</td><td>{section.marks}</td><td>{timerMode === "sectional" ? `${section.duration} min` : "Overall"}</td></tr>)}</tbody></table>
+</div>;
 
 export default TestInstructions;

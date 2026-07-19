@@ -4,6 +4,7 @@ import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
 import AnswererDashboard from './components/AnswererDashboard';
 import './App.css';
+import './CardMotion.css';
 
 type UserRole = 'admin' | 'answerer';
 
@@ -12,7 +13,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState<string>('');
   const navigate = useNavigate();
 
-  // Restore session on refresh
+  // Restore the Shine Exam session after a page refresh.
   useEffect(() => {
     const savedRole = sessionStorage.getItem('role') as UserRole | null;
     const savedUser = sessionStorage.getItem('userId');

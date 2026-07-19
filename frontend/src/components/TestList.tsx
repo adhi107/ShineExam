@@ -26,7 +26,10 @@ interface Test {
   sections: Section[];
   createdAt: string;
   updatedAt?: string;
-  status: "active" | "draft" | "completed";
+  availableFrom?: string;
+  validUntil?: string;
+  categoryId?: string; categoryName?: string; subcategoryId?: string; subcategoryName?: string; stage?: string;
+  status: "active" | "draft" | "completed" | "upcoming" | "expired";
   passingPercentage: number;
   assignmentCount?: number;
   assignedColleges?: string[];
@@ -38,9 +41,6 @@ interface User {
   userId: string;
   email?: string;
   isActive?: boolean;
-  collegeName?: string;
-  courseStream?: string;
-  gender?: string;
 }
 
 interface TestListProps {
@@ -61,30 +61,28 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
   const [assigningTest, setAssigningTest] = useState<Test | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [studentSearch, setStudentSearch] = useState("");
-  const [streamFilter, setStreamFilter] = useState("");
-  const [collegeFilter, setCollegeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
   const [testSearch, setTestSearch] = useState("");
-  const [testStatusFilter, setTestStatusFilter] = useState<"" | "active" | "draft" | "completed">("");
-  const [testDurationFilter, setTestDurationFilter] = useState<TestDurationBand>("all");
+  const [testStatusFilter, setTestStatusFilter] = useState<"" | "active" | "draft" | "completed" | "upcoming" | "expired">("");
+  const testDurationFilter: TestDurationBand = "all";
   const [testSectionFilter, setTestSectionFilter] = useState("all");
-  const [testQuestionFilter, setTestQuestionFilter] = useState<TestQuestionBand>("all");
-  const [testCutoffBand, setTestCutoffBand] = useState<TestCutoffBand>("all");
-  const [testSectionCountFilter, setTestSectionCountFilter] = useState<SectionCountBand>("all");
-  const [testAssignmentFilter, setTestAssignmentFilter] = useState<AssignmentLoadBand>("all");
-  const [testCollegeFilter, setTestCollegeFilter] = useState("all");
-  const [createdRangeFilter, setCreatedRangeFilter] = useState<RelativeDateFilter>("all");
-  const [updatedRangeFilter, setUpdatedRangeFilter] = useState<RelativeDateFilter>("all");
-  const [minCutoff, setMinCutoff] = useState("");
-  const [maxCutoff, setMaxCutoff] = useState("");
-  const [minDuration, setMinDuration] = useState("");
-  const [maxDuration, setMaxDuration] = useState("");
-  const [minQuestions, setMinQuestions] = useState("");
-  const [maxQuestions, setMaxQuestions] = useState("");
-  const [minAssignments, setMinAssignments] = useState("");
-  const [maxAssignments, setMaxAssignments] = useState("");
-  const [createdFrom, setCreatedFrom] = useState("");
-  const [createdTo, setCreatedTo] = useState("");
+  const testQuestionFilter: TestQuestionBand = "all";
+  const testCutoffBand: TestCutoffBand = "all";
+  const testSectionCountFilter: SectionCountBand = "all";
+  const testAssignmentFilter: AssignmentLoadBand = "all";
+  const testCollegeFilter = "all";
+  const createdRangeFilter: RelativeDateFilter = "all";
+  const updatedRangeFilter: RelativeDateFilter = "all";
+  const minCutoff = "";
+  const maxCutoff = "";
+  const minDuration = "";
+  const maxDuration = "";
+  const minQuestions = "";
+  const maxQuestions = "";
+  const minAssignments = "";
+  const maxAssignments = "";
+  const createdFrom = "";
+  const createdTo = "";
   const [testSortBy, setTestSortBy] = useState<TestSortBy>("newest");
   const [showFilters, setShowFilters] = useState(false);
 
@@ -116,23 +114,6 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
     loadUsers();
   }, []);
 
-  const availableStreams = useMemo(
-    () => Array.from(new Set(allUsers.map((user) => user.courseStream).filter(Boolean) as string[])).sort(),
-    [allUsers]
-  );
-
-  const availableColleges = useMemo(
-    () => Array.from(new Set(allUsers.map((user) => user.collegeName).filter(Boolean) as string[])).sort(),
-    [allUsers]
-  );
-
-  const assignedCollegeOptions: ValueHelpOption[] = useMemo(() => [
-    { value: "all", label: "All Target Colleges" },
-    ...Array.from(new Set(tests.flatMap((test) => test.assignedColleges || []).filter(Boolean) as string[]))
-      .sort()
-      .map((value) => ({ value, label: value })),
-  ], [tests]);
-
   const testSearchOptions = useMemo<ValueHelpOption[]>(() => {
     const unique = Array.from(new Set(tests.flatMap((test) => [
       test.name,
@@ -141,6 +122,9 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
       `${test.passingPercentage}% cutoff`,
       `${test.assignmentCount || 0} assigned`,
       test.status,
+      test.categoryName,
+      test.subcategoryName,
+      test.stage,
       ...(test.assignedColleges || []),
       ...(test.sections || []).map((section) => typeof section === "string" ? section : section.name),
     ])));
@@ -149,7 +133,7 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
 
   const studentSearchOptions = useMemo<ValueHelpOption[]>(() => {
     const unique = Array.from(new Set(allUsers.flatMap((user) => [
-      user.name, user.userId, user.email, user.courseStream, user.collegeName, user.gender,
+      user.name, user.userId, user.email,
     ]).filter(Boolean) as string[]));
     return unique.slice(0, 40).map((value) => ({ value, label: value }));
   }, [allUsers]);
@@ -159,12 +143,8 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
     { value: "active", label: "Active" },
     { value: "draft", label: "Draft" },
     { value: "completed", label: "Completed" },
-  ];
-  const durationOptions: ValueHelpOption[] = [
-    { value: "all", label: "All Durations" },
-    { value: "short", label: "Short", keywords: ["30 min or less"] },
-    { value: "medium", label: "Medium", keywords: ["31 to 60 min"] },
-    { value: "long", label: "Long", keywords: ["over 60 min"] },
+    { value: "upcoming", label: "Upcoming" },
+    { value: "expired", label: "Expired" },
   ];
   const sectionOptions: ValueHelpOption[] = [
     { value: "all", label: "All Sections" },
@@ -172,44 +152,6 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
       .filter(Boolean)
       .sort()
       .map((value) => ({ value: value as string, label: value as string })),
-  ];
-  const questionOptions: ValueHelpOption[] = [
-    { value: "all", label: "All Question Counts" },
-    { value: "short", label: "Up to 25 Questions" },
-    { value: "medium", label: "26 to 50 Questions" },
-    { value: "large", label: "More than 50 Questions" },
-  ];
-  const cutoffOptions: ValueHelpOption[] = [
-    { value: "all", label: "All Cutoffs" },
-    { value: "easy", label: "Up to 50%" },
-    { value: "standard", label: "51% to 70%" },
-    { value: "strict", label: "Above 70%" },
-  ];
-  const sectionCountOptions: ValueHelpOption[] = [
-    { value: "all", label: "All Section Counts" },
-    { value: "single", label: "Single Section" },
-    { value: "few", label: "2 to 3 Sections" },
-    { value: "many", label: "4+ Sections" },
-  ];
-  const assignmentOptions: ValueHelpOption[] = [
-    { value: "all", label: "All Assignment Loads" },
-    { value: "unassigned", label: "Unassigned" },
-    { value: "light", label: "1 to 25 Students" },
-    { value: "heavy", label: "26+ Students" },
-  ];
-  const createdRangeOptions: ValueHelpOption[] = [
-    { value: "all", label: "Any Created Date" },
-    { value: "today", label: "Created Today" },
-    { value: "last7", label: "Created Last 7 Days" },
-    { value: "last30", label: "Created Last 30 Days" },
-    { value: "older", label: "Created Earlier" },
-  ];
-  const updatedRangeOptions: ValueHelpOption[] = [
-    { value: "all", label: "Any Updated Date" },
-    { value: "today", label: "Updated Today" },
-    { value: "last7", label: "Updated Last 7 Days" },
-    { value: "last30", label: "Updated Last 30 Days" },
-    { value: "older", label: "Updated Earlier" },
   ];
   const sortOptions: ValueHelpOption[] = [
     { value: "newest", label: "Newest First" },
@@ -226,8 +168,6 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
     { value: "assignments-low", label: "Least Assigned" },
   ];
 
-  const streamOptions: ValueHelpOption[] = [{ value: "", label: "All Streams" }, ...availableStreams.map((value) => ({ value, label: value }))];
-  const collegeOptions: ValueHelpOption[] = [{ value: "", label: "All Colleges" }, ...availableColleges.map((value) => ({ value, label: value }))];
   const studentStatusOptions: ValueHelpOption[] = [
     { value: "active", label: "Active Only" },
     { value: "inactive", label: "Inactive Only" },
@@ -269,11 +209,11 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
   const filteredUsers = useMemo(() => {
     return filterAssignableStudents(allUsers, {
       search: studentSearch,
-      stream: streamFilter,
-      college: collegeFilter,
+      stream: "",
+      college: "",
       status: statusFilter,
     });
-  }, [allUsers, studentSearch, streamFilter, collegeFilter, statusFilter]);
+  }, [allUsers, studentSearch, statusFilter]);
 
   const filteredUserIds = useMemo(() => filteredUsers.map((user) => user.userId), [filteredUsers]);
   const allSelected = filteredUserIds.length > 0 && filteredUserIds.every((userId) => selectedUserIds.includes(userId));
@@ -307,31 +247,17 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
     if (status === "active") return "status-active";
     if (status === "draft") return "status-draft";
     if (status === "completed") return "status-completed";
+    if (status === "upcoming") return "status-upcoming";
+    if (status === "expired") return "status-expired";
     return "";
   };
+
+  const formatValidityDate = (value?: string) => value ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }) : "No expiry";
 
   const activeFilterCount = [
     Boolean(testSearch.trim()),
     Boolean(testStatusFilter),
-    testDurationFilter !== "all",
     testSectionFilter !== "all",
-    testQuestionFilter !== "all",
-    testCutoffBand !== "all",
-    testSectionCountFilter !== "all",
-    testAssignmentFilter !== "all",
-    testCollegeFilter !== "all",
-    createdRangeFilter !== "all",
-    updatedRangeFilter !== "all",
-    Boolean(minCutoff),
-    Boolean(maxCutoff),
-    Boolean(minDuration),
-    Boolean(maxDuration),
-    Boolean(minQuestions),
-    Boolean(maxQuestions),
-    Boolean(minAssignments),
-    Boolean(maxAssignments),
-    Boolean(createdFrom),
-    Boolean(createdTo),
     testSortBy !== "newest",
   ].filter(Boolean).length;
 
@@ -362,61 +288,10 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
           </div>
 
           <div className="test-list-filters">
-            <ValueHelpField label="Search Tests" placeholder="Search by name, duration, questions, section..." value={testSearch} options={testSearchOptions} onChange={setTestSearch} allowFreeText />
-            <ValueHelpField label="Status" placeholder="All Test Status" value={testStatusFilter} options={testStatusOptions} onChange={(value) => setTestStatusFilter(value as "" | "active" | "draft" | "completed")} />
-            <ValueHelpField label="Duration" placeholder="All Durations" value={testDurationFilter} options={durationOptions} onChange={(value) => setTestDurationFilter(value as "all" | "short" | "medium" | "long")} />
-            <ValueHelpField label="Questions" placeholder="All Question Counts" value={testQuestionFilter} options={questionOptions} onChange={(value) => setTestQuestionFilter(value as "all" | "short" | "medium" | "large")} />
-            <ValueHelpField label="Cutoff Band" placeholder="All Cutoffs" value={testCutoffBand} options={cutoffOptions} onChange={(value) => setTestCutoffBand(value as "all" | "easy" | "standard" | "strict")} />
+            <ValueHelpField label="Search Tests" placeholder="Search by name or section..." value={testSearch} options={testSearchOptions} onChange={setTestSearch} allowFreeText />
+            <ValueHelpField label="Status" placeholder="All Test Status" value={testStatusFilter} options={testStatusOptions} onChange={(value) => setTestStatusFilter(value as "" | "active" | "draft" | "completed" | "upcoming" | "expired")} />
             <ValueHelpField label="Section" placeholder="All Sections" value={testSectionFilter} options={sectionOptions} onChange={setTestSectionFilter} />
-            <ValueHelpField label="Section Count" placeholder="All Section Counts" value={testSectionCountFilter} options={sectionCountOptions} onChange={(value) => setTestSectionCountFilter(value as "all" | "single" | "few" | "many")} />
-            <ValueHelpField label="Assigned Students" placeholder="All Assignment Loads" value={testAssignmentFilter} options={assignmentOptions} onChange={(value) => setTestAssignmentFilter(value as "all" | "unassigned" | "light" | "heavy")} />
-            <ValueHelpField label="Target College" placeholder="All Target Colleges" value={testCollegeFilter} options={assignedCollegeOptions} onChange={setTestCollegeFilter} />
-            <ValueHelpField label="Created" placeholder="Any Created Date" value={createdRangeFilter} options={createdRangeOptions} onChange={(value) => setCreatedRangeFilter(value as RelativeDateFilter)} />
-            <ValueHelpField label="Updated" placeholder="Any Updated Date" value={updatedRangeFilter} options={updatedRangeOptions} onChange={(value) => setUpdatedRangeFilter(value as RelativeDateFilter)} />
             <ValueHelpField label="Sort By" placeholder="Newest First" value={testSortBy} options={sortOptions} onChange={(value) => setTestSortBy(value as TestSortBy)} />
-          </div>
-
-          <div className="test-range-filters">
-            <label className="range-input">
-              <span>Cutoff % Min</span>
-              <input type="number" min="0" max="100" value={minCutoff} onChange={(e) => setMinCutoff(e.target.value)} placeholder="0" />
-            </label>
-            <label className="range-input">
-              <span>Cutoff % Max</span>
-              <input type="number" min="0" max="100" value={maxCutoff} onChange={(e) => setMaxCutoff(e.target.value)} placeholder="100" />
-            </label>
-            <label className="range-input">
-              <span>Duration Min</span>
-              <input type="number" min="0" value={minDuration} onChange={(e) => setMinDuration(e.target.value)} placeholder="Minutes" />
-            </label>
-            <label className="range-input">
-              <span>Duration Max</span>
-              <input type="number" min="0" value={maxDuration} onChange={(e) => setMaxDuration(e.target.value)} placeholder="Minutes" />
-            </label>
-            <label className="range-input">
-              <span>Questions Min</span>
-              <input type="number" min="0" value={minQuestions} onChange={(e) => setMinQuestions(e.target.value)} placeholder="0" />
-            </label>
-            <label className="range-input">
-              <span>Questions Max</span>
-              <input type="number" min="0" value={maxQuestions} onChange={(e) => setMaxQuestions(e.target.value)} placeholder="Any" />
-            </label>
-            <label className="range-input">
-              <span>Assigned Min</span>
-              <input type="number" min="0" value={minAssignments} onChange={(e) => setMinAssignments(e.target.value)} placeholder="0" />
-            </label>
-            <label className="range-input">
-              <span>Assigned Max</span>
-              <input type="number" min="0" value={maxAssignments} onChange={(e) => setMaxAssignments(e.target.value)} placeholder="Any" />
-            </label>
-            <label className="range-input">
-              <span>Created From</span>
-              <input type="date" value={createdFrom} onChange={(e) => setCreatedFrom(e.target.value)} />
-            </label>
-            <label className="range-input">
-              <span>Created To</span>
-              <input type="date" value={createdTo} onChange={(e) => setCreatedTo(e.target.value)} />
-            </label>
           </div>
         </section>
       )}
@@ -433,15 +308,15 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
               <div className="test-info"><span className="info-label">Questions:</span><span className="info-value">{test.questions}</span></div>
               <div className="test-info"><span className="info-label">Cutoff:</span><span className="info-value">{test.passingPercentage}%</span></div>
               <div className="test-info"><span className="info-label">Assigned:</span><span className="info-value">{test.assignmentCount || 0}</span></div>
+              <div className="test-info"><span className="info-label">Classification:</span><span className="info-value">{[test.categoryName,test.subcategoryName,test.stage].filter(Boolean).join(" / ") || "Unclassified"}</span></div>
               <div className="test-info"><span className="info-label">Sections:</span><span className="info-value">{Array.isArray(test.sections) ? test.sections.map((s) => typeof s === "string" ? s : s.name).join(", ") : "N/A"}</span></div>
-              <div className="test-info"><span className="info-label">Created:</span><span className="info-value">{new Date(test.createdAt).toLocaleDateString()}</span></div>
-              <div className="test-info"><span className="info-label">Updated:</span><span className="info-value">{new Date(test.updatedAt || test.createdAt).toLocaleDateString()}</span></div>
-              <div className="test-info test-info-stack"><span className="info-label">Target Colleges:</span><span className="info-value">{(test.assignedColleges || []).length > 0 ? test.assignedColleges!.join(", ") : "None yet"}</span></div>
+              <div className="test-info validity-date"><span className="info-label">Start</span><span className="info-value">{formatValidityDate(test.availableFrom || test.createdAt)}</span></div>
+              <div className="test-info validity-date"><span className="info-label">Valid until</span><span className="info-value">{formatValidityDate(test.validUntil)}</span></div>
             </div>
             <div className="test-card-actions">
               <button className="action-btn view-btn" onClick={() => setSelectedTest(test)}>View Details</button>
               <button className="action-btn edit-btn" onClick={() => handleEdit(test.id)}>Edit</button>
-              <button className="action-btn edit-btn" onClick={() => { setAssigningTest(test); setSelectedUserIds([]); setStudentSearch(""); setStreamFilter(""); setCollegeFilter(""); setStatusFilter("active"); }}>Assign</button>
+              <button className="action-btn edit-btn" onClick={() => { setAssigningTest(test); setSelectedUserIds([]); setStudentSearch(""); setStatusFilter("active"); }}>Assign</button>
               <button className="action-btn delete-btn" onClick={() => deleteTest(test.id)}>Delete</button>
             </div>
           </div>
@@ -479,8 +354,9 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
               </div>
               <div className="detail-row"><span className="detail-label">Status:</span><span className={`status-badge ${getStatusColor(selectedTest.status)}`}>{selectedTest.status}</span></div>
               <div className="detail-row"><span className="detail-label">Created:</span><span>{new Date(selectedTest.createdAt).toLocaleString()}</span></div>
+              <div className="detail-row"><span className="detail-label">Available from:</span><span>{formatValidityDate(selectedTest.availableFrom || selectedTest.createdAt)}</span></div>
+              <div className="detail-row"><span className="detail-label">Valid until:</span><span>{formatValidityDate(selectedTest.validUntil)}</span></div>
               <div className="detail-row"><span className="detail-label">Updated:</span><span>{new Date(selectedTest.updatedAt || selectedTest.createdAt).toLocaleString()}</span></div>
-              <div className="detail-row"><span className="detail-label">Target Colleges:</span><span>{(selectedTest.assignedColleges || []).length > 0 ? selectedTest.assignedColleges!.join(", ") : "None yet"}</span></div>
             </div>
             <div className="modal-footer">
               <button className="secondary-btn" onClick={() => setSelectedTest(null)}>Close</button>
@@ -501,9 +377,7 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
               {allUsers.length > 0 && (
                 <div className="assign-filter-wrap">
                   <div className="assign-filter-grid">
-                    <ValueHelpField label="Search Students" placeholder="Search by name, user ID, email, stream, college" value={studentSearch} options={studentSearchOptions} onChange={setStudentSearch} allowFreeText />
-                    <ValueHelpField label="Stream" placeholder="All Streams" value={streamFilter} options={streamOptions} onChange={setStreamFilter} />
-                    <ValueHelpField label="College" placeholder="All Colleges" value={collegeFilter} options={collegeOptions} onChange={setCollegeFilter} />
+                    <ValueHelpField label="Search Students" placeholder="Search by name, username or email" value={studentSearch} options={studentSearchOptions} onChange={setStudentSearch} allowFreeText />
                     <ValueHelpField label="Status" placeholder="Active Only" value={statusFilter} options={studentStatusOptions} onChange={(value) => setStatusFilter(value as "active" | "inactive" | "all")} />
                   </div>
                   <div className="assign-selection-meta">
@@ -537,7 +411,7 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
                     />
                     <div className="assign-user-copy">
                       <span>{user.name} ({user.userId})</span>
-                      <small>{user.courseStream || "No stream"} | {user.collegeName || "No college"}</small>
+                      <small>{user.email || "No email address"}</small>
                     </div>
                   </label>
                 ))}

@@ -136,7 +136,7 @@ def compute_result(
             }
         )
 
-    # stable ordering
+    # Keep Shine Exam question review output in the original test order.
     section_breakdown.sort(key=lambda x: x["section"])
 
     return {

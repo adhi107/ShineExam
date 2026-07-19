@@ -1,10 +1,10 @@
-/* ================= ROOT RESET ================= */
+/* Candidate test-taking page reset. */
 html, body {
   margin: 0;
   padding: 0;
 }
 
-/* ================= ROOT CONTAINER ================= */
+/* Candidate test-taking workspace container. */
 .test-interface {
   position: fixed;
   inset: 0;
@@ -17,7 +17,7 @@ html, body {
   flex-direction: column;
 }
 
-/* ================= TOP HEADER (matches TestDetails/Instructions) ================= */
+/* Test-taking header shared with instructions and details pages. */
 .test-header {
   width: 100%;
   background: #ffffff;
@@ -97,7 +97,7 @@ html, body {
   50% { opacity: 0.6; }
 }
 
-/* ================= SUB HEADER ================= */
+/* Candidate test section and timer header. */
 .test-subheader {
   width: 100%;
   background: #ffffff;
@@ -123,7 +123,7 @@ html, body {
   color: #6a6d70;
 }
 
-/* ================= MAIN CONTENT AREA ================= */
+/* Main question and navigation workspace. */
 .test-body {
   flex: 1;
   display: flex;
@@ -139,7 +139,7 @@ html, body {
   overflow-y: auto;
 }
 
-/* ================= NAVIGATION CONTROLS ================= */
+/* Previous, next and submit controls for the test attempt. */
 .navigation-controls {
   display: flex;
   gap: 0.75rem;
@@ -190,7 +190,7 @@ html, body {
   cursor: not-allowed;
 }
 
-/* ================= MARK FOR REVIEW BUTTON ================= */
+/* Candidate mark-for-review question action. */
 .review-btn {
   background: #ffffff;
   color: #1d2d3e;
@@ -207,7 +207,7 @@ html, body {
   font-weight: 600;
 }
 
-/* ================= RESPONSIVE ================= */
+/* Responsive test-taking layout. */
 @media (max-width: 1024px) {
   .test-body {
     flex-direction: column;
@@ -237,10 +237,22 @@ html, body {
   }
 }
 
-/* ================= QUESTION TEXT ================= */
+/* Candidate question text readability. */
 .question-text {
   white-space: pre-wrap;   /* 🔑 THIS is the fix */
   font-family: inherit;
   line-height: 1.5;
   white-space: pre-wrap; 
 }
+
+/* Shine secure assessment workspace */
+.test-interface{background:#eef3fa;font-family:Inter,Segoe UI,sans-serif;overflow:hidden}.test-interface .test-header{height:78px;padding:0 25px;background:linear-gradient(100deg,#071a3d,#0b2f6b);border:0;color:#fff}.test-interface .shine-logo-mark{width:39px;height:39px;font-size:21px;border-radius:10px}.test-interface .shine-logo-copy strong{font-size:17px}.test-interface .test-portal-title{color:#aebfd8;font-size:12px;border-left:1px solid rgba(255,255,255,.2);padding-left:14px}.test-interface .user-meta,.test-interface .test-timer{color:#c7d3e5;font-size:10px}.test-interface .timer-value{background:#fff;color:#0b2f6b;border-radius:7px;padding:9px 12px;font-size:13px}.test-interface .test-subheader{height:62px;padding:0 25px;background:#fff}.test-interface .test-subheader .test-title{font-size:16px;font-weight:700}.test-interface .question-info{background:#eaf1ff;color:#2f6fed;padding:7px 11px;border-radius:20px;font-size:10px}.test-interface .test-body{display:block;overflow:hidden;background:#f3f6fb}.test-interface .question-section{position:absolute;left:0;right:285px;top:140px;bottom:66px;padding:30px 38px;overflow:auto;background:#fff;margin:20px;border:1px solid #dce3ee;border-radius:10px}.test-interface .navigation-controls{position:absolute;left:0;right:285px;bottom:0;height:66px;padding:12px 20px;align-items:center;background:#fff;box-shadow:0 -3px 12px rgba(15,39,76,.07)}.test-interface .nav-btn{height:40px;border-radius:7px;font:600 11px Inter}.test-interface .nav-btn.primary,.test-interface .nav-btn.submit-btn{background:#2f6fed;color:#fff;border-color:#2f6fed}.test-interface .review-btn{border-color:#f0ad48;color:#a76508}.test-interface .question-header{padding-bottom:18px;border-bottom:1px solid #e7ebf1}.test-interface .question-number{width:30px;height:30px!important;display:grid;background:#eaf1ff!important;color:#2f6fed!important;border-radius:7px!important;place-items:center;font-weight:800}.test-interface .question-text{font-size:15px;line-height:1.65;font-weight:600}.test-interface .options-list{gap:10px;margin-top:20px}.test-interface .option-item-label{border:1px solid #dce3ee;border-radius:8px;padding:13px 15px;background:#fff}.test-interface .option-item-label:hover{background:#f4f7fc;border-color:#9cb8e7}.test-interface .option-text{font-size:13px}.test-interface input{accent-color:#2f6fed}
+/* Section navigation and persistent submission area */
+.test-interface .navigator-sections{flex:0 0 auto;background:#f8faff;padding:10px 12px}.test-interface .navigator-sections button{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.test-interface .questions-grid{flex:1 1 auto;min-height:0;overflow-y:auto}.test-interface .navigator-submit-wrap{flex:0 0 auto;background:#f8faff;padding:12px 16px 16px}.test-interface .navigator-submit{background:linear-gradient(90deg,#0b2f6b,#2f6fed);font-size:12px;box-shadow:0 4px 10px rgba(47,111,237,.2)}
+@media(max-width:800px){.test-interface .test-header-right .user-meta,.test-interface .test-portal-title{display:none}.test-interface .question-section{right:0;bottom:285px;margin:10px;padding:20px}.test-interface .question-navigator{left:0!important;right:0!important;top:auto!important;bottom:65px!important;width:auto!important;height:215px!important}.test-interface .navigation-controls{right:0}.test-interface .shine-logo-copy{display:none}}
+
+.test-interface .save-next-btn{margin-left:auto;min-width:130px;background:#2f6fed!important;color:#fff!important;border-color:#2f6fed!important}
+
+/* Final submission summary */
+.submit-confirmation{position:fixed;inset:0;z-index:6000;background:#fff;font-family:Arial,sans-serif;color:#111}.submit-confirmation>header{height:105px;padding:0 42px;display:flex;align-items:center;justify-content:space-between;background:#eef1f4;border-top:5px solid #0b2f6b;border-bottom:1px solid #b9c2cb}.submit-confirmation>header div{display:flex;flex-direction:column;gap:7px}.submit-confirmation>header strong{padding:12px 18px;border-radius:9px;background:#2f9fde;color:#fff;font-size:18px}.submit-confirmation>header small{color:#637083}.submit-confirmation>header span{font-size:14px}.submit-confirmation>header b{color:#16933c}.submit-confirmation main{padding:38px 4vw;text-align:center}.submit-confirmation h2{margin:0 0 8px;color:#0b2f6b}.submit-confirmation main>p{color:#5d6878}.submit-table-wrap{max-width:1250px;margin:35px auto 28px;overflow:auto}.submit-confirmation table{width:100%;border-collapse:collapse;font-size:13px}.submit-confirmation th,.submit-confirmation td{border:1px solid #222;padding:11px 8px;text-align:center}.submit-confirmation th{background:#eaf4fc}.submit-confirmation td:first-child,.submit-confirmation th:first-child{text-align:left}.submit-confirmation .total-row{font-weight:700;background:#f3f5f7}.submit-confirmation h3{font-size:16px;font-weight:500}.submit-confirm-actions{display:flex;justify-content:center;gap:14px;margin:15px}.submit-confirm-actions button{padding:12px 22px;border:1px solid #aeb7c1;border-radius:4px;background:#d7d7d7;font:bold 14px Arial;cursor:pointer}.submit-confirm-actions button:first-child{background:#0b2f6b;color:#fff;border-color:#0b2f6b}.submit-confirm-actions button:disabled{opacity:.55}.submit-warning{font-size:12px!important;color:#c23a30!important}.submission-complete{position:fixed;inset:0;z-index:6000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;background:linear-gradient(145deg,#eef4fb,#fff);font-family:Inter,Arial,sans-serif;text-align:center}.submission-complete>.shine-logo{margin-bottom:28px}.submission-check{width:74px;height:74px;display:grid;place-items:center;border-radius:50%;background:#24aa75;color:#fff;font-size:40px}.submission-complete h1{color:#0b2f6b;margin:20px 0 6px}.submission-complete>p{color:#66748a}.submission-reference{width:min(560px,90vw);margin:24px 0;padding:20px;display:grid;grid-template-columns:140px 1fr;gap:12px;text-align:left;background:#fff;border:1px solid #d8e0eb;border-radius:10px}.submission-reference span{color:#758196}.submission-reference strong{overflow-wrap:anywhere;color:#1c2e47}.submission-note{font-size:13px}.submission-complete>button{margin-top:12px;padding:13px 28px;border:0;border-radius:7px;background:#0b2f6b;color:#fff;font-weight:700;cursor:pointer}@media(max-width:700px){.submit-confirmation>header{height:auto;padding:15px;gap:15px}.submit-confirmation main{padding:20px 12px}.submission-reference{grid-template-columns:1fr}.submit-table-wrap{margin-top:20px}}
+.question-subheader-actions{display:flex;align-items:center;gap:14px}.exam-bookmark-button{height:34px;padding:0 13px;border:1px solid #ccd5e2;border-radius:5px;background:#fff;color:#536178;font-weight:700;cursor:pointer}.exam-bookmark-button.saved{border-color:#e9c65f;background:#fff8dc;color:#a66e00}

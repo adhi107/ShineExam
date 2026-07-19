@@ -1,0 +1,17 @@
+.test-validity-box {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: 15px 0 16px;
+  padding: 10px;
+  background: #f5f7fb;
+  border: 1px solid #edf0f5;
+  border-radius: 9px;
+}
+.test-validity-box > div { min-width: 0; padding: 7px 10px; border-right: 1px solid #d8e0ec; }
+.test-validity-box > div:nth-child(2),.test-validity-box > div:nth-child(4) { border-right: 0; }
+.test-validity-box > div:nth-child(n+3) { margin-top: 5px; padding-top: 10px; border-top: 1px solid #e0e6ef; }
+.test-validity-box small,.test-validity-box strong { display: block; }
+.test-validity-box small { margin-bottom: 5px; color: #7e899b; font-size: 9px; }
+.test-validity-box strong { overflow: hidden; color: #172b4d; font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+.portal-test-list.list .test-validity-box { margin: 0; }
+.portal-test-list.list .shine-primary { align-self: center; }

@@ -20,8 +20,7 @@ def login():
 
     db = get_db()
 
-    # Accept login via userId OR naxUnid — both fields hold the same NAX_XXXX value
-    # for self-registered students, but querying both keeps it robust.
+    # Let candidates sign in with their Shine Exam username or generated NAX ID.
     user = db.users.find_one({
         "$or": [{"userId": userId}, {"naxUnid": userId}],
         "role": role,
@@ -76,7 +75,7 @@ def change_password():
 
     db = get_db()
 
-    # Same dual-field lookup as login
+    # Use the same Shine Exam username/NAX ID lookup as login.
     user = db.users.find_one({
         "$or": [{"userId": userId}, {"naxUnid": userId}],
         "role": role,

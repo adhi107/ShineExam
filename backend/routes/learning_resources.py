@@ -135,6 +135,52 @@ def _announcement_json(row, user_ids=None):
     return {"id":str(row["_id"]),"title":row.get("title", ""),"message":row.get("message", ""),"linkUrl":row.get("linkUrl", ""),"imageName":row.get("imageName", ""),"imageUrl":f"/answerer/announcements/{row['_id']}/image" if row.get("imageName") else "","publishAt":row.get("publishAt"),"expiresAt":row.get("expiresAt"),"createdAt":row.get("createdAt"),"assignedUserIds":user_ids or [],"assignedCount":len(user_ids or [])}
 
 
+def _parse_announcement_datetime(value):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None) if value.tzinfo else value
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+    except (TypeError, ValueError):
+        return None
+
+
+def _candidate_test_update_json(exam):
+    available_from = exam.get("availableFrom") or exam.get("createdAt")
+    parts = []
+    if exam.get("categoryName"):
+        parts.append(str(exam.get("categoryName")))
+    if exam.get("subcategoryName"):
+        parts.append(str(exam.get("subcategoryName")))
+    if exam.get("stage"):
+        parts.append(str(exam.get("stage")))
+    detail = " • ".join(parts)
+    duration = int(exam.get("duration", 0) or 0)
+    questions = int(exam.get("questionCount", 0) or 0)
+    message = f"This assigned test opens on {available_from.strftime('%d %b %Y, %I:%M %p')} UTC."
+    if duration or questions:
+        message += f" Duration: {duration} minutes. Questions: {questions}."
+    if detail:
+        message += f" Category: {detail}."
+    return {
+        "id": f"test-update-{exam['_id']}",
+        "title": f"Upcoming test: {exam.get('name', 'Assigned test')}",
+        "message": message,
+        "linkUrl": "",
+        "imageName": "",
+        "imageUrl": "",
+        "publishAt": available_from,
+        "expiresAt": exam.get("validUntil"),
+        "createdAt": exam.get("updatedAt") or exam.get("createdAt") or available_from,
+        "assignedUserIds": [],
+        "assignedCount": 0,
+        "type": "test_update",
+        "testId": str(exam["_id"]),
+    }
+
+
 @admin_announcements_bp.route("", methods=["GET", "POST"])
 @admin_announcements_bp.route("/", methods=["GET", "POST"])
 def announcement_collection():
@@ -152,7 +198,11 @@ def announcement_collection():
         original=secure_filename(image.filename);extension=original.rsplit(".",1)[-1].lower() if "." in original else ""
         if extension not in {"png","jpg","jpeg"}:return jsonify({"error":"Announcement image must be PNG or JPG"}),400
         image_name=f"{uuid.uuid4().hex}.{extension}";image.save(ANNOUNCEMENT_DIR/image_name)
-    now=datetime.utcnow();doc={"title":title,"message":message,"linkUrl":str(request.form.get("linkUrl") or "").strip(),"imageName":image_name,"publishAt":request.form.get("publishAt") or now.isoformat(),"expiresAt":request.form.get("expiresAt") or "","createdAt":now}
+    now=datetime.utcnow()
+    publish_at=_parse_announcement_datetime(request.form.get("publishAt")) or now
+    expires_at=_parse_announcement_datetime(request.form.get("expiresAt"))
+    if expires_at and expires_at < publish_at:return jsonify({"error":"Expire date must be after the publish date"}),400
+    doc={"title":title,"message":message,"linkUrl":str(request.form.get("linkUrl") or "").strip(),"imageName":image_name,"publishAt":publish_at,"expiresAt":expires_at,"createdAt":now}
     doc["_id"]=db.announcements.insert_one(doc).inserted_id
     return jsonify({"announcement":to_jsonable(_announcement_json(doc))}),201
 
@@ -183,9 +233,23 @@ def assign_announcement(announcement_id):
 
 @answerer_resources_bp.get("/announcements")
 def candidate_announcements():
-    user_id=str(request.args.get("userId") or "").strip();db=get_db();now=datetime.utcnow().isoformat();ids=[row["announcementId"] for row in db.announcement_assignments.find({"userId":user_id})]
-    rows=list(db.announcements.find({"_id":{"$in":ids},"publishAt":{"$lte":now},"$or":[{"expiresAt":""},{"expiresAt":{"$gte":now}}]}).sort("createdAt",-1)) if ids else []
-    return jsonify({"announcements":to_jsonable([_announcement_json(row) for row in rows])})
+    user_id=str(request.args.get("userId") or "").strip();db=get_db();now=datetime.utcnow();ids=[row["announcementId"] for row in db.announcement_assignments.find({"userId":user_id})]
+    rows=list(db.announcements.find({"_id":{"$in":ids}}).sort("createdAt",-1)) if ids else []
+    announcements=[]
+    for row in rows:
+        publish_at=_parse_announcement_datetime(row.get("publishAt")) or row.get("createdAt") or now
+        expires_at=_parse_announcement_datetime(row.get("expiresAt"))
+        if publish_at <= now and (not expires_at or expires_at >= now):
+            announcements.append(_announcement_json(row))
+    exam_ids=[row["examId"] for row in db.exam_assignments.find({"userId":user_id}) if row.get("examId")]
+    exams=list(db.exams.find({"_id":{"$in":exam_ids},"status":"active"})) if exam_ids else []
+    for exam in exams:
+        available_from=exam.get("availableFrom") or exam.get("createdAt")
+        valid_until=exam.get("validUntil")
+        if available_from and available_from > now and (not valid_until or valid_until >= now):
+            announcements.append(_candidate_test_update_json(exam))
+    announcements.sort(key=lambda item:_parse_announcement_datetime(item.get("publishAt")) or _parse_announcement_datetime(item.get("createdAt")) or now, reverse=True)
+    return jsonify({"announcements":to_jsonable(announcements)})
 
 
 @answerer_resources_bp.get("/announcements/<announcement_id>/image")

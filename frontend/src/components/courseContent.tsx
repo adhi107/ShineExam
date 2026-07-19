@@ -2,6 +2,7 @@ import React from "react";
 
 export type LessonBlock =
   | { type: "paragraph"; text: string }
+  | { type: "stat_grid"; title?: string; items: Array<{ label: string; value: string; detail?: string }> }
   | { type: "bullet_list"; title?: string; items: string[] }
   | { type: "comparison_table"; title?: string; columns: string[]; rows: string[][] }
   | { type: "callout"; tone?: "info" | "success" | "warning"; title: string; text: string }

@@ -13,7 +13,9 @@ type IconName =
   | "score"
   | "security"
   | "trophy"
-  | "streak";
+  | "streak"
+  | "categories"
+  | "documents";
 
 interface AppIconProps {
   name: IconName;
@@ -107,6 +109,12 @@ const iconPaths: Record<IconName, React.ReactNode> = {
     </>
   ),
   streak: <path d="M13 3c.5 2.5-.5 4.5-2 6 2-.5 4.5.5 5.5 2.5 1.5 3-1 6.5-4.5 7.5-3.5 1-7-1-8-4.5C3 10 7.5 7.5 9 4.5A5 5 0 0 1 13 3Z" />,
+  categories: (
+    <><rect x="3.5" y="4" width="6.5" height="6.5" rx="1" /><rect x="14" y="4" width="6.5" height="6.5" rx="1" /><rect x="3.5" y="14" width="6.5" height="6.5" rx="1" /><rect x="14" y="14" width="6.5" height="6.5" rx="1" /></>
+  ),
+  documents: (
+    <><path d="M6 3.5h8l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 5 20V5a1.5 1.5 0 0 1 1-1.5Z" /><path d="M14 3.5V8h4" /><path d="M8 12h7M8 15.5h7M8 19h4" /></>
+  ),
 };
 
 const AppIcon: React.FC<AppIconProps> = ({ name, className }) => (

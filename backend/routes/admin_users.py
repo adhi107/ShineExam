@@ -1,4 +1,4 @@
-#admin_users.py
+# Shine Exam admin routes for candidate account management.
 from flask import Blueprint, jsonify, request
 from datetime import datetime, time
 from bson import ObjectId
@@ -50,9 +50,7 @@ def _merge_registration_fields(user: dict, registration: Optional[dict]) -> dict
 
     return merged
 
-# =========================
-# LIST USERS
-# =========================
+# List candidate accounts and expire access when validity dates pass.
 @admin_users_bp.route("", methods=["GET"])
 @admin_users_bp.route("/", methods=["GET"])
 def list_users():
@@ -76,9 +74,7 @@ def list_users():
         })
     return jsonify({"users": to_jsonable(out)})
 
-# =========================
-# CREATE USER
-# =========================
+# Create a candidate account from the admin student directory.
 @admin_users_bp.route("", methods=["POST"])
 @admin_users_bp.route("/", methods=["POST"])
 def create_user():
@@ -100,7 +96,7 @@ def create_user():
         "name": payload["name"].strip(),
         "email": payload["email"].strip().lower(),
         "userId": userId,
-        "password": str(payload["password"]).strip(),  # plain text (as requested)
+        "password": str(payload["password"]).strip(),  # Stored to match the current Shine Exam login model.
         "role": "answerer",
         "createdAt": datetime.utcnow(),
         "lastLoginAt": None,
@@ -121,9 +117,7 @@ def create_user():
         })
     }), 201
 
-# =========================
-# ADMIN CHANGE USER PASSWORD (NEW)
-# =========================
+# Let an administrator reset a candidate's Shine Exam password.
 @admin_users_bp.route("/<user_id>/change-password", methods=["PUT", "PATCH"])
 @admin_users_bp.route("/<user_id>/change-password/", methods=["PUT", "PATCH"])
 def admin_change_user_password(user_id: str):
@@ -146,7 +140,7 @@ def admin_change_user_password(user_id: str):
     
     db = get_db()
     
-    # Try to find user by ObjectId first, then by userId
+    # Support resets from either the Mongo record id or the candidate username.
     try:
         user = db.users.find_one({"_id": ObjectId(user_id)})
     except Exception:
@@ -155,7 +149,7 @@ def admin_change_user_password(user_id: str):
     if not user:
         return jsonify({"error": "User not found"}), 404
     
-    # Update password
+    # Save the new candidate password and timestamp the admin reset.
     db.users.update_one(
         {"_id": user["_id"]},
         {
@@ -172,9 +166,7 @@ def admin_change_user_password(user_id: str):
     })
 
 
-# =========================
-# TOGGLE USER ACTIVE STATUS
-# =========================
+# Block or unblock a candidate's portal access.
 @admin_users_bp.route("/<user_id>/status", methods=["PUT", "PATCH"])
 @admin_users_bp.route("/<user_id>/status/", methods=["PUT", "PATCH"])
 def update_user_status(user_id: str):
@@ -191,7 +183,7 @@ def update_user_status(user_id: str):
 
     db = get_db()
 
-    # Find by ObjectId first, then fallback to userId
+    # Support status changes from either the Mongo record id or the candidate username.
     try:
         q = {"_id": ObjectId(user_id)}
     except Exception:
@@ -224,9 +216,7 @@ def update_user_status(user_id: str):
         "isActive": bool(payload["isActive"])
     })
 
-# =========================
-# DELETE USER
-# =========================
+# Delete a candidate account and remove related test activity links.
 @admin_users_bp.route("/<user_id>", methods=["DELETE"])
 @admin_users_bp.route("/<user_id>/", methods=["DELETE"])
 def delete_user(user_id: str):

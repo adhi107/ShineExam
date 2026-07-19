@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './TestBuilder.css';
 import { apiGet, apiPut } from "../services/api";
+import type { ExamCategory } from "./ExamCategoryManagement";
 
 interface Question {
   id: string;
@@ -27,6 +28,12 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
   const [testName, setTestName] = useState('');
   const [duration, setDuration] = useState(60);
   const [passingPercentage, setPassingPercentage] = useState(40);
+  const [availableFrom, setAvailableFrom] = useState('');
+  const [validUntil, setValidUntil] = useState('');
+  const [categories, setCategories] = useState<ExamCategory[]>([]);
+  const [categoryId, setCategoryId] = useState('');
+  const [subcategoryId, setSubcategoryId] = useState('');
+  const [stage, setStage] = useState('');
   const [sections, setSections] = useState<Section[]>([
     { id: 'general', name: 'General' }
   ]);
@@ -48,7 +55,13 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
 
   useEffect(() => {
     loadTest();
+    apiGet<{categories:ExamCategory[]}>("/admin/exam-categories").then(res=>setCategories(res.categories||[])).catch(console.error);
   }, [testId]);
+
+  const selectedCategory=categories.find(item=>item.id===categoryId);
+  const selectedSubcategory=selectedCategory?.subcategories.find(item=>item.id===subcategoryId);
+  const changeCategory=(value:string)=>{const category=categories.find(item=>item.id===value);const sub=category?.subcategories[0];setCategoryId(value);setSubcategoryId(sub?.id||'');setStage(sub?.stages[0]||'')};
+  const changeSubcategory=(value:string)=>{const sub=selectedCategory?.subcategories.find(item=>item.id===value);setSubcategoryId(value);setStage(sub?.stages[0]||'')};
 
   const loadTest = async () => {
     setLoading(true);
@@ -59,8 +72,13 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
       setTestName(test.testName || test.name || '');
       setDuration(test.duration || 60);
       setPassingPercentage(test.passingPercentage || 40);
+      setAvailableFrom(test.availableFrom ? String(test.availableFrom).slice(0, 10) : String(test.createdAt || '').slice(0, 10));
+      setValidUntil(test.validUntil ? String(test.validUntil).slice(0, 10) : '');
+      setCategoryId(test.categoryId || '');
+      setSubcategoryId(test.subcategoryId || '');
+      setStage(test.stage || '');
       
-      // Convert sections from backend format to {id, name} format
+      // Convert stored Shine Exam sections into editor section rows.
       const normalizedSections = (test.sections || ['General'])
         .map((s: any) => typeof s === 'string' ? s : s.name)
         .map((s: string) => s?.trim())
@@ -73,9 +91,9 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
 
       setSections(sectionObjects);
       
-      // Convert questions from backend format
+      // Convert stored Shine Exam questions into editable question forms.
       const loadedQuestions: Question[] = (test.questions || []).map((q: any) => {
-        // Find matching section ID
+        // Link each stored question back to its editor section.
         const sectionName = q.section?.trim() || 'General';
         const sectionObj = sectionObjects.find((s: Section) => s.name === sectionName);
         const sectionId = sectionObj ? sectionObj.id : sectionObjects[0]?.id || 'general';
@@ -129,7 +147,7 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
     setNewSection('');
   };
 
-  // Add option to the question form
+  // Add an answer option to the test question editor.
   const addOption = () => {
     setQuestionForm({ 
       ...questionForm, 
@@ -137,10 +155,10 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
     });
   };
 
-  // Remove option from the question form
+  // Remove an answer option from the test question editor.
   const removeOption = (index: number) => {
     const newOptions = questionForm.options.filter((_, i) => i !== index);
-    // Also remove from correct answers if it was selected
+    // Remove the deleted option from selected correct answers.
     const removedOption = questionForm.options[index];
     let newCorrectAnswers = questionForm.correctAnswers;
     if (questionForm.correctAnswers.includes(removedOption)) {
@@ -160,7 +178,7 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
   };
 
   const addQuestion = () => {
-    // Validate that we have at least 2 options for MCQ/multiple questions
+    // Require enough options for Shine Exam MCQ and multi-select questions.
     if (questionForm.type === 'mcq' || questionForm.type === 'multiple') {
       const validOptions = questionForm.options.filter(opt => opt.trim());
       if (validOptions.length < 2) {
@@ -293,12 +311,17 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
       alert("Passing score must be between 1 and 100");
       return;
     }
+    if (!availableFrom || !validUntil || validUntil < availableFrom) {
+      alert("Choose a valid test start date and an end date on or after it");
+      return;
+    }
+    if (!categoryId || !subcategoryId || !stage) { alert("Select an exam category, subcategory and stage"); return; }
 
     try {
-      // Convert sections from {id, name} objects to just names (strings)
+      // Save editor sections as the section names expected by the backend.
       const sectionNames = sections.map(s => s.name);
       
-      // Convert questions section IDs to section names
+      // Save each question with its selected Shine Exam section name.
       const questionsWithSectionNames = questions.map(q => {
         const sectionObj = sections.find(s => s.id === q.section);
         return {
@@ -311,6 +334,11 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
         testName,
         duration,
         passingPercentage,
+        availableFrom,
+        validUntil,
+        categoryId,
+        subcategoryId,
+        stage,
         sections: sectionNames,
         questions: questionsWithSectionNames,
       });
@@ -376,6 +404,19 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
           </div>
         </div>
 
+        <div className="hierarchy-row">
+          <div className="validity-copy"><span>EXAM CLASSIFICATION</span><strong>My Tests location</strong><p>This controls where the test appears in the candidate sidebar.</p></div>
+          <div className="form-group"><label>Category *</label><select value={categoryId} onChange={e=>changeCategory(e.target.value)}><option value="">Select category</option>{categories.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
+          <div className="form-group"><label>Subcategory *</label><select value={subcategoryId} onChange={e=>changeSubcategory(e.target.value)}><option value="">Select subcategory</option>{selectedCategory?.subcategories.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
+          <div className="form-group"><label>Stage *</label><select value={stage} onChange={e=>setStage(e.target.value)}><option value="">Select stage</option>{selectedSubcategory?.stages.map(item=><option key={item} value={item}>{item}</option>)}</select></div>
+        </div>
+
+        <div className="validity-row">
+          <div className="validity-copy"><span>TEST AVAILABILITY</span><strong>Validity window</strong><p>Students can start this paper only within these dates.</p></div>
+          <div className="form-group"><label>Available from *</label><input type="date" value={availableFrom} onChange={e => setAvailableFrom(e.target.value)} /></div>
+          <div className="form-group"><label>Valid until *</label><input type="date" min={availableFrom} value={validUntil} onChange={e => setValidUntil(e.target.value)} /></div>
+        </div>
+
         <div className="section-management">
           <h4>Sections</h4>
           <div className="section-tags">
@@ -423,7 +464,7 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
                       setSections(remainingSections);
                       setQuestions(questions.filter(q => q.section !== section.id));
 
-                      // Reset selected section if needed
+                      // Keep the selected editor section valid after deleting a section.
                       setQuestionForm((prev) => ({
                         ...prev,
                         section:

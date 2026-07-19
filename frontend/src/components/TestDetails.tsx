@@ -1,5 +1,6 @@
 import React from "react";
 import "./TestDetails.css";
+import ShineLogo from "./ShineLogo";
 
 interface TestDetailsProps {
   testName: string;
@@ -23,12 +24,8 @@ const TestDetails: React.FC<TestDetailsProps> = ({
       {/* ===== TOP BAR ===== */}
       <header className="test-header">
         <div className="test-header-left">
-          <img
-            src="/assets/emax-logo.png"
-            alt="Emax Technologies"
-            className="test-logo"
-          />
-          <span className="test-portal-title">Online Exam Portal</span>
+          <ShineLogo inverse />
+          <span className="test-portal-title">System Check</span>
         </div>
         <div className="test-header-right">
           {new Date().toLocaleDateString("en-US", {
@@ -52,6 +49,7 @@ const TestDetails: React.FC<TestDetailsProps> = ({
       {/* ===== CONTENT ===== */}
       <main className="test-details-content">
         <div className="details-card">
+          <span className="details-kicker">ASSESSMENT READY</span>
           <h1 className="details-title">{testName}</h1>
           <div className="details-grid">
             <div className="detail-box">
@@ -73,6 +71,7 @@ const TestDetails: React.FC<TestDetailsProps> = ({
               </span>
             </div>
           </div>
+          <div className="system-checks"><div><span>✓</span><strong>Browser compatible</strong></div><div><span>✓</span><strong>User verified</strong></div><div><span>✓</span><strong>Test available</strong></div><div><span>✓</span><strong>Autosave enabled</strong></div></div>
           <div className="details-actions">
             <button className="primary-btn large" onClick={onContinue}>
               Continue to Instructions

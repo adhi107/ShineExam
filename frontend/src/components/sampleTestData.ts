@@ -1,4 +1,4 @@
-// Sample test data for testing the interface
+// Shine Exam sample question paper data for local interface checks.
 export const sampleTest = {
   testName: "SAP Certified Technology Associate - SAP HANA Cloud Provisioning and Administration",
   certificationCode: "C_HCADM_01",

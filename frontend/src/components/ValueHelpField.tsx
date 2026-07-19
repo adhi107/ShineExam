@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { normalizeSearchText } from "../utils/filterUtils";
 import "./ValueHelpField.css";
 
 export interface ValueHelpOption {
@@ -44,11 +45,11 @@ const ValueHelpField: React.FC<ValueHelpFieldProps> = ({
   }, []);
 
   const filteredOptions = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
+    const normalized = normalizeSearchText(query);
     if (!normalized) return options;
 
     return options.filter((option) => {
-      const haystack = [option.label, option.value, ...(option.keywords || [])].join(" ").toLowerCase();
+      const haystack = normalizeSearchText([option.label, option.value, ...(option.keywords || [])].join(" "));
       return haystack.includes(normalized);
     });
   }, [options, query]);

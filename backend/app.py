@@ -18,7 +18,7 @@ from routes.learning_resources import admin_documents_bp, admin_announcements_bp
 def create_app() -> Flask:
     app = Flask(__name__)
 
-    # CORS (comma-separated)
+    # Allow the configured Shine Exam frontend origins.
     origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
     CORS(app, resources={r"/*": {"origins": origins}}, supports_credentials=True)
 
@@ -26,7 +26,7 @@ def create_app() -> Flask:
     def health():
         return jsonify({"status": "ok", "service": "exam-portal-backend"})
 
-    # Blueprints
+    # Register Shine Exam API route groups.
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(admin_users_bp, url_prefix="/admin/users")
     app.register_blueprint(admin_exams_bp, url_prefix="/admin/exams")
@@ -49,7 +49,7 @@ def create_app() -> Flask:
 
     @app.errorhandler(500)
     def server_error(e):
-        # Avoid leaking stack traces in JSON
+        # Return safe JSON errors without exposing backend stack traces.
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
     return app

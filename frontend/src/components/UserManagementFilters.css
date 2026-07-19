@@ -1,0 +1,70 @@
+.students-toolbar {
+  flex-wrap: wrap;
+  gap: 10px;
+  background: #fbfcfe;
+}
+
+.students-toolbar label.student-search {
+  width: auto;
+  min-width: 220px;
+  flex: 1 1 280px;
+  background: #fff;
+}
+
+.students-toolbar input { height: 40px; background: transparent; }
+.students-toolbar select {
+  min-width: 135px;
+  height: 42px;
+  padding: 0 30px 0 11px;
+  color: #34445f;
+  cursor: pointer;
+}
+
+.students-toolbar select:focus,
+.students-toolbar label:focus-within {
+  outline: 0;
+  border-color: #2f6fed;
+  box-shadow: 0 0 0 3px rgba(47,111,237,.1);
+}
+
+.students-toolbar small {
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: #eef3fa;
+  color: #617087;
+  white-space: nowrap;
+}
+
+.students-toolbar.value-help-toolbar {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.45fr) repeat(5, minmax(185px, 1fr));
+  align-items: end;
+  overflow: visible;
+}
+
+.students-toolbar.value-help-toolbar .value-help-label {
+  width: 10rem;
+  justify-content: center;
+}
+
+.students-toolbar.value-help-toolbar .value-help-field:first-child .value-help-label,
+.students-toolbar.value-help-toolbar .value-help-field:nth-child(3) .value-help-label,
+.students-toolbar.value-help-toolbar .value-help-field:nth-child(4) .value-help-label,
+.students-toolbar.value-help-toolbar .value-help-field:nth-child(5) .value-help-label {
+  width: 12rem;
+}
+
+.students-toolbar.value-help-toolbar small {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+
+@media (max-width: 1500px) {
+  .students-toolbar.value-help-toolbar { grid-template-columns: repeat(3, minmax(190px, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .students-toolbar.value-help-toolbar { grid-template-columns: 1fr; }
+  .students-toolbar select { flex: 1 1 calc(50% - 10px); }
+  .students-toolbar small { width: 100%; margin-left: 0; text-align: center; }
+}
