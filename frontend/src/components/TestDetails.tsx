@@ -71,7 +71,6 @@ const TestDetails: React.FC<TestDetailsProps> = ({
               </span>
             </div>
           </div>
-          <div className="system-checks"><div><span>✓</span><strong>Browser compatible</strong></div><div><span>✓</span><strong>User verified</strong></div><div><span>✓</span><strong>Test available</strong></div><div><span>✓</span><strong>Autosave enabled</strong></div></div>
           <div className="details-actions">
             <button className="primary-btn large" onClick={onContinue}>
               Continue to Instructions

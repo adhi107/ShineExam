@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 import './TestBuilder.css';
 import { apiGet, apiPost } from "../services/api";
 import type { ExamCategory } from "./ExamCategoryManagement";
+import { DocumentQuestionUploader } from "./DocumentQuestionUploader";
+
 
 interface Question {
   id: string;
@@ -71,6 +73,49 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
 
   const addOption = () => {
     setQuestionForm({ ...questionForm, options: [...questionForm.options, ''] });
+  };
+
+  const handleDocumentParsed = (
+    parsedData: { sections: Section[]; questions: Question[] },
+    mode: 'append' | 'replace'
+  ) => {
+    let updatedSections = mode === 'replace' ? [] : [...sections];
+    const secIdMap: Record<string, string> = {};
+
+    parsedData.sections.forEach(pSec => {
+      const existing = updatedSections.find(
+        s => s.name.trim().toLowerCase() === pSec.name.trim().toLowerCase()
+      );
+      if (existing) {
+        secIdMap[pSec.id] = existing.id;
+      } else {
+        const newSecId = `sec_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const newSecObj = { id: newSecId, name: pSec.name.trim() };
+        updatedSections.push(newSecObj);
+        secIdMap[pSec.id] = newSecId;
+      }
+    });
+
+    if (updatedSections.length === 0) {
+      updatedSections = [{ id: 'general', name: 'General' }];
+    }
+
+    const formattedQuestions: Question[] = parsedData.questions.map((q, idx) => ({
+      id: `q_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 5)}`,
+      type: q.type,
+      question: q.question,
+      options: q.options || [],
+      correctAnswer: q.correctAnswer,
+      section: secIdMap[q.section] || updatedSections[0].id,
+      marks: q.marks || 1,
+    }));
+
+    setSections(updatedSections);
+    if (mode === 'replace') {
+      setQuestions(formattedQuestions);
+    } else {
+      setQuestions(prev => [...prev, ...formattedQuestions]);
+    }
   };
 
   const removeOption = (index: number) => {
@@ -284,8 +329,12 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
           <div className="form-group"><label>Valid until *</label><input type="date" min={availableFrom} value={validUntil} onChange={e => setValidUntil(e.target.value)} /></div>
         </div>
 
+        {/* ── Document Upload Option (Below Validity Window & Above Paper Sections) ── */}
+        <DocumentQuestionUploader onParsed={handleDocumentParsed} />
+
         {/* ── Sections ── */}
         <div className="section-management">
+
           <div className="subsection-heading"><div><h4>Paper Sections</h4><p>Group questions into subjects such as Reasoning or English.</p></div><span>{sections.length} sections</span></div>
           <div className="section-tags">
             {sections.map(section => (

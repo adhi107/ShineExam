@@ -34,7 +34,7 @@ def dashboard_stats():
         "id": str(row["_id"]), "userId": row.get("userId"),
         "testName": exams.get(row.get("examId"), "Untitled Test"),
         "percentage": float(row.get("percentage", 0)), "passed": bool(row.get("passed")),
-        "submittedAt": row.get("submittedAt"),
+        "submittedAt": row.get("submittedAt").isoformat() if hasattr(row.get("submittedAt"), "isoformat") else (str(row.get("submittedAt")) if row.get("submittedAt") else ""),
     } for row in result_rows]
 
     return jsonify({

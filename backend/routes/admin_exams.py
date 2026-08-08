@@ -5,6 +5,7 @@ from bson import ObjectId
 from config.db import get_db
 from utils.json import to_jsonable
 from utils.validators import require_fields
+from services.document_parser import parse_document_file
 
 admin_exams_bp = Blueprint("admin_exams", __name__)
 
@@ -206,6 +207,49 @@ def create_exam():
     }), 201
 
 
+@admin_exams_bp.route("/parse-document", methods=["POST"], strict_slashes=False)
+def parse_document_route():
+
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["file"]
+    if not file or not file.filename:
+        return jsonify({"error": "Selected file is empty"}), 400
+
+    filename = file.filename
+    try:
+        file_bytes = file.read()
+        if not file_bytes:
+            return jsonify({"error": "Uploaded file is empty"}), 400
+
+        sections, questions = parse_document_file(file_bytes, filename)
+        if not questions:
+            return jsonify({"error": "No questions could be parsed from the document. Please check the document structure."}), 400
+
+        # Summarise context types for frontend info panel
+        di_count = sum(1 for q in questions if q.get("contextType") == "table")
+        passage_count = sum(1 for q in questions if q.get("contextType") == "passage")
+        graph_count = sum(1 for q in questions if q.get("contextType") == "graph")
+
+        return jsonify({
+            "success": True,
+            "filename": filename,
+            "sections": sections,
+            "questions": questions,
+            "totalParsed": len(questions),
+            "stats": {
+                "dataInterpretation": di_count,
+                "passageBased": passage_count,
+                "graphBased": graph_count,
+                "plainMCQ": len(questions) - di_count - passage_count - graph_count,
+            }
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({"error": f"Failed to parse document: {str(e)}", "trace": traceback.format_exc()}), 500
+
+
 @admin_exams_bp.route("/<exam_id>", methods=["GET"])
 @admin_exams_bp.route("/<exam_id>/", methods=["GET"])
 def get_exam(exam_id: str):
@@ -277,6 +321,8 @@ def update_exam(exam_id: str):
     category_id = str(payload.get("categoryId") or "").strip()
     subcategory_id = str(payload.get("subcategoryId") or "").strip()
     stage = str(payload.get("stage") or "").strip()
+    if not category_id or not subcategory_id or not stage:
+        return jsonify({"error": "Category, subcategory and stage are required"}), 400
     try:
         category = db.exam_categories.find_one({"_id": ObjectId(category_id), "isActive": {"$ne": False}})
     except Exception:
@@ -418,3 +464,4 @@ def assign_exam(exam_id: str):
         upserts += 1
 
     return jsonify({"message": "Assigned", "assigned": upserts})
+

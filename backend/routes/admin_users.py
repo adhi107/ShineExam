@@ -1,13 +1,22 @@
 # Shine Exam admin routes for candidate account management.
-from flask import Blueprint, jsonify, request
-from datetime import datetime, time
+import io
+import csv
+import re
+from datetime import datetime, timedelta, time
 from bson import ObjectId
 from typing import Optional
+from flask import Blueprint, jsonify, request, send_file
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+
 from config.db import get_db
 from utils.json import to_jsonable
 from utils.validators import require_fields
 
 admin_users_bp = Blueprint("admin_users", __name__)
+
+EMAIL_REGEX = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
 def _parse_valid_until(value):
@@ -267,3 +276,235 @@ def update_user(user_id: str):
         "id": str(updated["_id"]),
         **{k: updated.get(k) for k in ["name", "email", "userId", "createdAt", "lastLoginAt", "isActive", "validUntil"]}
     })})
+
+
+# Download Excel/CSV template for student creation.
+@admin_users_bp.route("/template", methods=["GET"])
+@admin_users_bp.route("/template/", methods=["GET"])
+@admin_users_bp.route("/excel-template", methods=["GET"])
+def download_student_template():
+    format_type = request.args.get("format", "xlsx").lower()
+    
+    headers = ["Full Name", "Email Address", "Username", "Password", "Valid Until (YYYY-MM-DD)"]
+    default_validity = (datetime.utcnow() + timedelta(days=365)).strftime("%Y-%m-%d")
+    
+    sample_rows = [
+        ["Aarav Patel", "aarav.patel@example.com", "STU202601", "Shine@2026", default_validity],
+        ["Priya Sharma", "priya.sharma@example.com", "STU202602", "Shine@2026", default_validity],
+    ]
+    
+    if format_type == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(headers)
+        for row in sample_rows:
+            writer.writerow(row)
+        mem = io.BytesIO()
+        mem.write(output.getvalue().encode("utf-8"))
+        mem.seek(0)
+        return send_file(
+            mem,
+            mimetype="text/csv",
+            as_attachment=True,
+            download_name="student_creation_template.csv"
+        )
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Student Accounts"
+    
+    header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    align_center = Alignment(horizontal="center", vertical="center")
+    align_left = Alignment(horizontal="left", vertical="center")
+    thin_border = Border(
+        left=Side(style="thin", color="E2E8F0"),
+        right=Side(style="thin", color="E2E8F0"),
+        top=Side(style="thin", color="E2E8F0"),
+        bottom=Side(style="thin", color="E2E8F0")
+    )
+    
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = align_center
+    
+    for row in sample_rows:
+        ws.append(row)
+        
+    for row in ws.iter_rows(min_row=2, max_row=len(sample_rows)+1, min_col=1, max_col=5):
+        for cell in row:
+            cell.alignment = align_left
+            cell.border = thin_border
+            
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = max(max_len + 5, 20)
+        
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="student_creation_template.xlsx"
+    )
+
+
+def _parse_spreadsheet(file_obj, filename: str):
+    rows = []
+    ext = filename.lower().split(".")[-1] if "." in filename else ""
+    
+    if ext in ["xlsx", "xls"]:
+        wb = openpyxl.load_workbook(file_obj, data_only=True)
+        sheet = wb.active
+        all_rows = list(sheet.iter_rows(values_only=True))
+        if not all_rows:
+            return []
+        
+        headers = [str(h).strip() if h is not None else "" for h in all_rows[0]]
+        for r in all_rows[1:]:
+            if not any(r):
+                continue
+            row_dict = {}
+            for col_idx, header in enumerate(headers):
+                if header and col_idx < len(r):
+                    val = r[col_idx]
+                    row_dict[header] = str(val).strip() if val is not None else ""
+            rows.append(row_dict)
+    else:
+        content = file_obj.read()
+        try:
+            decoded = content.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            decoded = content.decode("latin-1")
+            
+        reader = csv.DictReader(io.StringIO(decoded))
+        for r in reader:
+            row_dict = {k.strip(): str(v).strip() if v is not None else "" for k, v in r.items() if k}
+            if any(row_dict.values()):
+                rows.append(row_dict)
+                
+    return rows
+
+
+# Bulk student account creation from uploaded Excel/CSV file.
+@admin_users_bp.route("/bulk-upload", methods=["POST"])
+@admin_users_bp.route("/bulk-upload/", methods=["POST"])
+def bulk_upload_users():
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+    
+    file = request.files["file"]
+    if not file or not file.filename:
+        return jsonify({"error": "Selected file is empty"}), 400
+    
+    filename = file.filename
+    try:
+        raw_rows = _parse_spreadsheet(file.stream, filename)
+    except Exception as exc:
+        return jsonify({"error": f"Failed to parse file: {str(exc)}"}), 400
+        
+    if not raw_rows:
+        return jsonify({"error": "The uploaded spreadsheet contains no data rows"}), 400
+        
+    db = get_db()
+    now = datetime.utcnow()
+    default_validity = datetime.combine((now + timedelta(days=365)).date(), time.max)
+    
+    created_users = []
+    errors = []
+    seen_usernames = set()
+    
+    existing_user_ids = set(doc["userId"] for doc in db.users.find({}, {"userId": 1}))
+    
+    for idx, row in enumerate(raw_rows, start=2):
+        name = ""
+        email = ""
+        user_id = ""
+        password = ""
+        valid_until_str = ""
+        
+        for k, v in row.items():
+            key_lower = k.lower().replace("_", " ").replace("-", " ")
+            if key_lower in ["full name", "name", "student name", "candidate name"]:
+                name = v
+            elif key_lower in ["email address", "email", "student email", "college email"]:
+                email = v
+            elif key_lower in ["username", "user id", "userid", "student id", "roll number", "college roll number"]:
+                user_id = v
+            elif key_lower in ["password", "temp password", "temporary password"]:
+                password = v
+            elif key_lower in ["valid until (yyyy-mm-dd)", "valid until", "valid until date", "validity", "expiry date"]:
+                valid_until_str = v
+
+        row_errors = []
+        if not name:
+            row_errors.append("Full Name is required")
+        if not email:
+            row_errors.append("Email address is required")
+        elif not EMAIL_REGEX.match(email):
+            row_errors.append(f"Invalid email format '{email}'")
+        if not user_id:
+            row_errors.append("Username / Student ID is required")
+        elif user_id in seen_usernames:
+            row_errors.append(f"Duplicate Username '{user_id}' in this spreadsheet")
+        elif user_id in existing_user_ids:
+            row_errors.append(f"Username '{user_id}' already exists in system database")
+            
+        valid_until = default_validity
+        if valid_until_str:
+            try:
+                valid_until = _parse_valid_until(valid_until_str)
+            except ValueError as val_err:
+                row_errors.append(str(val_err))
+
+        if row_errors:
+            errors.append({
+                "row": idx,
+                "name": name or "—",
+                "userId": user_id or "—",
+                "email": email or "—",
+                "reason": "; ".join(row_errors)
+            })
+            continue
+
+        seen_usernames.add(user_id)
+        pwd = password if password else "Shine@2026"
+        
+        user_doc = {
+            "name": name.strip(),
+            "email": email.strip().lower(),
+            "userId": user_id.strip(),
+            "password": str(pwd).strip(),
+            "role": "answerer",
+            "createdAt": now,
+            "lastLoginAt": None,
+            "isActive": True,
+            "validUntil": valid_until,
+        }
+        
+        res = db.users.insert_one(user_doc)
+        created_users.append({
+            "id": str(res.inserted_id),
+            "name": user_doc["name"],
+            "email": user_doc["email"],
+            "userId": user_doc["userId"],
+            "role": user_doc["role"],
+            "createdAt": user_doc["createdAt"],
+            "isActive": user_doc["isActive"],
+            "validUntil": user_doc["validUntil"]
+        })
+        
+    return jsonify({
+        "success": True,
+        "totalRows": len(raw_rows),
+        "createdCount": len(created_users),
+        "failedCount": len(errors),
+        "createdUsers": to_jsonable(created_users),
+        "errors": errors
+    }), 200

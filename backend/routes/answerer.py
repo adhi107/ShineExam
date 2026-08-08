@@ -113,6 +113,14 @@ def get_notifications():
             "target": "announcements", "createdAt": latest_announcement_assignment.get("createdAt") or datetime.utcnow(),
         })
 
+    cleared_ids = set(db.notification_clears.distinct("notificationId", {"userId": user_id}))
+    if "all" in cleared_ids:
+        all_cleared = db.notification_clears.find_one({"userId": user_id, "notificationId": "all"})
+        all_cleared_at = all_cleared.get("clearedAt") if all_cleared else None
+        if all_cleared_at:
+            items = [item for item in items if item.get("createdAt") and item["createdAt"] > all_cleared_at]
+    items = [item for item in items if item["id"] not in cleared_ids]
+
     read_ids = set(db.notification_reads.distinct("notificationId", {"userId": user_id}))
     for item in items:
         item["read"] = item["id"] in read_ids
@@ -149,6 +157,22 @@ def read_notification():
             {"$set": {"readAt": datetime.utcnow()}}, upsert=True,
         )
     return jsonify({"message": "Notification status updated"})
+
+
+@answerer_bp.post("/notifications/clear")
+def clear_notification():
+    payload = request.get_json(silent=True) or {}
+    user_id = str(payload.get("userId") or "").strip()
+    notification_id = str(payload.get("notificationId") or "all").strip()
+    if not user_id:
+        return jsonify({"error": "userId is required"}), 400
+
+    db = get_db()
+    db.notification_clears.update_one(
+        {"userId": user_id, "notificationId": notification_id},
+        {"$set": {"clearedAt": datetime.utcnow()}}, upsert=True,
+    )
+    return jsonify({"message": "Notifications cleared successfully"})
 
 def _normalize_user_id(value: str) -> str:
     return str(value or "").strip()
@@ -620,16 +644,49 @@ def list_assigned_tests():
                 question_types.add("MCQ")
             elif qtype == "multiple":
                 question_types.add("Multiple Choice")
+        question_types = set()
+        for q in qs:
+            qtype = q.get("type", "")
+            if qtype == "mcq":
+                question_types.add("MCQ")
+            elif qtype == "multiple":
+                question_types.add("Multiple Choice")
             elif qtype == "text":
                 question_types.add("Text")
         
         question_types_str = ", ".join(sorted(question_types)) if question_types else "Mixed"
 
-        has_attempted = db.attempts.find_one({
+        # Check candidate attempts for this exam
+        submitted_attempt = db.attempts.find_one({
             "examId": e["_id"],
             "userId": userId,
             "status": "submitted"
-        }) is not None
+        })
+        in_progress_attempt = db.attempts.find_one({
+            "examId": e["_id"],
+            "userId": userId,
+            "status": "in_progress"
+        })
+
+        has_attempted = submitted_attempt is not None
+        attempt_status = "submitted" if submitted_attempt else ("in_progress" if in_progress_attempt else "not_started")
+        
+        answered_count = 0
+        in_progress_id = None
+        time_spent_sec = 0
+        current_question_index = 0
+        current_section = ""
+        last_saved_at = None
+
+        if in_progress_attempt:
+            in_progress_id = str(in_progress_attempt["_id"])
+            answers = in_progress_attempt.get("answers") or []
+            answered_count = sum(1 for a in answers if a.get("answer") is not None and a.get("answer") != "" and a.get("answer") != [])
+            time_spent_sec = int(in_progress_attempt.get("timeSpentSec") or 0)
+            current_question_index = int(in_progress_attempt.get("currentQuestionIndex") or 0)
+            current_section = str(in_progress_attempt.get("currentSection") or "")
+            if in_progress_attempt.get("updatedAt"):
+                last_saved_at = in_progress_attempt.get("updatedAt").isoformat()
         
         available_from = e.get("availableFrom") or e.get("createdAt")
         valid_until = e.get("validUntil")
@@ -651,6 +708,14 @@ def list_assigned_tests():
             "passingPercentage": passing_percentage,
             "questionTypes": question_types_str,
             "attempted": has_attempted,
+            "attemptStatus": attempt_status,
+            "attemptId": in_progress_id,
+            "answeredCount": answered_count,
+            "totalQuestions": len(qs) or int(e.get("questionCount", 0)),
+            "timeSpentSec": time_spent_sec,
+            "currentQuestionIndex": current_question_index,
+            "currentSection": current_section,
+            "lastSavedAt": last_saved_at,
         })
 
     return jsonify({"tests": to_jsonable(out)})
@@ -658,6 +723,7 @@ def list_assigned_tests():
 
 @answerer_bp.get("/courses")
 def list_assigned_courses():
+
     userId = (request.args.get("userId") or "").strip()
     if not userId:
         return jsonify({"error": "userId is required"}), 400
@@ -858,6 +924,7 @@ def start_attempt():
     if availability != "active":
         return jsonify({"error": "This test is not active"}), 403
 
+
     # Confirm the candidate is assigned to this test before starting.
     if not db.exam_assignments.find_one({"examId": exam_oid, "userId": userId}):
         return jsonify({"error": "Exam not assigned"}), 403
@@ -878,7 +945,15 @@ def start_attempt():
         "status": "in_progress"
     })
     if existing:
-        return jsonify({"attemptId": str(existing["_id"])})
+        return jsonify({
+            "attemptId": str(existing["_id"]),
+            "isResume": True,
+            "answers": existing.get("answers", []),
+            "timeSpentSec": int(existing.get("timeSpentSec", 0)),
+            "currentQuestionIndex": int(existing.get("currentQuestionIndex", 0)),
+            "currentSection": str(existing.get("currentSection", "")),
+            "questionTimes": existing.get("questionTimes", {})
+        })
 
     now = datetime.utcnow()
     attempt_doc = {
@@ -890,17 +965,32 @@ def start_attempt():
         "updatedAt": now,
         "submittedAt": None,
         "timeSpentSec": 0,
+        "currentQuestionIndex": 0,
+        "currentSection": "",
         "questionTimes": {},
     }
     res = db.attempts.insert_one(attempt_doc)
-    return jsonify({"attemptId": str(res.inserted_id)})
+    return jsonify({"attemptId": str(res.inserted_id), "isResume": False})
+
+
+@answerer_bp.get("/attempts/<attempt_id>")
+def get_attempt_by_id(attempt_id: str):
+    db = get_db()
+    try:
+        oid = ObjectId(attempt_id)
+    except Exception:
+        return jsonify({"error": "Invalid attempt id"}), 400
+    attempt = db.attempts.find_one({"_id": oid})
+    if not attempt:
+        return jsonify({"error": "Attempt not found"}), 404
+    return jsonify({"attempt": to_jsonable(attempt)})
 
 
 @answerer_bp.put("/attempts/<attempt_id>/save")
 def save_attempt(attempt_id: str):
     """Save answers while test is in progress.
 
-    Payload: {"answers": [...], "timeSpentSec": 123}
+    Payload: {"answers": [...], "timeSpentSec": 123, "currentQuestionIndex": 4, "currentSection": "General"}
     """
     payload = request.get_json(silent=True) or {}
     ok, msg = require_fields(payload, ["answers"])
@@ -925,11 +1015,16 @@ def save_attempt(attempt_id: str):
     }
     if payload.get("timeSpentSec") is not None:
         update["timeSpentSec"] = int(payload.get("timeSpentSec") or 0)
+    if payload.get("currentQuestionIndex") is not None:
+        update["currentQuestionIndex"] = max(0, int(payload.get("currentQuestionIndex") or 0))
+    if payload.get("currentSection") is not None:
+        update["currentSection"] = str(payload.get("currentSection") or "").strip()
     if isinstance(payload.get("questionTimes"), dict):
         update["questionTimes"] = {str(key): max(0, int(value or 0)) for key, value in payload.get("questionTimes", {}).items()}
 
     db.attempts.update_one({"_id": oid}, {"$set": update})
     return jsonify({"message": "Saved"})
+
 
 
 @answerer_bp.route("/attempts/<attempt_id>/submit", methods=["POST"])

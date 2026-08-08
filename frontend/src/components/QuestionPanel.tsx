@@ -5,6 +5,8 @@ interface Question {
   id: string;
   type: 'mcq' | 'msq' | 'multiple' | 'ordering' | 'text';
   question: string;
+  context?: string;
+  contextType?: string;
   options?: string[];
   correctAnswer?: string | string[];
   section: string;
@@ -21,13 +23,84 @@ interface QuestionPanelProps {
   onMarkForReview: () => void;
 }
 
+const renderFormattedContent = (content: string) => {
+  if (!content || !content.trim()) return null;
+
+  const lines = content.split('\n');
+  const blocks: React.ReactNode[] = [];
+  let tableBuffer: string[] = [];
+
+  const flushTable = (key: string) => {
+    if (tableBuffer.length === 0) return;
+    const cleanRows = tableBuffer
+      .filter((line) => !line.match(/^\|?\s*:?-+:?\s*(\|?\s*:?-+:?\s*)*\|?$/))
+      .map((line) =>
+        line
+          .split('|')
+          .map((c) => c.trim())
+          .filter((c, i, arr) => !(i === 0 && c === '') && !(i === arr.length - 1 && c === ''))
+      );
+
+    tableBuffer = [];
+    if (cleanRows.length === 0) return;
+
+    const headerRow = cleanRows[0];
+    const bodyRows = cleanRows.slice(1);
+
+    blocks.push(
+      <div key={key} className="parsed-di-table-wrapper">
+        <table className="parsed-di-table">
+          <thead>
+            <tr>
+              {headerRow.map((cell, idx) => (
+                <th key={idx}>{cell}</th>
+              ))}
+            </tr>
+          </thead>
+          {bodyRows.length > 0 && (
+            <tbody>
+              {bodyRows.map((row, rIdx) => (
+                <tr key={rIdx}>
+                  {row.map((cell, cIdx) => (
+                    <td key={cIdx}>{cell}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          )}
+        </table>
+      </div>
+    );
+  };
+
+  lines.forEach((line, idx) => {
+    const trimmed = line.trim();
+    const isTableLine = trimmed.startsWith('|') || (trimmed.includes('|') && trimmed.split('|').length >= 3);
+
+    if (isTableLine) {
+      tableBuffer.push(line);
+    } else {
+      flushTable(`tbl-${idx}`);
+      if (trimmed) {
+        blocks.push(
+          <div key={`txt-${idx}`} className="q-paragraph-line">
+            {trimmed}
+          </div>
+        );
+      }
+    }
+  });
+
+  flushTable(`tbl-end`);
+  return <div className="formatted-content-wrap">{blocks}</div>;
+};
+
 const QuestionPanel: React.FC<QuestionPanelProps> = ({
   question,
-  questionNumber,
   answer,
   onAnswer,
 }) => {
-  const isMultipleChoice = Array.isArray(question.correctAnswer);
+  const isMultipleChoice = Array.isArray(question.correctAnswer) || question.type === 'multiple';
 
   const [orderedItems, setOrderedItems] = useState<string[]>(() => {
     if (question.type === 'ordering') {
@@ -79,85 +152,154 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
 
   const handleDragEnd = () => setDragIndex(null);
 
+  const fullText = question.question || '';
+  const contextText = question.context || '';
+
+  // Determine if options exist (even if type was set to text erroneously)
+  const hasOptions = Array.isArray(question.options) && question.options.length > 0;
+
   return (
-    <div className="question-panel">
-      <div className="question-header">
-        <span className="question-number">{questionNumber}.</span>
-        <p className="question-text prewrap">{question.question}</p>
-      </div>
-
-      {question.options && question.type !== 'ordering' && question.type !== 'text' && !isMultipleChoice && (
-        <div className="options-list">
-          {question.options.map((option, index) => (
-            <label key={index} className="option-item-label">
-              <input
-                type="radio"
-                name={`question-${question.id}`}
-                value={option}
-                checked={answer === option}
-                onChange={() => handleOptionClick(option)}
-                className="option-radio"
-              />
-              <span className="option-text">{option}</span>
-            </label>
-          ))}
-        </div>
-      )}
-
-      {question.options && question.type !== 'ordering' && question.type !== 'text' && isMultipleChoice && (
-        <>
-          <p className="note-text">Note: There are multiple correct answers to this question.</p>
-          <div className="options-list">
-            {question.options.map((option, index) => {
-              const isSelected = Array.isArray(answer) && answer.includes(option);
-              return (
-                <label key={index} className="option-item-label">
-                  <input
-                    type="checkbox"
-                    name={`question-${question.id}`}
-                    value={option}
-                    checked={isSelected}
-                    onChange={() => handleOptionClick(option)}
-                    className="option-checkbox"
-                  />
-                  <span className="option-text">{option}</span>
-                </label>
-              );
-            })}
+    <div className="bank-question-panel">
+      {contextText ? (
+        <div className="split-directions-layout">
+          <div className="directions-pane">
+            <strong className="directions-title">Data / Context:</strong>
+            {renderFormattedContent(contextText)}
           </div>
-        </>
-      )}
 
-      {question.type === 'ordering' && (
-        <>
-          <p className="note-text">Note: Drag and drop the options to arrange them in the correct order.</p>
-          <div className="options-list ordering-list">
-            {orderedItems.map((item, index) => (
-              <div
-                key={item}
-                className={`ordering-item ${dragIndex === index ? 'dragging' : ''}`}
-                draggable
-                onDragStart={() => handleDragStart(index)}
-                onDragOver={(e) => handleDragOver(e, index)}
-                onDragEnd={handleDragEnd}
-              >
-                <span className="ordering-handle">::</span>
-                <span className="ordering-index">{index + 1}.</span>
-                <span className="option-text">{item}</span>
+          <div className="question-content-pane">
+            <div className="q-prompt-statement">{renderFormattedContent(fullText)}</div>
+
+            {hasOptions && question.type !== 'ordering' && !isMultipleChoice && (
+              <div className="tcs-options-list">
+                {question.options!.map((option, index) => (
+                  <label key={index} className={`tcs-option-label ${answer === option ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name={`question-${question.id}`}
+                      value={option}
+                      checked={answer === option}
+                      onChange={() => handleOptionClick(option)}
+                      className="tcs-option-radio"
+                    />
+                    <span className="tcs-option-val">{option}</span>
+                  </label>
+                ))}
               </div>
-            ))}
-          </div>
-        </>
-      )}
+            )}
 
-      {question.type === 'text' && (
-        <textarea
-          className="text-answer"
-          value={typeof answer === 'string' ? answer : ''}
-          onChange={(e) => onAnswer(e.target.value)}
-          placeholder="Type your answer here..."
-          rows={6}
-        />
+            {hasOptions && question.type !== 'ordering' && isMultipleChoice && (
+              <>
+                <p className="note-text">Note: There are multiple correct answers to this question.</p>
+                <div className="tcs-options-list">
+                  {question.options!.map((option, index) => {
+                    const isSelected = Array.isArray(answer) && answer.includes(option);
+                    return (
+                      <label key={index} className={`tcs-option-label ${isSelected ? 'selected' : ''}`}>
+                        <input
+                          type="checkbox"
+                          name={`question-${question.id}`}
+                          value={option}
+                          checked={isSelected}
+                          onChange={() => handleOptionClick(option)}
+                          className="tcs-option-checkbox"
+                        />
+                        <span className="tcs-option-val">{option}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {!hasOptions && question.type === 'text' && (
+              <textarea
+                className="bank-text-area"
+                value={typeof answer === 'string' ? answer : ''}
+                onChange={(e) => onAnswer(e.target.value)}
+                placeholder="Type your answer here..."
+                rows={6}
+              />
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="single-question-layout">
+          <div className="question-content-pane">
+            <div className="q-prompt-statement">{renderFormattedContent(fullText)}</div>
+
+            {hasOptions && question.type !== 'ordering' && !isMultipleChoice && (
+              <div className="tcs-options-list">
+                {question.options!.map((option, index) => (
+                  <label key={index} className={`tcs-option-label ${answer === option ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name={`question-${question.id}`}
+                      value={option}
+                      checked={answer === option}
+                      onChange={() => handleOptionClick(option)}
+                      className="tcs-option-radio"
+                    />
+                    <span className="tcs-option-val">{option}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {hasOptions && question.type !== 'ordering' && isMultipleChoice && (
+              <>
+                <p className="note-text">Note: There are multiple correct answers to this question.</p>
+                <div className="tcs-options-list">
+                  {question.options!.map((option, index) => {
+                    const isSelected = Array.isArray(answer) && answer.includes(option);
+                    return (
+                      <label key={index} className={`tcs-option-label ${isSelected ? 'selected' : ''}`}>
+                        <input
+                          type="checkbox"
+                          name={`question-${question.id}`}
+                          value={option}
+                          checked={isSelected}
+                          onChange={() => handleOptionClick(option)}
+                          className="tcs-option-checkbox"
+                        />
+                        <span className="tcs-option-val">{option}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {question.type === 'ordering' && (
+              <div className="ordering-list">
+                <p className="note-text">Note: Drag and drop to arrange in order.</p>
+                {orderedItems.map((item, index) => (
+                  <div
+                    key={item}
+                    className={`ordering-item ${dragIndex === index ? 'dragging' : ''}`}
+                    draggable
+                    onDragStart={() => handleDragStart(index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <span className="ordering-index">{index + 1}.</span>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!hasOptions && question.type === 'text' && (
+              <textarea
+                className="bank-text-area"
+                value={typeof answer === 'string' ? answer : ''}
+                onChange={(e) => onAnswer(e.target.value)}
+                placeholder="Type your answer here..."
+                rows={6}
+              />
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

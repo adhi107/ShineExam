@@ -61,7 +61,10 @@ def category_item(category_id):
         return jsonify({"error": "Category not found"}), 404
     if request.method == "DELETE":
         if db.exams.count_documents({"categoryId": category_id}) > 0:
-            return jsonify({"error": "Move or delete tests in this category first"}), 409
+            if request.args.get("force") == "true":
+                db.exams.update_many({"categoryId": category_id}, {"$set": {"categoryId": "", "subcategoryId": "", "updatedAt": datetime.utcnow()}})
+            else:
+                return jsonify({"error": "Move or delete tests in this category first"}), 409
         db.exam_categories.delete_one({"_id": oid})
         return jsonify({"message": "Category deleted"})
     payload = request.get_json(silent=True) or {}
@@ -112,7 +115,10 @@ def subcategory_item(category_id, subcategory_id):
         return jsonify({"error": "Subcategory not found"}), 404
     if request.method == "DELETE":
         if db.exams.count_documents({"categoryId": category_id, "subcategoryId": subcategory_id}) > 0:
-            return jsonify({"error": "Move or delete tests in this subcategory first"}), 409
+            if request.args.get("force") == "true":
+                db.exams.update_many({"categoryId": category_id, "subcategoryId": subcategory_id}, {"$set": {"subcategoryId": "", "updatedAt": datetime.utcnow()}})
+            else:
+                return jsonify({"error": "Move or delete tests in this subcategory first"}), 409
         db.exam_categories.update_one({"_id": oid}, {"$pull": {"subcategories": {"id": subcategory_id}}, "$set": {"updatedAt": datetime.utcnow()}})
         return jsonify({"message": "Subcategory deleted"})
     payload = request.get_json(silent=True) or {}

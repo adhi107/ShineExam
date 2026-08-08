@@ -233,8 +233,13 @@ def assign_announcement(announcement_id):
 
 @answerer_resources_bp.get("/announcements")
 def candidate_announcements():
-    user_id=str(request.args.get("userId") or "").strip();db=get_db();now=datetime.utcnow();ids=[row["announcementId"] for row in db.announcement_assignments.find({"userId":user_id})]
-    rows=list(db.announcements.find({"_id":{"$in":ids}}).sort("createdAt",-1)) if ids else []
+    user_id=str(request.args.get("userId") or "").strip()
+    db=get_db()
+    now=datetime.utcnow()
+    assigned_ids=[row["announcementId"] for row in db.announcement_assignments.find({"userId":user_id})]
+    all_assigned=[row for row in db.announcement_assignments.distinct("announcementId")]
+    query={"$or":[{"_id":{"$in":assigned_ids}},{"_id":{"$nin":all_assigned}}]} if all_assigned else {}
+    rows=list(db.announcements.find(query).sort("createdAt",-1))
     announcements=[]
     for row in rows:
         publish_at=_parse_announcement_datetime(row.get("publishAt")) or row.get("createdAt") or now
@@ -246,7 +251,7 @@ def candidate_announcements():
     for exam in exams:
         available_from=exam.get("availableFrom") or exam.get("createdAt")
         valid_until=exam.get("validUntil")
-        if available_from and available_from > now and (not valid_until or valid_until >= now):
+        if (not available_from or available_from <= now) and (not valid_until or valid_until >= now):
             announcements.append(_candidate_test_update_json(exam))
     announcements.sort(key=lambda item:_parse_announcement_datetime(item.get("publishAt")) or _parse_announcement_datetime(item.get("createdAt")) or now, reverse=True)
     return jsonify({"announcements":to_jsonable(announcements)})

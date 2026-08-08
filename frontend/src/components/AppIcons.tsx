@@ -128,7 +128,7 @@ const AppIcon: React.FC<AppIconProps> = ({ name, className }) => (
     strokeLinecap="round"
     strokeLinejoin="round"
   >
-    {iconPaths[name]}
+    {iconPaths[name] || iconPaths.dashboard}
   </svg>
 );
 

@@ -59,9 +59,15 @@ const ValueHelpField: React.FC<ValueHelpFieldProps> = ({
     return match?.label || value;
   }, [options, value]);
 
+  // Clean search placeholder without awkward repetitions
+  const searchPlaceholder = useMemo(() => {
+    const cleanLabel = label.replace(/^search\s+/i, "").trim();
+    return cleanLabel ? `Filter ${cleanLabel.toLowerCase()}...` : "Filter options...";
+  }, [label]);
+
   return (
     <div ref={wrapperRef} className={`value-help-field ${compact ? "compact" : ""} ${disabled ? "disabled" : ""}`}>
-      <label className="value-help-label">{label}</label>
+      {!compact && <label className="value-help-label">{label}</label>}
       <div
         className={`value-help-trigger-row ${open ? "open" : ""} ${disabled ? "disabled" : ""}`}
         onClick={() => !disabled && setOpen(true)}
@@ -93,35 +99,72 @@ const ValueHelpField: React.FC<ValueHelpFieldProps> = ({
         <div className="value-help-popover">
           <div className="value-help-header">
             <span className="value-help-title">{label}</span>
-            <span className="value-help-hint">Search and select a value</span>
+            <span className="value-help-hint">Select or type to filter options</span>
           </div>
-          <input
-            className="value-help-search"
-            type="text"
-            value={query}
-            placeholder={`Search ${label.toLowerCase()} values...`}
-            onChange={(e) => setQuery(e.target.value)}
-            autoFocus
-          />
-          <div className="value-help-list">
-            {filteredOptions.length === 0 && <div className="value-help-empty">No matching values</div>}
-            {filteredOptions.map((option) => (
+
+          <div className="value-help-search-bar">
+            <span className="value-help-search-icon">🔍</span>
+            <input
+              className="value-help-search"
+              type="text"
+              value={query}
+              placeholder={searchPlaceholder}
+              onChange={(e) => setQuery(e.target.value)}
+              autoFocus
+            />
+            {query && (
               <button
-                key={option.value}
                 type="button"
-                className={`value-help-option ${option.value === value ? "selected" : ""}`}
-                onClick={() => {
-                  onChange(option.value);
-                  setOpen(false);
-                  setQuery("");
-                }}
+                className="value-help-clear-btn"
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
               >
-                <span className="value-help-option-label">{option.label}</span>
-                {option.keywords && option.keywords.length > 0 && (
-                  <span className="value-help-option-meta">{option.keywords.join(" • ")}</span>
-                )}
+                ✕
               </button>
-            ))}
+            )}
+          </div>
+
+          <div className="value-help-list">
+            {filteredOptions.length === 0 && (
+              <div className="value-help-empty">No matching items found</div>
+            )}
+            {filteredOptions.map((option) => {
+              const isSelected = option.value === value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`value-help-option ${isSelected ? "selected" : ""}`}
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                    setQuery("");
+                  }}
+                >
+                  <div className="value-help-option-content">
+                    <span className="value-help-option-label">{option.label}</span>
+                    {option.keywords && option.keywords.length > 0 && (
+                      <div className="value-help-option-badges">
+                        {option.keywords.map((kw, i) => {
+                          const lower = kw.toLowerCase();
+                          const isPass = lower.includes("pass");
+                          const isFail = lower.includes("improvement") || lower.includes("fail");
+                          return (
+                            <span
+                              key={i}
+                              className={`value-help-badge ${isPass ? "badge-pass" : isFail ? "badge-fail" : ""}`}
+                            >
+                              {kw}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  {isSelected && <span className="value-help-check">✓</span>}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

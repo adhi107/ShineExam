@@ -1,5 +1,6 @@
-from flask import Blueprint, jsonify, request
+import re
 from datetime import datetime
+from flask import Blueprint, jsonify, request
 from config.db import get_db
 from utils.json import to_jsonable
 from utils.validators import require_fields
@@ -20,20 +21,28 @@ def login():
 
     db = get_db()
 
-    # Let candidates sign in with their Shine Exam username or generated NAX ID.
+    # Case-insensitive lookup for userId / naxUnid matching the selected role
     user = db.users.find_one({
-        "$or": [{"userId": userId}, {"naxUnid": userId}],
+        "$or": [
+            {"userId": {"$regex": f"^{re.escape(userId)}$", "$options": "i"}},
+            {"naxUnid": {"$regex": f"^{re.escape(userId)}$", "$options": "i"}},
+        ],
         "role": role,
     })
 
     if not user:
-        return jsonify({"error": "Invalid userId/role"}), 401
+        return jsonify({"error": "Invalid User ID or role"}), 401
     if user.get("password") != password:
-        return jsonify({"error": "Invalid password"}), 401
+        return jsonify({"error": "Invalid credentials. Please check your User ID and password."}), 401
+    
     valid_until = user.get("validUntil")
     if role == "answerer" and valid_until and valid_until < datetime.utcnow():
-        db.users.update_one({"_id": user["_id"]}, {"$set": {"isActive": False, "statusReason": "validity_expired", "statusUpdatedAt": datetime.utcnow()}})
+        db.users.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"isActive": False, "statusReason": "validity_expired", "statusUpdatedAt": datetime.utcnow()}}
+        )
         return jsonify({"error": "Your account validity has expired. Please contact your administrator."}), 403
+
     if role == "answerer" and not user.get("isActive", True):
         return jsonify({"error": "Your account is inactive. Please contact your administrator."}), 403
 
@@ -51,15 +60,6 @@ def login():
 
 @auth_bp.post("/change-password")
 def change_password():
-    """
-    Payload:
-    {
-      "userId": "...",
-      "oldPassword": "...",
-      "newPassword": "...",
-      "role": "admin" | "answerer"
-    }
-    """
     payload = request.get_json(silent=True) or {}
     ok, msg = require_fields(payload, ["userId", "oldPassword", "newPassword", "role"])
     if not ok:
@@ -75,9 +75,11 @@ def change_password():
 
     db = get_db()
 
-    # Use the same Shine Exam username/NAX ID lookup as login.
     user = db.users.find_one({
-        "$or": [{"userId": userId}, {"naxUnid": userId}],
+        "$or": [
+            {"userId": {"$regex": f"^{re.escape(userId)}$", "$options": "i"}},
+            {"naxUnid": {"$regex": f"^{re.escape(userId)}$", "$options": "i"}},
+        ],
         "role": role,
     })
     if not user:

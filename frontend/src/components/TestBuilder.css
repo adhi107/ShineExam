@@ -385,3 +385,177 @@
   .builder-save-bar { align-items: stretch; flex-direction: column; bottom: .5rem; }
   .test-builder .builder-save-bar .large { width: 100%; }
 }
+
+/* Document Uploader Card */
+.doc-uploader-card {
+  margin: 1.25rem 0;
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(135deg, #f0f7ff, #f8fafc);
+  border: 1.5px dashed #2563eb;
+  border-radius: 0.9rem;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.06);
+  transition: all 0.2s ease;
+}
+
+.doc-uploader-card:hover {
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.1);
+}
+
+.doc-uploader-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.doc-uploader-icon {
+  font-size: 2rem;
+  background: #eff6ff;
+  border-radius: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #dbeafe;
+}
+
+.doc-uploader-badge {
+  display: inline-block;
+  color: #2563eb;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  background: #dbeafe;
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.4rem;
+  margin-bottom: 0.25rem;
+}
+
+.doc-uploader-header h4 {
+  margin: 0;
+  color: #1e3a8a;
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+
+.doc-uploader-header p {
+  margin: 0.25rem 0 0;
+  color: #475569;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.doc-upload-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.doc-upload-zone.drag-over {
+  background: #eff6ff;
+  border-color: #2563eb;
+}
+
+.doc-upload-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.choose-file-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.1rem;
+  background: #ffffff;
+  color: #1e40af;
+  border: 1.5px solid #2563eb;
+  border-radius: 0.6rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.choose-file-btn:hover {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.file-info-badge {
+  font-size: 0.84rem;
+  color: #334155;
+  background: #f1f5f9;
+  padding: 0.5rem 0.85rem;
+  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+  flex: 1;
+  min-width: 15rem;
+}
+
+.file-placeholder {
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.doc-uploader-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-top: 0.5rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.mode-selector {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.mode-radio {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: #334155;
+  cursor: pointer;
+}
+
+.mode-radio input[type="radio"] {
+  width: auto;
+  min-height: auto;
+  cursor: pointer;
+}
+
+.parse-btn {
+  padding: 0.65rem 1.35rem;
+  font-size: 0.88rem;
+}
+
+.doc-parse-status {
+  margin-top: 0.85rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.doc-parse-status.success {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.doc-parse-status.error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
