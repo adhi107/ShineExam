@@ -4,7 +4,6 @@ import { apiGet, apiPut } from "../services/api";
 import type { ExamCategory } from "./ExamCategoryManagement";
 import { DocumentQuestionUploader } from "./DocumentQuestionUploader";
 
-
 interface Question {
   id: string;
   type: 'mcq' | 'multiple' | 'text';
@@ -48,7 +47,7 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
   const [questionForm, setQuestionForm] = useState({
     type: 'mcq' as 'mcq' | 'multiple' | 'text',
     question: '',
-    options: ['', ''],  // Start with 2 empty options
+    options: ['', ''],
     correctAnswer: '',
     correctAnswers: [] as string[],
     section: sections[0]?.id || '',
@@ -57,20 +56,34 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
 
   useEffect(() => {
     loadTest();
-    apiGet<{categories:ExamCategory[]}>("/admin/exam-categories").then(res=>setCategories(res.categories||[])).catch(console.error);
+    apiGet<{ categories: ExamCategory[] }>("/admin/exam-categories")
+      .then(res => setCategories(res.categories || []))
+      .catch(console.error);
   }, [testId]);
 
-  const selectedCategory=categories.find(item=>item.id===categoryId);
-  const selectedSubcategory=selectedCategory?.subcategories.find(item=>item.id===subcategoryId);
-  const changeCategory=(value:string)=>{const category=categories.find(item=>item.id===value);const sub=category?.subcategories[0];setCategoryId(value);setSubcategoryId(sub?.id||'');setStage(sub?.stages[0]||'')};
-  const changeSubcategory=(value:string)=>{const sub=selectedCategory?.subcategories.find(item=>item.id===value);setSubcategoryId(value);setStage(sub?.stages[0]||'')};
+  const selectedCategory = categories.find(item => item.id === categoryId);
+  const selectedSubcategory = selectedCategory?.subcategories.find(item => item.id === subcategoryId);
+  
+  const changeCategory = (value: string) => {
+    const category = categories.find(item => item.id === value);
+    const sub = category?.subcategories[0];
+    setCategoryId(value);
+    setSubcategoryId(sub?.id || '');
+    setStage(sub?.stages[0] || '');
+  };
+
+  const changeSubcategory = (value: string) => {
+    const sub = selectedCategory?.subcategories.find(item => item.id === value);
+    setSubcategoryId(value);
+    setStage(sub?.stages[0] || '');
+  };
 
   const loadTest = async () => {
     setLoading(true);
     try {
       const res = await apiGet<any>(`/admin/exams/${testId}`);
       const test = res.test;
-      
+
       setTestName(test.testName || test.name || '');
       setDuration(test.duration || 60);
       setPassingPercentage(test.passingPercentage || 40);
@@ -79,8 +92,7 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
       setCategoryId(test.categoryId || '');
       setSubcategoryId(test.subcategoryId || '');
       setStage(test.stage || '');
-      
-      // Convert stored Shine Exam sections into editor section rows.
+
       const normalizedSections = (test.sections || ['General'])
         .map((s: any) => typeof s === 'string' ? s : s.name)
         .map((s: string) => s?.trim())
@@ -92,10 +104,8 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
       }));
 
       setSections(sectionObjects);
-      
-      // Convert stored Shine Exam questions into editable question forms.
+
       const loadedQuestions: Question[] = (test.questions || []).map((q: any) => {
-        // Link each stored question back to its editor section.
         const sectionName = q.section?.trim() || 'General';
         const sectionObj = sectionObjects.find((s: Section) => s.name === sectionName);
         const sectionId = sectionObj ? sectionObj.id : sectionObjects[0]?.id || 'general';
@@ -106,16 +116,13 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
           question: q.question,
           options: q.options || [],
           correctAnswer: q.correctAnswer,
-          section: sectionId, // Use section ID instead of name
+          section: sectionId,
           marks: q.marks || 1,
         };
       });
-      
-      console.log('Loaded questions:', loadedQuestions);
-      console.log('Sections:', sectionObjects);
-      
+
       setQuestions(loadedQuestions);
-      
+
       if (sectionObjects.length > 0) {
         setQuestionForm(prev => ({ ...prev, section: sectionObjects[0].id }));
       }
@@ -192,18 +199,15 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
     setNewSection('');
   };
 
-  // Add an answer option to the test question editor.
   const addOption = () => {
-    setQuestionForm({ 
-      ...questionForm, 
-      options: [...questionForm.options, ''] 
+    setQuestionForm({
+      ...questionForm,
+      options: [...questionForm.options, '']
     });
   };
 
-  // Remove an answer option from the test question editor.
   const removeOption = (index: number) => {
     const newOptions = questionForm.options.filter((_, i) => i !== index);
-    // Remove the deleted option from selected correct answers.
     const removedOption = questionForm.options[index];
     let newCorrectAnswers = questionForm.correctAnswers;
     if (questionForm.correctAnswers.includes(removedOption)) {
@@ -213,9 +217,9 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
     if (questionForm.correctAnswer === removedOption) {
       newCorrectAnswer = '';
     }
-    
-    setQuestionForm({ 
-      ...questionForm, 
+
+    setQuestionForm({
+      ...questionForm,
       options: newOptions,
       correctAnswers: newCorrectAnswers,
       correctAnswer: newCorrectAnswer,
@@ -223,7 +227,6 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
   };
 
   const addQuestion = () => {
-    // Require enough options for Shine Exam MCQ and multi-select questions.
     if (questionForm.type === 'mcq' || questionForm.type === 'multiple') {
       const validOptions = questionForm.options.filter(opt => opt.trim());
       if (validOptions.length < 2) {
@@ -261,7 +264,7 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
     setQuestionForm({
       type: 'mcq',
       question: '',
-      options: ['', ''],  // Reset to 2 empty options
+      options: ['', ''],
       correctAnswer: '',
       correctAnswers: [],
       section: sections[0]?.id || '',
@@ -325,6 +328,13 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
       marks: question.marks,
     });
     setShowQuestionForm(true);
+
+    setTimeout(() => {
+      const el = document.getElementById(`question-editor-${question.id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 50);
   };
 
   const resetQuestionForm = () => {
@@ -339,6 +349,150 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
       marks: 1,
     });
     setShowQuestionForm(false);
+  };
+
+  const renderQuestionFormCard = (targetId: string | null = null) => {
+    const isEditing = targetId !== null;
+    return (
+      <div
+        id={isEditing ? `question-editor-${targetId}` : 'new-question-form'}
+        className={`question-form ${isEditing ? 'editing-question-card' : ''}`}
+      >
+        <div className="form-header-badge">
+          {isEditing ? '✏️ EDIT QUESTION' : '✨ NEW QUESTION'}
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label>Question Type *</label>
+            <select
+              value={questionForm.type}
+              onChange={(e) =>
+                setQuestionForm({ ...questionForm, type: e.target.value as any })
+              }
+            >
+              <option value="mcq">Single Choice (MCQ)</option>
+              <option value="multiple">Multiple Correct Answers</option>
+              <option value="text">Text Answer</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Section *</label>
+            <select
+              value={questionForm.section}
+              onChange={(e) =>
+                setQuestionForm({ ...questionForm, section: e.target.value })
+              }
+            >
+              {sections.map((section) => (
+                <option key={section.id} value={section.id}>
+                  {section.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Marks *</label>
+            <input
+              type="number"
+              value={questionForm.marks}
+              onChange={(e) =>
+                setQuestionForm({ ...questionForm, marks: Number(e.target.value) })
+              }
+              min="1"
+            />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label>Question *</label>
+          <textarea
+            value={questionForm.question}
+            onChange={(e) =>
+              setQuestionForm({ ...questionForm, question: e.target.value })
+            }
+            placeholder="Enter your question"
+            rows={3}
+          />
+        </div>
+
+        {(questionForm.type === 'mcq' || questionForm.type === 'multiple') && (
+          <div className="options-section">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <label>Options * (minimum 2)</label>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={addOption}
+                style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+              >
+                + Add Option
+              </button>
+            </div>
+            {questionForm.options.map((option, index) => (
+              <div key={index} className="option-input">
+                <input
+                  type="text"
+                  value={option}
+                  onChange={(e) => handleOptionChange(index, e.target.value)}
+                  placeholder={`Option ${index + 1}`}
+                />
+                {questionForm.type === 'mcq' ? (
+                  <input
+                    type="radio"
+                    name={`correct-${targetId || 'new'}`}
+                    checked={questionForm.correctAnswer === option}
+                    onChange={() =>
+                      setQuestionForm({ ...questionForm, correctAnswer: option })
+                    }
+                  />
+                ) : (
+                  <input
+                    type="checkbox"
+                    checked={questionForm.correctAnswers.includes(option)}
+                    onChange={() => toggleCorrectAnswer(option)}
+                  />
+                )}
+                <span className="option-label">Correct</span>
+                {questionForm.options.length > 2 && (
+                  <button
+                    type="button"
+                    className="icon-btn danger"
+                    onClick={() => removeOption(index)}
+                    title="Remove option"
+                    style={{ marginLeft: '0.5rem' }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {questionForm.type === 'text' && (
+          <div className="form-group">
+            <label>Model Answer (for reference)</label>
+            <textarea
+              value={questionForm.correctAnswer}
+              onChange={(e) =>
+                setQuestionForm({ ...questionForm, correctAnswer: e.target.value })
+              }
+              placeholder="Enter model answer"
+              rows={3}
+            />
+          </div>
+        )}
+
+        <div className="form-actions">
+          <button className="primary-btn" onClick={addQuestion}>
+            {isEditing ? 'Update Question' : 'Add Question'}
+          </button>
+          <button className="secondary-btn" onClick={resetQuestionForm}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
   };
 
   const handleUpdateTest = async () => {
@@ -360,14 +514,13 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
       alert("Choose a valid test start date and an end date on or after it");
       return;
     }
-    if (!categoryId || !subcategoryId || !stage) { alert("Select an exam category, subcategory and stage"); return; }
-
+    if (!categoryId || !subcategoryId || !stage) {
+      alert("Select an exam category, subcategory and stage");
+      return;
+    }
 
     try {
-      // Save editor sections as the section names expected by the backend.
       const sectionNames = sections.map(s => s.name);
-      
-      // Save each question with its selected Shine Exam section name.
       const questionsWithSectionNames = questions.map(q => {
         const sectionObj = sections.find(s => s.id === q.section);
         return {
@@ -410,14 +563,25 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
   return (
     <div className="test-builder page-with-topbar">
       <div className="page-header">
-        <h2>Edit Test</h2>
+        <div>
+          <span className="page-eyebrow">EDIT TEST</span>
+          <h2>Edit Test: {testName}</h2>
+          <p>Modify test details, timing, sections and questions.</p>
+        </div>
         <button className="secondary-btn" onClick={onBack}>
           ← Back to Tests
         </button>
       </div>
 
       <div className="form-card">
-        <h3>Test Details</h3>
+        <div className="card-heading">
+          <div className="card-heading-icon">📝</div>
+          <div>
+            <h3>Test Details</h3>
+            <p>Update basic rules and metadata for this test.</p>
+          </div>
+        </div>
+
         <div className="form-row">
           <div className="form-group">
             <label>Test Name *</label>
@@ -451,23 +615,60 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
         </div>
 
         <div className="hierarchy-row">
-          <div className="validity-copy"><span>EXAM CLASSIFICATION</span><strong>My Tests location</strong><p>This controls where the test appears in the candidate sidebar.</p></div>
-          <div className="form-group"><label>Category *</label><select value={categoryId} onChange={e=>changeCategory(e.target.value)}><option value="">Select category</option>{categories.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
-          <div className="form-group"><label>Subcategory *</label><select value={subcategoryId} onChange={e=>changeSubcategory(e.target.value)}><option value="">Select subcategory</option>{selectedCategory?.subcategories.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
-          <div className="form-group"><label>Stage *</label><select value={stage} onChange={e=>setStage(e.target.value)}><option value="">Select stage</option>{selectedSubcategory?.stages.map(item=><option key={item} value={item}>{item}</option>)}</select></div>
+          <div className="validity-copy">
+            <span>EXAM CLASSIFICATION</span>
+            <strong>My Tests location</strong>
+            <p>This controls where the test appears in the candidate sidebar.</p>
+          </div>
+          <div className="form-group">
+            <label>Category *</label>
+            <select value={categoryId} onChange={e => changeCategory(e.target.value)}>
+              <option value="">Select category</option>
+              {categories.map(item => (
+                <option key={item.id} value={item.id}>{item.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Subcategory *</label>
+            <select value={subcategoryId} onChange={e => changeSubcategory(e.target.value)}>
+              <option value="">Select subcategory</option>
+              {selectedCategory?.subcategories.map(item => (
+                <option key={item.id} value={item.id}>{item.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Stage *</label>
+            <select value={stage} onChange={e => setStage(e.target.value)}>
+              <option value="">Select stage</option>
+              {selectedSubcategory?.stages.map(item => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="validity-row">
-          <div className="validity-copy"><span>TEST AVAILABILITY</span><strong>Validity window</strong><p>Students can start this paper only within these dates.</p></div>
-          <div className="form-group"><label>Available from *</label><input type="date" value={availableFrom} onChange={e => setAvailableFrom(e.target.value)} /></div>
-          <div className="form-group"><label>Valid until *</label><input type="date" min={availableFrom} value={validUntil} onChange={e => setValidUntil(e.target.value)} /></div>
+          <div className="validity-copy">
+            <span>TEST AVAILABILITY</span>
+            <strong>Validity window</strong>
+            <p>Students can start this paper only within these dates.</p>
+          </div>
+          <div className="form-group">
+            <label>Available from *</label>
+            <input type="date" value={availableFrom} onChange={e => setAvailableFrom(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label>Valid until *</label>
+            <input type="date" min={availableFrom} value={validUntil} onChange={e => setValidUntil(e.target.value)} />
+          </div>
         </div>
 
-        {/* ── Document Upload Option (Below Validity Window & Above Paper Sections) ── */}
+        {/* ── Document Upload Option ── */}
         <DocumentQuestionUploader onParsed={handleDocumentParsed} />
 
         <div className="section-management">
-
           <h4>Sections</h4>
           <div className="section-tags">
             {sections.map((section) => (
@@ -510,17 +711,11 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
                     title="Delete section"
                     onClick={() => {
                       const remainingSections = sections.filter(s => s.id !== section.id);
-
                       setSections(remainingSections);
                       setQuestions(questions.filter(q => q.section !== section.id));
-
-                      // Keep the selected editor section valid after deleting a section.
                       setQuestionForm((prev) => ({
                         ...prev,
-                        section:
-                          prev.section === section.id
-                            ? remainingSections[0]?.id || ''
-                            : prev.section,
+                        section: prev.section === section.id ? remainingSections[0]?.id || '' : prev.section,
                       }));
                     }}
                   >
@@ -558,144 +753,11 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
               setShowQuestionForm(!showQuestionForm);
             }}
           >
-            {showQuestionForm ? 'Cancel' : '+ Add Question'}
+            {showQuestionForm && !editingQuestionId ? 'Cancel' : '+ Add Question'}
           </button>
         </div>
 
-        {showQuestionForm && (
-          <div className="question-form">
-            <div className="form-row">
-              <div className="form-group">
-                <label>Question Type *</label>
-                <select
-                  value={questionForm.type}
-                  onChange={(e) =>
-                    setQuestionForm({ ...questionForm, type: e.target.value as any })
-                  }
-                >
-                  <option value="mcq">Single Choice (MCQ)</option>
-                  <option value="multiple">Multiple Correct Answers</option>
-                  <option value="text">Text Answer</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Section *</label>
-                <select
-                  value={questionForm.section}
-                  onChange={(e) =>
-                    setQuestionForm({ ...questionForm, section: e.target.value })
-                  }
-                >
-                  {sections.map((section) => (
-                    <option key={section.id} value={section.id}>
-                      {section.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Marks *</label>
-                <input
-                  type="number"
-                  value={questionForm.marks}
-                  onChange={(e) =>
-                    setQuestionForm({ ...questionForm, marks: Number(e.target.value) })
-                  }
-                  min="1"
-                />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>Question *</label>
-              <textarea
-                value={questionForm.question}
-                onChange={(e) =>
-                  setQuestionForm({ ...questionForm, question: e.target.value })
-                }
-                placeholder="Enter your question"
-                rows={3}
-              />
-            </div>
-
-            {(questionForm.type === 'mcq' || questionForm.type === 'multiple') && (
-              <div className="options-section">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <label>Options * (minimum 2)</label>
-                  <button 
-                    type="button"
-                    className="primary-btn" 
-                    onClick={addOption}
-                    style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
-                  >
-                    + Add Option
-                  </button>
-                </div>
-                {questionForm.options.map((option, index) => (
-                  <div key={index} className="option-input">
-                    <input
-                      type="text"
-                      value={option}
-                      onChange={(e) => handleOptionChange(index, e.target.value)}
-                      placeholder={`Option ${index + 1}`}
-                    />
-                    {questionForm.type === 'mcq' ? (
-                      <input
-                        type="radio"
-                        name="correct"
-                        checked={questionForm.correctAnswer === option}
-                        onChange={() =>
-                          setQuestionForm({ ...questionForm, correctAnswer: option })
-                        }
-                      />
-                    ) : (
-                      <input
-                        type="checkbox"
-                        checked={questionForm.correctAnswers.includes(option)}
-                        onChange={() => toggleCorrectAnswer(option)}
-                      />
-                    )}
-                    <span className="option-label">Correct</span>
-                    {questionForm.options.length > 2 && (
-                      <button
-                        type="button"
-                        className="icon-btn danger"
-                        onClick={() => removeOption(index)}
-                        title="Remove option"
-                        style={{ marginLeft: '0.5rem' }}
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {questionForm.type === 'text' && (
-              <div className="form-group">
-                <label>Model Answer (for reference)</label>
-                <textarea
-                  value={questionForm.correctAnswer}
-                  onChange={(e) =>
-                    setQuestionForm({ ...questionForm, correctAnswer: e.target.value })
-                  }
-                  placeholder="Enter model answer"
-                  rows={3}
-                />
-              </div>
-            )}
-
-            <div className="form-actions">
-              <button className="primary-btn" onClick={addQuestion}>
-                {editingQuestionId ? 'Update Question' : 'Add Question'}
-              </button>
-              <button className="secondary-btn" onClick={resetQuestionForm}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
+        {showQuestionForm && !editingQuestionId && renderQuestionFormCard(null)}
 
         {sections.map((section) => {
           const sectionQuestions = getQuestionsBySection(section.id);
@@ -705,42 +767,47 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
             <div key={section.id} className="section-block">
               <h4>{section.name} ({sectionQuestions.length} questions)</h4>
               <div className="questions-list">
-                {sectionQuestions.map((q, index) => (
-                  <div key={q.id} className="question-card">
-                    <div className="question-header">
-                      <span className="question-number">Q{index + 1}</span>
-                      <span className="question-type">{q.type.toUpperCase()}</span>
-                      <span className="question-marks">{q.marks} marks</span>
-                      <button
-                        className="icon-btn"
-                        type="button"
-                        title="Edit question"
-                        onClick={() => handleEditQuestion(q)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="delete-icon"
-                        onClick={() => deleteQuestion(q.id)}
-                      >
-                        ✕
-                      </button>
+                {sectionQuestions.map((q, index) => {
+                  if (editingQuestionId === q.id) {
+                    return <React.Fragment key={q.id}>{renderQuestionFormCard(q.id)}</React.Fragment>;
+                  }
+                  return (
+                    <div key={q.id} id={`question-card-${q.id}`} className="question-card">
+                      <div className="question-header">
+                        <span className="question-number">Q{index + 1}</span>
+                        <span className="question-type">{q.type.toUpperCase()}</span>
+                        <span className="question-marks">{q.marks} marks</span>
+                        <button
+                          className="question-edit-btn"
+                          type="button"
+                          title="Edit question"
+                          onClick={() => handleEditQuestion(q)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="delete-icon"
+                          onClick={() => deleteQuestion(q.id)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <p className="question-text prewrap">{q.question}</p>
+                      {q.options && (
+                        <ul className="options-list">
+                          {q.options.map((opt, i) => (
+                            <li key={i} className={
+                              (Array.isArray(q.correctAnswer) && q.correctAnswer.includes(opt)) ||
+                              q.correctAnswer === opt ? 'correct-option' : ''
+                            }>
+                              {opt}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
-                    <p className="question-text prewrap">{q.question}</p>
-                    {q.options && (
-                      <ul className="options-list">
-                        {q.options.map((opt, i) => (
-                          <li key={i} className={
-                            (Array.isArray(q.correctAnswer) && q.correctAnswer.includes(opt)) ||
-                            q.correctAnswer === opt ? 'correct-option' : ''
-                          }>
-                            {opt}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
@@ -754,7 +821,11 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
       </div>
 
       {questions.length > 0 && (
-        <div className="form-actions">
+        <div className="builder-save-bar">
+          <div>
+            <strong>Ready to update?</strong>
+            <span>{questions.length} questions across {sections.length} sections</span>
+          </div>
           <button className="primary-btn large" onClick={handleUpdateTest}>
             Update Test
           </button>
