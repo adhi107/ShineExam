@@ -6,6 +6,7 @@ import TestInterface from "./TestInterface";
 import ShineLogo from "./ShineLogo";
 import { CandidateAnnouncements, CandidateBookmarks, CandidateDocuments, CandidateBookmark } from "./CandidateResources";
 import ValueHelpField from "./ValueHelpField";
+import { ParsedQuestionPreview } from "./ParsedQuestionPreview";
 import "./AnswererDashboard.css";
 import "./CandidateValidity.css";
 
@@ -617,9 +618,24 @@ const SolutionReport = ({ testName, userName, review, onClose }: any) => {
   const answered = (value: any) => Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== "";
   const status = (item: any) => !answered(item?.userAnswer) ? "empty" : item?.isCorrect ? "correct" : "wrong";
 
-  const matches = (value: any, option: string, index: number) => {
-    const values = Array.isArray(value) ? value : [value];
-    return values.some(answer => String(answer ?? "").trim().toLowerCase() === option.trim().toLowerCase() || String(answer ?? "").trim().toLowerCase() === String.fromCharCode(97 + index));
+  const matches = (value: any, option: string, index: number, optionsList?: string[]) => {
+    const rawValues = (Array.isArray(value) ? value : [value]).map(v => String(v ?? "").trim().toLowerCase()).filter(Boolean);
+    if (rawValues.length === 0) return false;
+    const targetOpt = option.trim().toLowerCase();
+
+    // 1. If values match an exact option string in the options list, match by exact option string ONLY
+    if (optionsList && optionsList.some(opt => rawValues.includes(opt.trim().toLowerCase()))) {
+      return rawValues.includes(targetOpt);
+    }
+
+    // 2. Direct string match
+    if (rawValues.includes(targetOpt)) {
+      return true;
+    }
+
+    // 3. Fallback to index letter (A=0, B=1, C=2...) if no option text matched
+    const letterIndex = String.fromCharCode(97 + index);
+    return rawValues.includes(letterIndex);
   };
 
   const handleSectionClick = (sec: string) => {
@@ -656,11 +672,21 @@ const SolutionReport = ({ testName, userName, review, onClose }: any) => {
 
       <main className="solution-paper-body">
         <section className="solution-question-pane">
-          <div className="solution-question-text">{current.question || `Question ${safeIndex + 1}`}</div>
+          <ParsedQuestionPreview
+            question={current.question || `Question ${safeIndex + 1}`}
+            context={current.context}
+            contextType={current.contextType}
+            chartData={current.chartData}
+            tableData={current.tableData}
+            imageReference={current.imageReference}
+            visualReferences={current.visualReferences}
+            mappingStatus={current.mappingStatus}
+            mappingConfidence={current.mappingConfidence}
+          />
           <div className="solution-options">
             {(current.options || []).map((option: string, index: number) => {
-              const correct = matches(current.correctAnswer, option, index);
-              const chosen = matches(current.userAnswer, option, index);
+              const correct = matches(current.correctAnswer, option, index, current.options);
+              const chosen = matches(current.userAnswer, option, index, current.options);
               return (
                 <div key={`${option}-${index}`} className={`solution-option ${correct ? "correct-option" : ""} ${chosen && !correct ? "wrong-option" : ""}`}>
                   <span>{String.fromCharCode(65 + index)}</span>

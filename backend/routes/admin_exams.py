@@ -5,7 +5,7 @@ from bson import ObjectId
 from config.db import get_db
 from utils.json import to_jsonable
 from utils.validators import require_fields
-from services.document_parser import parse_document_file
+from services.document_parser import parse_document_file, validate_parsed_test_data
 
 admin_exams_bp = Blueprint("admin_exams", __name__)
 
@@ -172,13 +172,41 @@ def create_exam():
             continue
         q_docs.append({
             "examId": exam_id,
-            "qid": str(q.get("id") or ""),
+            "qid": str(q.get("id") or q.get("question_id") or ""),
+            "question_id": str(q.get("question_id") or q.get("id") or ""),
             "type": q.get("type"),
             "question": q.get("question"),
+            "context": q.get("context", ""),
+            "contextType": q.get("contextType", ""),
+            "groupId": q.get("groupId") or q.get("context_id") or q.get("sharedContentId"),
+            "sharedContentId": q.get("sharedContentId") or q.get("groupId") or q.get("context_id"),
+            "context_id": q.get("context_id") or q.get("groupId") or q.get("sharedContentId"),
+            "questionRange": q.get("questionRange"),
+            "sharedContent": q.get("sharedContent"),
             "options": q.get("options", []),
+            "options_detail": q.get("options_detail", []),
             "correctAnswer": q.get("correctAnswer"),
+            "correct_option_id": q.get("correct_option_id") or q.get("correctAnswer"),
             "section": q.get("section"),
+            "sequence": q.get("sequence") or q.get("source_order") or 1,
+            "source_order": q.get("source_order") or q.get("sequence") or 1,
             "marks": int(q.get("marks", 0)),
+            "negativeMarks": float(q.get("negativeMarks", 0) or 0),
+            "chartData": q.get("chartData"),
+            "tableData": q.get("tableData"),
+            "visual_asset": q.get("visual_asset") or q.get("imageReference") or "",
+            "visual_data": q.get("visual_data") or q.get("chartData") or q.get("tableData"),
+            "visualId": q.get("visualId") or q.get("visual_id"),
+            "visual_id": q.get("visual_id") or q.get("visualId"),
+            "visualIds": q.get("visualIds") or ([q.get("visualId")] if q.get("visualId") else []),
+            "visualReferences": q.get("visualReferences") or q.get("visuals") or [],
+            "imageReference": q.get("imageReference") or "",
+            "sourceReference": q.get("sourceReference"),
+            "pageNumber": q.get("pageNumber"),
+            "region": q.get("region"),
+            "mappingConfidence": q.get("mappingConfidence", "HIGH"),
+            "validationStatus": q.get("validationStatus", "passed"),
+            "validationError": q.get("validationError", ""),
             "createdAt": now,
         })
 
@@ -198,8 +226,8 @@ def create_exam():
             "sections": exam_doc["sections"],
             "createdAt": exam_doc["createdAt"].isoformat(),
             "status": exam_doc["status"],
-            "availableFrom": exam_doc["availableFrom"],
-            "validUntil": exam_doc["validUntil"],
+            "availableFrom": exam_doc.get("availableFrom") or exam_doc.get("createdAt"),
+            "validUntil": exam_doc.get("validUntil"),
             "categoryId": exam_doc["categoryId"],
             "subcategoryId": exam_doc["subcategoryId"],
             "stage": exam_doc["stage"],
@@ -227,10 +255,16 @@ def parse_document_route():
         if not questions:
             return jsonify({"error": "No questions could be parsed from the document. Please check the document structure."}), 400
 
-        # Summarise context types for frontend info panel
-        di_count = sum(1 for q in questions if q.get("contextType") == "table")
+        validation_report = validate_parsed_test_data(sections, questions)
+
+        # Summarise context types & visual stats for frontend info panel & preview modal
+        di_count = sum(1 for q in questions if q.get("contextType") == "table" or q.get("tableData"))
         passage_count = sum(1 for q in questions if q.get("contextType") == "passage")
-        graph_count = sum(1 for q in questions if q.get("contextType") == "graph")
+        graph_count = sum(1 for q in questions if q.get("contextType") == "graph" or q.get("chartData"))
+        image_count = sum(1 for q in questions if "data:image" in (q.get("context") or "") or "![" in (q.get("context") or ""))
+        
+        passed_count = sum(1 for q in questions if q.get("validationStatus") == "passed")
+        needs_review_count = sum(1 for q in questions if q.get("validationStatus") == "failed")
 
         return jsonify({
             "success": True,
@@ -238,9 +272,17 @@ def parse_document_route():
             "sections": sections,
             "questions": questions,
             "totalParsed": len(questions),
+            "validation": validation_report,
             "stats": {
-                "dataInterpretation": di_count,
+                "totalQuestions": len(questions),
+                "textQuestions": len(questions) - graph_count - di_count - passage_count,
+                "chartQuestions": graph_count,
+                "tableQuestions": di_count,
                 "passageBased": passage_count,
+                "imagesCount": image_count,
+                "validationPassed": passed_count,
+                "needsReview": needs_review_count,
+                "dataInterpretation": di_count,
                 "graphBased": graph_count,
                 "plainMCQ": len(questions) - di_count - passage_count - graph_count,
             }
@@ -272,10 +314,31 @@ def get_exam(exam_id: str):
             "_id": str(q.get("_id")),
             "type": q.get("type"),
             "question": q.get("question"),
+            "context": q.get("context", ""),
+            "contextType": q.get("contextType", ""),
+            "groupId": q.get("groupId") or q.get("sharedContentId"),
+            "sharedContentId": q.get("sharedContentId") or q.get("groupId"),
+            "questionRange": q.get("questionRange"),
+            "sharedContent": q.get("sharedContent"),
             "options": q.get("options", []),
             "correctAnswer": q.get("correctAnswer"),
             "section": q.get("section"),
             "marks": int(q.get("marks", 0)),
+            "negativeMarks": float(q.get("negativeMarks", 0) or 0),
+            "chartData": q.get("chartData"),
+            "tableData": q.get("tableData"),
+            "visual_asset": q.get("visual_asset") or q.get("imageReference") or "",
+            "visual_data": q.get("visual_data") or q.get("chartData") or q.get("tableData"),
+            "visualId": q.get("visualId"),
+            "visualIds": q.get("visualIds") or ([q.get("visualId")] if q.get("visualId") else []),
+            "visualReferences": q.get("visualReferences") or [],
+            "imageReference": q.get("imageReference") or "",
+            "sourceReference": q.get("sourceReference"),
+            "pageNumber": q.get("pageNumber"),
+            "region": q.get("region"),
+            "mappingConfidence": q.get("mappingConfidence", "HIGH"),
+            "validationStatus": q.get("validationStatus", "passed"),
+            "validationError": q.get("validationError", ""),
         })
 
     return jsonify({
@@ -379,10 +442,31 @@ def update_exam(exam_id: str):
             "qid": str(q.get("id") or ""),
             "type": q.get("type"),
             "question": q.get("question"),
+            "context": q.get("context", ""),
+            "contextType": q.get("contextType", ""),
+            "groupId": q.get("groupId") or q.get("sharedContentId"),
+            "sharedContentId": q.get("sharedContentId") or q.get("groupId"),
+            "questionRange": q.get("questionRange"),
+            "sharedContent": q.get("sharedContent"),
             "options": q.get("options", []),
             "correctAnswer": q.get("correctAnswer"),
             "section": q.get("section"),
             "marks": int(q.get("marks", 0)),
+            "negativeMarks": float(q.get("negativeMarks", 0) or 0),
+            "chartData": q.get("chartData"),
+            "tableData": q.get("tableData"),
+            "visual_asset": q.get("visual_asset") or q.get("imageReference") or "",
+            "visual_data": q.get("visual_data") or q.get("chartData") or q.get("tableData"),
+            "visualId": q.get("visualId"),
+            "visualIds": q.get("visualIds") or ([q.get("visualId")] if q.get("visualId") else []),
+            "visualReferences": q.get("visualReferences") or q.get("visuals") or [],
+            "imageReference": q.get("imageReference") or "",
+            "sourceReference": q.get("sourceReference"),
+            "pageNumber": q.get("pageNumber"),
+            "region": q.get("region"),
+            "mappingConfidence": q.get("mappingConfidence", "HIGH"),
+            "validationStatus": q.get("validationStatus", "passed"),
+            "validationError": q.get("validationError", ""),
             "createdAt": now,
         })
 
@@ -464,4 +548,3 @@ def assign_exam(exam_id: str):
         upserts += 1
 
     return jsonify({"message": "Assigned", "assigned": upserts})
-

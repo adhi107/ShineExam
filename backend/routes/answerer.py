@@ -867,12 +867,30 @@ def get_test_for_taker(exam_id: str):
             "id": str(q.get("qid") or q.get("_id")),
             "type": q.get("type"),
             "question": q.get("question"),
+            "context": q.get("context", ""),
+            "contextType": q.get("contextType", ""),
+            "groupId": q.get("groupId") or q.get("sharedContentId"),
+            "sharedContentId": q.get("sharedContentId") or q.get("groupId"),
+            "questionRange": q.get("questionRange"),
+            "sharedContent": q.get("sharedContent"),
             "options": q.get("options", []),
             # Preserve only answer shape so multi-select rendering works without exposing answers.
             "correctAnswer": [] if isinstance(q.get("correctAnswer"), list) else "",
             "section": q.get("section"),
             "marks": float(q.get("marks", 0)),
             "negativeMarks": float(q.get("negativeMarks", 0) or 0),
+            "chartData": q.get("chartData"),
+            "tableData": q.get("tableData"),
+            "visual_asset": q.get("visual_asset") or q.get("imageReference") or "",
+            "visual_data": q.get("visual_data") or q.get("chartData") or q.get("tableData"),
+            "visualId": q.get("visualId"),
+            "visualIds": q.get("visualIds") or ([q.get("visualId")] if q.get("visualId") else []),
+            "visualReferences": q.get("visualReferences") or [],
+            "imageReference": q.get("imageReference") or "",
+            "sourceReference": q.get("sourceReference"),
+            "pageNumber": q.get("pageNumber"),
+            "region": q.get("region"),
+            "mappingConfidence": q.get("mappingConfidence", "HIGH"),
         })
 
     return jsonify({
@@ -1048,7 +1066,6 @@ def submit_attempt(attempt_id):
     exam = db.exams.find_one({"_id": exam_id})
     if not exam:
         return jsonify({"error": "Exam not found"}), 404
-
     passing_percentage = float(exam.get("passingPercentage", 40))
 
     questions = list(db.questions.find({"examId": exam_id}))
@@ -1065,6 +1082,8 @@ def submit_attempt(attempt_id):
         {
             "questionId": item["questionId"],
             "question": item.get("question"),
+            "context": item.get("context", ""),
+            "contextType": item.get("contextType", ""),
             "type": item.get("type"),
             "options": item.get("options", []),
             "isCorrect": item["isCorrect"],
@@ -1117,7 +1136,51 @@ def submit_attempt(attempt_id):
         "questionReview": [],
     }
 
-    return jsonify(response_data)
+    return jsonify({"result": response_data, **response_data})
+
+
+@answerer_bp.route("/attempts/submit", methods=["POST"])
+def submit_attempt_generic():
+    payload = request.get_json(silent=True) or {}
+    user_id = str(payload.get("userId") or "").strip()
+    exam_id_str = str(payload.get("examId") or "").strip()
+
+    db = get_db()
+    if not user_id or not exam_id_str:
+        return jsonify({"error": "userId and examId are required"}), 400
+
+    try:
+        exam_oid = ObjectId(exam_id_str)
+    except Exception:
+        return jsonify({"error": "Invalid examId"}), 400
+
+    attempt = db.attempts.find_one({
+        "examId": exam_oid,
+        "userId": user_id,
+        "status": "in_progress"
+    })
+
+    if not attempt:
+        now = datetime.utcnow()
+        attempt_doc = {
+            "examId": exam_oid,
+            "userId": user_id,
+            "status": "in_progress",
+            "answers": payload.get("answers", []),
+            "startedAt": now,
+            "updatedAt": now,
+            "submittedAt": None,
+            "timeSpentSec": int(payload.get("timeSpentSec", 0)),
+            "currentQuestionIndex": 0,
+            "currentSection": "",
+            "questionTimes": {},
+        }
+        res = db.attempts.insert_one(attempt_doc)
+        attempt_id = str(res.inserted_id)
+    else:
+        attempt_id = str(attempt["_id"])
+
+    return submit_attempt(attempt_id)
 
 @answerer_bp.get("/results/<attempt_id>")
 def get_result(attempt_id: str):
@@ -1139,13 +1202,15 @@ def get_result(attempt_id: str):
         question_docs = list(db.questions.find({"examId": out["examId"]}))
         question_map = {}
         for question in question_docs:
-            for raw_id in (question.get("qid"), question.get("_id")):
+            for raw_id in (question.get("qid"), question.get("id"), question.get("_id")):
                 if raw_id is not None:
                     question_map[str(raw_id)] = question
         for item in review:
             question = question_map.get(str(item.get("questionId")))
             if question:
                 item.setdefault("question", question.get("question"))
+                item.setdefault("context", question.get("context", ""))
+                item.setdefault("contextType", question.get("contextType", ""))
                 item.setdefault("type", question.get("type"))
                 item.setdefault("options", question.get("options", []))
                 item.setdefault("correctAnswer", question.get("correctAnswer"))

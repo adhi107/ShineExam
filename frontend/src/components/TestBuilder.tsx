@@ -4,16 +4,10 @@ import './TestBuilder.css';
 import { apiGet, apiPost } from "../services/api";
 import type { ExamCategory } from "./ExamCategoryManagement";
 import { DocumentQuestionUploader } from "./DocumentQuestionUploader";
+import { ParsedQuestionPreview } from "./ParsedQuestionPreview";
+import { SharedParsedQuestion } from "../types/visual";
 
-interface Question {
-  id: string;
-  type: 'mcq' | 'multiple' | 'text';
-  question: string;
-  options?: string[];
-  correctAnswer?: string | string[];
-  section: string;
-  marks: number;
-}
+type Question = SharedParsedQuestion;
 
 interface Section {
   id: string;
@@ -46,15 +40,94 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [newSection, setNewSection] = useState('');
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+  const [showSetModal, setShowSetModal] = useState(false);
+  const [setForm, setSetForm] = useState({
+    title: 'Directions (Q1–5): Read the passage / study the data carefully and answer the questions.',
+    contextType: 'passage' as 'passage' | 'table' | 'graph',
+    contextBody: '',
+    numQuestions: 5,
+    sectionId: sections[0]?.id || '',
+    marks: 1,
+  });
+
+  const applyPreset = (presetType: 'sbi' | 'ssc' | 'rrb') => {
+    if (presetType === 'sbi') {
+      setTestName(prev => prev || 'SBI PO Prelims Mock Test');
+      setDuration(60);
+      setPassingPercentage(45);
+      setSections([
+        { id: 'sec_qa', name: 'Quantitative Aptitude' },
+        { id: 'sec_reasoning', name: 'Reasoning Ability' },
+        { id: 'sec_english', name: 'English Language' }
+      ]);
+      setQuestionForm(prev => ({ ...prev, section: 'sec_qa' }));
+    } else if (presetType === 'ssc') {
+      setTestName(prev => prev || 'SSC CGL Tier-1 Official Pattern Mock');
+      setDuration(60);
+      setPassingPercentage(40);
+      setSections([
+        { id: 'sec_gi', name: 'General Intelligence & Reasoning' },
+        { id: 'sec_ga', name: 'General Awareness' },
+        { id: 'sec_quant', name: 'Quantitative Aptitude' },
+        { id: 'sec_english', name: 'English Comprehension' }
+      ]);
+      setQuestionForm(prev => ({ ...prev, section: 'sec_gi' }));
+    } else if (presetType === 'rrb') {
+      setTestName(prev => prev || 'RRB NTPC CBT-1 Full Length Mock');
+      setDuration(90);
+      setPassingPercentage(40);
+      setSections([
+        { id: 'sec_math', name: 'Mathematics' },
+        { id: 'sec_reasoning', name: 'General Intelligence & Reasoning' },
+        { id: 'sec_ga', name: 'General Awareness' }
+      ]);
+      setQuestionForm(prev => ({ ...prev, section: 'sec_math' }));
+    }
+  };
+
+  const handleCreateQuestionSet = () => {
+    const bodyText = setForm.contextBody.trim();
+    if (!bodyText) {
+      alert('Please enter the passage text or table data for the question set.');
+      return;
+    }
+    const fullContext = setForm.title.trim() ? `${setForm.title.trim()}\n${bodyText}` : bodyText;
+    const targetSection = setForm.sectionId || sections[0]?.id || 'general';
+    const count = Math.max(1, setForm.numQuestions || 5);
+
+    const newSetQuestions: Question[] = [];
+    for (let i = 1; i <= count; i++) {
+      newSetQuestions.push({
+        id: `q_set_${Date.now()}_${i}`,
+        type: 'mcq',
+        question: `Question ${i} based on the given ${setForm.contextType === 'table' ? 'data table' : setForm.contextType === 'graph' ? 'diagram' : 'passage'}:`,
+        context: fullContext,
+        contextType: setForm.contextType,
+        options: [`Option A for Q${i}`, `Option B for Q${i}`, `Option C for Q${i}`, `Option D for Q${i}`],
+        correctAnswer: `Option A for Q${i}`,
+        section: targetSection,
+        marks: setForm.marks || 1,
+        negativeMarks: 0.25,
+      });
+    }
+
+    setQuestions(prev => [...prev, ...newSetQuestions]);
+    setShowSetModal(false);
+    setSetForm(prev => ({ ...prev, contextBody: '' }));
+  };
+
   const [questionForm, setQuestionForm] = useState({
     type: 'mcq' as 'mcq' | 'multiple' | 'text',
     question: '',
+    context: '',
+    contextType: '' as 'table' | 'passage' | 'graph' | '',
     options: ['', ''],
     correctAnswer: '',
     correctAnswers: [] as string[],
     section: sections[0]?.id || '',
     marks: 1,
   });
+
 
   useEffect(() => {
     apiGet<{ categories: ExamCategory[] }>("/admin/exam-categories").then(res => {
@@ -114,10 +187,25 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
       id: `q_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 5)}`,
       type: q.type,
       question: q.question,
+      context: q.context || '',
+      contextType: q.contextType || '',
       options: q.options || [],
       correctAnswer: q.correctAnswer,
       section: secIdMap[q.section] || updatedSections[0].id,
       marks: q.marks || 1,
+      negativeMarks: q.negativeMarks || 0,
+      chartData: (q as any).chartData || null,
+      tableData: (q as any).tableData || null,
+      imageReference: (q as any).imageReference || (q as any).visual_asset || '',
+      visualReferences: (q as any).visualReferences || (q as any).visuals || [],
+      groupId: (q as any).groupId || (q as any).sharedContentId || '',
+      sharedContentId: (q as any).sharedContentId || (q as any).groupId || '',
+      questionRange: (q as any).questionRange,
+      sharedContent: (q as any).sharedContent,
+      visualId: (q as any).visualId || '',
+      visualIds: (q as any).visualIds || [],
+      mappingStatus: (q as any).mappingStatus || '',
+      mappingConfidence: (q as any).mappingConfidence || '',
     }));
 
     setSections(updatedSections);
@@ -166,6 +254,8 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
     setQuestionForm({
       type: question.type,
       question: question.question,
+      context: question.context || '',
+      contextType: question.contextType || '',
       options: question.options && question.options.length > 0 ? [...question.options] : ['', ''],
       correctAnswer: typeof question.correctAnswer === 'string' ? question.correctAnswer : '',
       correctAnswers: Array.isArray(question.correctAnswer) ? [...question.correctAnswer] : [],
@@ -187,6 +277,8 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
     setQuestionForm({
       type: 'mcq',
       question: '',
+      context: '',
+      contextType: '',
       options: ['', ''],
       correctAnswer: '',
       correctAnswers: [],
@@ -226,6 +318,8 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
       id: nextQuestionId,
       type: questionForm.type,
       question: questionForm.question,
+      context: questionForm.context,
+      contextType: questionForm.contextType,
       section: questionForm.section,
       marks: questionForm.marks,
     };
@@ -251,6 +345,8 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
     setQuestionForm({
       type: 'mcq',
       question: '',
+      context: '',
+      contextType: '',
       options: ['', ''],
       correctAnswer: '',
       correctAnswers: [],
@@ -376,12 +472,73 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
         </div>
 
         <div className="form-group">
-          <label>Question *</label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+            <label>Question *</label>
+            <label className="preset-chip" style={{ cursor: 'pointer', margin: 0, padding: '0.25rem 0.65rem' }}>
+              📷 Attach Image to Question
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      const dataUri = ev.target?.result as string;
+                      if (dataUri) {
+                        setQuestionForm(prev => ({
+                          ...prev,
+                          question: prev.question ? `${prev.question}\n![Question Diagram](${dataUri})` : `![Question Diagram](${dataUri})`
+                        }));
+                      }
+                    };
+                    reader.readAsDataURL(e.target.files[0]);
+                  }
+                }}
+              />
+            </label>
+          </div>
           <textarea
             value={questionForm.question}
             rows={3}
             onChange={e => setQuestionForm({ ...questionForm, question: e.target.value })}
-            placeholder="Enter your question"
+            placeholder="Enter your question text or formula"
+          />
+        </div>
+
+        <div className="form-group">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+            <label>Shared passage / table / graph context</label>
+            <label className="preset-chip" style={{ cursor: 'pointer', margin: 0, padding: '0.25rem 0.65rem' }}>
+              📊 Upload Bar Graph / Diagram Image
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      const dataUri = ev.target?.result as string;
+                      if (dataUri) {
+                        setQuestionForm(prev => ({
+                          ...prev,
+                          context: prev.context ? `${prev.context}\n![Shared Diagram](${dataUri})` : `![Shared Diagram](${dataUri})`,
+                          contextType: prev.contextType || 'graph'
+                        }));
+                      }
+                    };
+                    reader.readAsDataURL(e.target.files[0]);
+                  }
+                }}
+              />
+            </label>
+          </div>
+          <textarea
+            value={questionForm.context}
+            rows={4}
+            onChange={e => setQuestionForm({ ...questionForm, context: e.target.value })}
+            placeholder="Optional shared context for passage, table, DI, caselet or graph-based questions"
           />
         </div>
 
@@ -485,6 +642,14 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
           <div className="card-heading-icon">📝</div>
           <div><h3>Test Details</h3><p>Set the basic rules students will see for this examination.</p></div>
         </div>
+
+        <div className="preset-quick-bar">
+          <span className="preset-label">⚡ Quick Exam Presets:</span>
+          <button type="button" className="preset-chip" onClick={() => applyPreset('sbi')}>🏦 SBI PO / IBPS PO Pattern</button>
+          <button type="button" className="preset-chip" onClick={() => applyPreset('ssc')}>🏛️ SSC CGL Tier-1 Pattern</button>
+          <button type="button" className="preset-chip" onClick={() => applyPreset('rrb')}>🚆 RRB NTPC Pattern</button>
+        </div>
+
         <div className="form-row">
           <div className="form-group">
             <label>Test Name *</label>
@@ -589,17 +754,94 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
       <div className="questions-section">
         <div className="section-header">
           <div><h3>Question Bank</h3><p>{questions.length} questions • {questions.reduce((sum, q) => sum + q.marks, 0)} total marks</p></div>
-          <button className="primary-btn" onClick={() => {
-            if (showQuestionForm && !editingQuestionId) {
-              resetQuestionForm();
-              return;
-            }
-            setEditingQuestionId(null);
-            setShowQuestionForm(!showQuestionForm);
-          }}>
-            {showQuestionForm && !editingQuestionId ? 'Cancel' : '+ Add Question'}
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button type="button" className="secondary-btn" onClick={() => setShowSetModal(true)}>
+              📖 + Add Passage / DI Set (5 Questions)
+            </button>
+            <button className="primary-btn" onClick={() => {
+              if (showQuestionForm && !editingQuestionId) {
+                resetQuestionForm();
+                return;
+              }
+              setEditingQuestionId(null);
+              setShowQuestionForm(!showQuestionForm);
+            }}>
+              {showQuestionForm && !editingQuestionId ? 'Cancel' : '+ Add Single Question'}
+            </button>
+          </div>
         </div>
+
+        {/* Modal for 5-Question Set Generator */}
+        {showSetModal && (
+          <div className="modal-backdrop">
+            <div className="set-modal-card">
+              <h3>📖 Add Shared Passage / DI Question Set</h3>
+              <p>Map 5 (or custom) questions under one shared paragraph, table, or graph context.</p>
+              
+              <div className="form-group" style={{ marginTop: '1rem' }}>
+                <label>Set Type & Format *</label>
+                <select
+                  value={setForm.contextType}
+                  onChange={e => setSetForm({ ...setForm, contextType: e.target.value as any })}
+                >
+                  <option value="passage">Reading Comprehension / Caselet Passage</option>
+                  <option value="table">Data Interpretation Table</option>
+                  <option value="graph">Data Interpretation Graph / Chart Image</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Direction Line / Title *</label>
+                <input
+                  type="text"
+                  value={setForm.title}
+                  onChange={e => setSetForm({ ...setForm, title: e.target.value })}
+                  placeholder="Directions (Q1-5): Read the passage and answer..."
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Passage Paragraph Text or Table Data *</label>
+                <textarea
+                  rows={6}
+                  value={setForm.contextBody}
+                  onChange={e => setSetForm({ ...setForm, contextBody: e.target.value })}
+                  placeholder={setForm.contextType === 'table' ? '| Branch | Accounts |\n| Branch A | 120 |\n| Branch B | 450 |' : 'Enter paragraph text or graph description here...'}
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Target Section *</label>
+                  <select
+                    value={setForm.sectionId}
+                    onChange={e => setSetForm({ ...setForm, sectionId: e.target.value })}
+                  >
+                    {sections.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Number of Questions *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={setForm.numQuestions}
+                    onChange={e => setSetForm({ ...setForm, numQuestions: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+                <button type="button" className="secondary-btn" onClick={() => setShowSetModal(false)}>Cancel</button>
+                <button type="button" className="primary-btn" onClick={handleCreateQuestionSet}>✨ Generate Question Set</button>
+              </div>
+            </div>
+          </div>
+        )}
+
 
         {showQuestionForm && !editingQuestionId && renderQuestionFormCard(null)}
 
@@ -635,7 +877,17 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
                           ✕
                         </button>
                       </div>
-                      <p className="question-text prewrap">{q.question}</p>
+                      <ParsedQuestionPreview
+                        question={q.question}
+                        context={q.context}
+                        contextType={q.contextType}
+                        chartData={q.chartData}
+                        tableData={q.tableData}
+                        imageReference={q.imageReference}
+                        visualReferences={q.visualReferences}
+                        mappingStatus={q.mappingStatus}
+                        mappingConfidence={q.mappingConfidence}
+                      />
                       {q.options && (
                         <ul className="options-list">
                           {q.options.map((opt, i) => (

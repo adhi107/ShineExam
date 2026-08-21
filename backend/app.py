@@ -4,7 +4,7 @@ import sys
 # Ensure backend root is in sys.path so modules (config, routes, etc.) resolve cleanly
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 
 from config.settings import settings
@@ -31,6 +31,11 @@ def create_app() -> Flask:
     @app.get("/")
     def health():
         return jsonify({"status": "ok", "service": "exam-portal-backend"})
+
+    @app.get("/uploads/<path:filename>")
+    def serve_uploads(filename):
+        uploads_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
+        return send_from_directory(uploads_dir, filename)
 
     # Register Shine Exam API route groups.
     app.register_blueprint(auth_bp, url_prefix="/auth")

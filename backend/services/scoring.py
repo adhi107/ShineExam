@@ -103,6 +103,8 @@ def compute_result(
             {
                 "questionId": canonical_qid,
                 "question": q.get("question"),
+                "context": q.get("context", ""),
+                "contextType": q.get("contextType", ""),
                 "type": qtype,
                 "section": section,
                 "marks": marks if is_correct else (-negative_marks if attempted else 0),

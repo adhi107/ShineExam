@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import './QuestionPanel.css';
+import { VisualContentRenderer } from './VisualContentRenderer';
 
 interface Question {
   id: string;
@@ -11,6 +12,10 @@ interface Question {
   correctAnswer?: string | string[];
   section: string;
   marks: number;
+  chartData?: any;
+  tableData?: any;
+  imageReference?: string;
+  visualReferences?: any[];
 }
 
 interface QuestionPanelProps {
@@ -45,7 +50,26 @@ const renderFormattedContent = (content: string) => {
     if (cleanRows.length === 0) return;
 
     const headerRow = cleanRows[0];
-    const bodyRows = cleanRows.slice(1);
+    const rawBodyRows = cleanRows.slice(1);
+    const numCols = headerRow.length;
+    const bodyRows: string[][] = [];
+
+    rawBodyRows.forEach((row) => {
+      if (numCols > 1 && row.length === numCols) {
+        const lastCell = row[row.length - 1];
+        const tokens = lastCell.trim().split(/\s+/);
+        if (tokens.length >= numCols) {
+          const firstVal = tokens[0];
+          const remTokens = tokens.slice(1);
+          bodyRows.push([...row.slice(0, -1), firstVal]);
+          for (let i = 0; i < remTokens.length; i += numCols) {
+            bodyRows.push(remTokens.slice(i, i + numCols));
+          }
+          return;
+        }
+      }
+      bodyRows.push(row);
+    });
 
     blocks.push(
       <div key={key} className="parsed-di-table-wrapper">
@@ -75,6 +99,48 @@ const renderFormattedContent = (content: string) => {
 
   lines.forEach((line, idx) => {
     const trimmed = line.trim();
+
+    // Universal image extraction: base64, markdown img, http URL, or graph tag
+    let extractedImgUrl = '';
+    const b64Match = trimmed.match(/data:image\/[a-zA-Z0-9+\-.]+;base64,[A-Za-z0-9+/=\s]+/i);
+    if (b64Match) {
+      extractedImgUrl = b64Match[0].trim();
+    }
+    if (!extractedImgUrl) {
+      const mdImgMatch = trimmed.match(/!\[.*?\]\((.*?)\)/i);
+      if (mdImgMatch && mdImgMatch[1]) {
+        extractedImgUrl = mdImgMatch[1].trim();
+      }
+    }
+    if (!extractedImgUrl) {
+      const httpMatch = trimmed.match(/(https?:\/\/[^\s)]+\.(?:png|jpg|jpeg|svg|gif|webp))/i);
+      if (httpMatch && httpMatch[1]) {
+        extractedImgUrl = httpMatch[1].trim();
+      }
+    }
+    if (!extractedImgUrl) {
+      const graphTagMatch = trimmed.match(/\[Graph(?:\/Figure)?:\s*(.+?)\]/i);
+      if (graphTagMatch && graphTagMatch[1]) {
+        extractedImgUrl = graphTagMatch[1].trim();
+      }
+    }
+
+    if (extractedImgUrl) {
+      flushTable(`tbl-${idx}`);
+      blocks.push(
+        <div key={`img-${idx}`} className="candidate-graph-wrap" style={{ margin: '0.75rem 0', textAlign: 'center' }}>
+          {extractedImgUrl.startsWith('http') || extractedImgUrl.startsWith('data:image') ? (
+            <img src={extractedImgUrl} alt="Exam diagram" style={{ maxWidth: '100%', maxHeight: '420px', borderRadius: '0.5rem', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
+          ) : (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1rem', background: '#f8fafc', border: '1.5px dashed #94a3b8', borderRadius: '0.5rem', fontWeight: 600 }}>
+              📊 Graph / Diagram: {extractedImgUrl}
+            </div>
+          )}
+        </div>
+      );
+      return;
+    }
+
     const isTableLine = trimmed.startsWith('|') || (trimmed.includes('|') && trimmed.split('|').length >= 3);
 
     if (isTableLine) {
@@ -82,11 +148,24 @@ const renderFormattedContent = (content: string) => {
     } else {
       flushTable(`tbl-${idx}`);
       if (trimmed) {
-        blocks.push(
-          <div key={`txt-${idx}`} className="q-paragraph-line">
-            {trimmed}
-          </div>
-        );
+        const dirMatch = trimmed.match(/^(Directions\s*(?:\([^)]+\))?\s*:?\s*)(.*)/i);
+        if (dirMatch && dirMatch[1]) {
+          const headerTitle = dirMatch[1].trim();
+          const bodyContent = dirMatch[2] ? dirMatch[2].trim() : '';
+          blocks.push(
+            <div key={`txt-${idx}`} className="direction-header-block">
+              <div className="q-paragraph-line direction-header-line">{headerTitle}</div>
+              {bodyContent && <div className="q-paragraph-line passage-body-line" style={{ marginTop: '0.4rem', color: '#1e293b' }}>{bodyContent}</div>}
+            </div>
+          );
+        } else {
+          const isDirHeader = /^(?:Directions|Read the following|Consider the|Study the)/i.test(trimmed);
+          blocks.push(
+            <div key={`txt-${idx}`} className={`q-paragraph-line ${isDirHeader ? 'direction-header-line' : ''}`}>
+              {trimmed}
+            </div>
+          );
+        }
       }
     }
   });
@@ -154,17 +233,26 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
 
   const fullText = question.question || '';
   const contextText = question.context || '';
-
-  // Determine if options exist (even if type was set to text erroneously)
   const hasOptions = Array.isArray(question.options) && question.options.length > 0;
 
   return (
     <div className="bank-question-panel">
-      {contextText ? (
+      {contextText || question.chartData || question.imageReference || (question.visualReferences && question.visualReferences.length > 0) ? (
         <div className="split-directions-layout">
           <div className="directions-pane">
             <strong className="directions-title">Data / Context:</strong>
-            {renderFormattedContent(contextText)}
+            {contextText && renderFormattedContent(contextText)}
+            <VisualContentRenderer
+              visualReferences={question.visualReferences}
+              imageReference={question.imageReference}
+              chartData={question.chartData}
+              tableData={question.tableData}
+              context={contextText}
+              contextType={question.contextType}
+              title={contextText ? contextText.split('\n')[0] : ''}
+              mappingStatus={(question as any).mappingStatus}
+              mappingConfidence={(question as any).mappingConfidence}
+            />
           </div>
 
           <div className="question-content-pane">
@@ -210,6 +298,25 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
                   })}
                 </div>
               </>
+            )}
+
+            {question.type === 'ordering' && (
+              <div className="ordering-list">
+                <p className="note-text">Note: Drag and drop to arrange in order.</p>
+                {orderedItems.map((item: string, index: number) => (
+                  <div
+                    key={item}
+                    className={`ordering-item ${dragIndex === index ? 'dragging' : ''}`}
+                    draggable
+                    onDragStart={() => handleDragStart(index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <span className="ordering-index">{index + 1}.</span>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
             )}
 
             {!hasOptions && question.type === 'text' && (
@@ -273,7 +380,7 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
             {question.type === 'ordering' && (
               <div className="ordering-list">
                 <p className="note-text">Note: Drag and drop to arrange in order.</p>
-                {orderedItems.map((item, index) => (
+                {orderedItems.map((item: string, index: number) => (
                   <div
                     key={item}
                     className={`ordering-item ${dragIndex === index ? 'dragging' : ''}`}
