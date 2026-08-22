@@ -2,6 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+ENV PYTHONUNBUFFERED=1
+
+# Install system dependencies for document conversion (LibreOffice), 
+# PDF/Image processing (Poppler, OpenCV), OCR (Tesseract), and fonts.
 RUN apt-get update && apt-get install -y \
     gcc \
     libreoffice \
@@ -9,20 +13,18 @@ RUN apt-get update && apt-get install -y \
     fonts-dejavu-core \
     fonts-freefont-ttf \
     fontconfig \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    poppler-utils \
+    libgl1 \
+    libglib2.0-0 \
     --no-install-recommends \
     && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir \
-    flask \
-    flask-cors \
-    flask-pymongo \
-    gunicorn \
-    pymongo \
-    APScheduler \
-    python-dotenv \
-    python-dateutil \
-    requests
+# Install all Python dependencies from requirements.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
