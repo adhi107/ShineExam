@@ -758,3 +758,203 @@
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(43, 120, 196, 0.4);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   MOBILE & TABLET RESPONSIVE STYLES (EXAM EXPERIENCE)
+   ═══════════════════════════════════════════════════════════ */
+
+/* Mobile Palette Toggle Button */
+.btn-mobile-palette-toggle {
+  display: none;
+  align-items: center;
+  gap: 5px;
+  background: #2b78c4;
+  color: #ffffff;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(43, 120, 196, 0.3);
+}
+
+.tcs-palette-drawer-wrapper {
+  display: flex;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.palette-inner-container {
+  height: 100%;
+  display: flex;
+}
+
+.q-meta-right-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 860px) {
+  .btn-mobile-palette-toggle {
+    display: inline-flex;
+  }
+
+  .tcs-question-workspace {
+    border-right: none;
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  /* Mobile slide-in drawer for Question Palette */
+  .tcs-palette-drawer-wrapper {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 9999999 !important;
+    display: none !important;
+  }
+
+  .tcs-palette-drawer-wrapper.mobile-open {
+    display: flex !important;
+  }
+
+  .mobile-palette-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(4px);
+  }
+
+  .palette-inner-container {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: min(340px, 86vw);
+    background: #ffffff;
+    box-shadow: -8px 0 35px rgba(0, 0, 0, 0.35);
+    z-index: 2;
+    animation: drawer-slide-in 0.22s ease-out;
+  }
+
+  @keyframes drawer-slide-in {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+
+  .palette-inner-container .bank-palette-sidebar {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* Option rows on touch devices */
+  .tcs-option-row {
+    min-height: 48px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    touch-action: manipulation;
+  }
+
+  .option-label-text {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .tcs-top-blue-header {
+    height: 44px;
+    padding: 0 10px;
+  }
+
+  .exam-title-pill-tag {
+    font-size: 0.72rem !important;
+    padding: 2px 8px !important;
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .btn-fullscreen-toggle {
+    display: none;
+  }
+
+  .tcs-section-bar {
+    height: auto;
+    min-height: 38px;
+    padding: 6px 10px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .section-buttons-row {
+    overflow-x: auto;
+    max-width: 60vw;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .section-timer-right {
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+
+  .tcs-question-meta-bar {
+    height: auto;
+    padding: 6px 10px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .q-type-label {
+    font-size: 0.75rem;
+  }
+
+  .tcs-question-scroll-pane {
+    padding: 12px 14px;
+  }
+
+  .question-text {
+    font-size: 14.5px !important;
+    line-height: 1.5 !important;
+  }
+
+  /* Bottom footer layout on mobile */
+  .tcs-question-action-footer {
+    height: auto !important;
+    padding: 8px 10px 10px !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .footer-left-buttons,
+  .footer-right-buttons {
+    width: 100% !important;
+    display: flex !important;
+    gap: 6px !important;
+  }
+
+  .tcs-btn-white,
+  .tcs-btn-blue-save {
+    flex: 1 !important;
+    height: 38px !important;
+    font-size: 12.5px !important;
+    padding: 0 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Full-page confirmation summary on mobile */
+  .tcs-summary-metrics-row {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .tcs-confirm-card {
+    padding: 14px !important;
+    margin: 10px !important;
+  }
+}
+

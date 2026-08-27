@@ -3,6 +3,7 @@ import { apiGet } from "../services/api";
 import { normalizeSearchText } from "../utils/filterUtils";
 import ValueHelpField from "./ValueHelpField";
 import "./TestResults.css";
+import { SensitiveContent, ScreenVisibilityGuard } from "../security";
 
 interface TestSummary { id: string; name: string; duration: number; questions: number; totalAttempts: number; avgScore: number; passRate: number }
 interface CandidateResult { id: string; userId: string; userName: string; percentage: number; scoredMarks: number; totalMarks: number; passed: boolean; submittedAt: string; timeSpentSec: number; percentile?: number }
@@ -117,7 +118,17 @@ const TestResults: React.FC = () => {
     }
   };
 
-  if (detail) return <CandidateAnalytics detail={detail} test={selectedTest!} onBack={() => setDetail(null)} formatTime={formatTime} />;
+  if (detail) return (
+    <SensitiveContent
+      showWatermark
+      hideOnTabSwitch
+      shieldOnScreenShare
+      shieldMessage="Candidate results are protected. Return to this tab to continue."
+    >
+      <CandidateAnalytics detail={detail} test={selectedTest!} onBack={() => setDetail(null)} formatTime={formatTime} />
+    </SensitiveContent>
+  );
+
   
   if (selectedTest) return (
     <section className="admin-analytics">

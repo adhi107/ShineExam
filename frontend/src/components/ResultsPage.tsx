@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import "./ResultsPage.css";
+import { SensitiveContent } from "../security";
 
 interface Question {
   id: string;
@@ -96,6 +97,12 @@ const ResultsPage: React.FC<ResultsPageProps> = ({
 
 
   return (
+    <SensitiveContent
+      showWatermark
+      hideOnTabSwitch
+      shieldOnScreenShare
+      shieldMessage="Result content is protected. Return to this tab to view your results."
+    >
     <div className="results-page">
       <div className="results-container">
         <div className="results-header">
@@ -220,12 +227,17 @@ const ResultsPage: React.FC<ResultsPageProps> = ({
           <button className="action-button primary" onClick={onBackToDashboard}>
             Back to Dashboard
           </button>
-          <button className="action-button secondary" onClick={() => window.print()}>
-            Print Results
+          <button
+            className="action-button secondary"
+            onClick={() => alert('Printing is disabled for protected exam content. Your results are watermarked and tracked.')}
+            title="Printing is disabled for secure content"
+          >
+            🔒 Print Disabled
           </button>
         </div>
       </div>
     </div>
+    </SensitiveContent>
   );
 };
 

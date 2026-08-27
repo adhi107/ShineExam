@@ -4,10 +4,11 @@ import { apiPost } from "../services/api";
 import AppIcon from './AppIcons';
 import ShineLogo from './ShineLogo';
 
+
 type UserRole = 'admin' | 'answerer';
 
 interface LoginProps {
-  onLogin: (role: UserRole, userId: string) => void;
+  onLogin: (role: UserRole, userId: string, sessionId?: string) => void;
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
@@ -27,13 +28,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         password,
         role: selectedRole,
       });
-      onLogin(res.user.role, res.user.userId);
+      onLogin(res.user.role, res.user.userId, res.user.sessionId);
     } catch (err: any) {
       const msg: string = err?.message || err?.error || "";
       if (msg.toLowerCase().includes("expired")) {
         alert("Account Validity Expired\n\nYour access period has ended. Please contact your administrator to extend or unblock the account.");
-      } else if (msg.toLowerCase().includes("inactive") || msg.toLowerCase().includes("blocked")) {
-        alert("Account Inactive\n\nYour account has been deactivated. Please contact your administrator to regain access.");
+      } else if (msg.toLowerCase().includes("suspended") || msg.toLowerCase().includes("screenshot") || msg.toLowerCase().includes("violation") || msg.toLowerCase().includes("blocked") || msg.toLowerCase().includes("inactive")) {
+        alert("Account Suspended\n\nYour account is suspended. Contact the admin for unblock.");
       } else {
         alert("Invalid credentials. Please check your User ID and password.");
       }

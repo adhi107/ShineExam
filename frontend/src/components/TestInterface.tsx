@@ -6,6 +6,7 @@ import TestInstructions from "./TestInstructions";
 import "./TestInterface.css";
 import { apiPost } from "../services/api";
 import ShineLogo from "./ShineLogo";
+import { SensitiveContent } from "../security";
 
 interface Question {
   id: string;
@@ -201,6 +202,8 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
 
   const [result, setResult] = useState<ResultPayload | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [mobilePaletteOpen, setMobilePaletteOpen] = useState(false);
+
 
   const handleSubmitExam = async () => {
     setSubmitting(true);
@@ -289,7 +292,16 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
   );
 
   return (
-    <>
+    <SensitiveContent
+      userId={userId}
+      hideOnTabSwitch={testStep === "exam"}
+      shieldOnScreenShare={testStep === "exam"}
+      hideOnWindowBlur={testStep === "exam"}
+      showWatermark={testStep === "exam"}
+      shieldMessage="Exam content is hidden. Return to this tab to continue your exam."
+      className="test-interface-root"
+    >
+
       {testStep === "details" && (
         <TestDetails
           testName={testName}
@@ -363,10 +375,20 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
             <div className="q-type-label">
               Question Type: {activeQuestion.type === "msq" || activeQuestion.type === "multiple" ? "Multiple Choice (MSQ)" : "Multiple Choice Question (MCQ)"}
             </div>
-            <div className="q-marks-label">
-              Marks for correct answer: <strong>{activeQuestion.marks || 1}</strong>
-              <span className="divider">|</span>
-              Negative Marks: <strong>0</strong>
+            <div className="q-meta-right-group">
+              <div className="q-marks-label">
+                Marks: <strong>+{activeQuestion.marks || 1}</strong>
+                <span className="divider">|</span>
+                Negative: <strong>0</strong>
+              </div>
+              <button
+                type="button"
+                className="btn-mobile-palette-toggle"
+                onClick={() => setMobilePaletteOpen(!mobilePaletteOpen)}
+                title="Toggle question grid"
+              >
+                📋 Grid ({currentQuestionIndex + 1}/{questions.length})
+              </button>
             </div>
           </div>
 
@@ -427,31 +449,41 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
               </footer>
             </div>
 
-            {/* Right Question Navigator */}
-            <QuestionNavigator
-              userId={userId}
-              questions={questions}
-              currentIndex={currentQuestionIndex}
-              answers={answers}
-              visited={visited}
-              sections={sections}
-              currentSection={currentSection}
-              onQuestionSelect={handleSelectQuestion}
-              onSectionChange={(sec) => {
-                setCurrentSection(sec);
-                const firstIdx = questions.findIndex((q) => q.section === sec);
-                if (firstIdx >= 0) handleSelectQuestion(firstIdx);
-              }}
-              getQuestionStatus={getQuestionStatus}
-              onSubmit={() => {
-                if (!isLastSection && isSectional) {
-                  handleNextSection();
-                } else {
-                  setTestStep("confirm");
-                }
-              }}
-              submitText={submitText}
-            />
+            {/* Right Question Navigator Drawer */}
+            <div className={`tcs-palette-drawer-wrapper ${mobilePaletteOpen ? "mobile-open" : ""}`}>
+              {mobilePaletteOpen && (
+                <div className="mobile-palette-backdrop" onClick={() => setMobilePaletteOpen(false)} />
+              )}
+              <div className="palette-inner-container">
+                <QuestionNavigator
+                  userId={userId}
+                  questions={questions}
+                  currentIndex={currentQuestionIndex}
+                  answers={answers}
+                  visited={visited}
+                  sections={sections}
+                  currentSection={currentSection}
+                  onQuestionSelect={(idx) => {
+                    handleSelectQuestion(idx);
+                    setMobilePaletteOpen(false);
+                  }}
+                  onSectionChange={(sec) => {
+                    setCurrentSection(sec);
+                    const firstIdx = questions.findIndex((q) => q.section === sec);
+                    if (firstIdx >= 0) handleSelectQuestion(firstIdx);
+                  }}
+                  getQuestionStatus={getQuestionStatus}
+                  onSubmit={() => {
+                    if (!isLastSection && isSectional) {
+                      handleNextSection();
+                    } else {
+                      setTestStep("confirm");
+                    }
+                  }}
+                  submitText={submitText}
+                />
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -592,7 +624,7 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
           </div>
         </div>
       )}
-    </>
+    </SensitiveContent>
   );
 };
 

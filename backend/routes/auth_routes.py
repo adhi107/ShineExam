@@ -1,13 +1,17 @@
 import re
-from datetime import datetime
+import uuid
+from datetime import datetime, timedelta
 from flask import Blueprint, jsonify, request
 from config.db import get_db
+from config.settings import settings
 from utils.json import to_jsonable
 from utils.validators import require_fields
+from utils.security import rate_limit, audit_log
 
 auth_bp = Blueprint("auth", __name__)
 
 @auth_bp.post("/login")
+@rate_limit(max_calls=settings.RATE_LIMIT_LOGIN_MAX, period_seconds=settings.RATE_LIMIT_LOGIN_PERIOD)
 def login():
     """Login using userId (or naxUnid) + password + role."""
     payload = request.get_json(silent=True) or {}
@@ -31,8 +35,12 @@ def login():
     })
 
     if not user:
+        audit_log("LOGIN_FAILED", user_id=userId,
+                  details={"reason": "user_not_found", "role": role}, severity="warning")
         return jsonify({"error": "Invalid User ID or role"}), 401
     if user.get("password") != password:
+        audit_log("LOGIN_FAILED", user_id=userId,
+                  details={"reason": "wrong_password", "role": role}, severity="warning")
         return jsonify({"error": "Invalid credentials. Please check your User ID and password."}), 401
     
     valid_until = user.get("validUntil")
@@ -41,19 +49,51 @@ def login():
             {"_id": user["_id"]},
             {"$set": {"isActive": False, "statusReason": "validity_expired", "statusUpdatedAt": datetime.utcnow()}}
         )
+        audit_log("LOGIN_FAILED", user_id=userId,
+                  details={"reason": "validity_expired"}, severity="warning")
         return jsonify({"error": "Your account validity has expired. Please contact your administrator."}), 403
 
     if role == "answerer" and not user.get("isActive", True):
-        return jsonify({"error": "Your account is inactive. Please contact your administrator."}), 403
+        status_reason = user.get("statusReason", "")
+        if status_reason == "security_violation_screenshot":
+            error_msg = "Your account has been permanently blocked due to unauthorized screenshot activity. Please contact your administrator to unblock your account."
+        elif status_reason == "security_violation_recording":
+            error_msg = "Your account has been permanently blocked due to screen recording/sharing violations. Please contact your administrator to unblock your account."
+        elif status_reason == "validity_expired":
+            error_msg = "Your account validity has expired. Please contact your administrator."
+        else:
+            error_msg = "Your account is deactivated. Please contact your administrator to regain access."
+            
+        audit_log("LOGIN_FAILED", user_id=userId,
+                  details={"reason": "account_blocked", "statusReason": status_reason}, severity="warning")
+        return jsonify({"error": error_msg}), 403
+
 
     db.users.update_one({"_id": user["_id"]}, {"$set": {"lastLoginAt": datetime.utcnow()}})
 
+    # Issue a short-lived security session token for the watermark system
+    session_id = str(uuid.uuid4())
+    session_expires = datetime.utcnow() + timedelta(hours=settings.SESSION_TTL_HOURS)
+    try:
+        db.security_sessions.insert_one({
+            "sessionId": session_id,
+            "userId": userId,
+            "createdAt": datetime.utcnow(),
+            "expiresAt": session_expires,
+            "active": True,
+        })
+    except Exception:
+        pass  # Non-critical — watermark will fall back to local UUID
+
+    audit_log("LOGIN_SUCCESS", user_id=userId, details={"role": role, "sessionId": session_id})
+
     res_user = {
-        "id":     str(user["_id"]),
-        "userId": user.get("userId"),
-        "name":   user.get("name"),
-        "email":  user.get("email"),
-        "role":   user.get("role"),
+        "id":        str(user["_id"]),
+        "userId":    user.get("userId"),
+        "name":      user.get("name"),
+        "email":     user.get("email"),
+        "role":      user.get("role"),
+        "sessionId": session_id,
     }
     return jsonify({"user": to_jsonable(res_user)})
 

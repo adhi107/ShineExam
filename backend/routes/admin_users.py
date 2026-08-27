@@ -77,17 +77,22 @@ def list_users():
             "email": u.get("email", ""), "userId": u.get("userId"),
             "createdAt": u.get("createdAt"), "lastLoginAt": u.get("lastLoginAt"),
             "isActive": u.get("isActive", True),
+            "statusReason": u.get("statusReason", ""),
+            "statusUpdatedAt": u.get("statusUpdatedAt"),
+            "blockedDueTo": u.get("blockedDueTo", ""),
             "validUntil": u.get("validUntil"),
             "isExpired": bool(u.get("validUntil") and u.get("validUntil") < now),
             "attempts": db.results.count_documents({"userId": u.get("userId")}),
         })
     return jsonify({"users": to_jsonable(out)})
 
+
 # Create a candidate account from the admin student directory.
 @admin_users_bp.route("", methods=["POST"])
 @admin_users_bp.route("/", methods=["POST"])
 def create_user():
     payload = request.get_json(silent=True) or {}
+
     ok, msg = require_fields(payload, ["name", "email", "userId", "password"])
     if not ok:
         return jsonify({"error": msg}), 400
@@ -206,10 +211,12 @@ def update_user_status(user_id: str):
         "isActive": bool(payload["isActive"]),
         "statusUpdatedAt": datetime.utcnow()
     }
-    if status_updates["isActive"] and user.get("validUntil") and user.get("validUntil") < datetime.utcnow():
-        status_updates["validUntil"] = None
-        status_updates["statusReason"] = "manually_unblocked"
-    elif not status_updates["isActive"]:
+    if status_updates["isActive"]:
+        status_updates["statusReason"] = "unblocked_by_admin"
+        status_updates["blockedDueTo"] = None
+        if user.get("validUntil") and user.get("validUntil") < datetime.utcnow():
+            status_updates["validUntil"] = None
+    else:
         status_updates["statusReason"] = "manually_blocked"
 
     db.users.update_one(
@@ -224,6 +231,7 @@ def update_user_status(user_id: str):
         "userId": user.get("userId"),
         "isActive": bool(payload["isActive"])
     })
+
 
 # Delete a candidate account and remove related test activity links.
 @admin_users_bp.route("/<user_id>", methods=["DELETE"])

@@ -17,8 +17,42 @@ from utils.json import to_jsonable
 from routes.admin_courses import _ensure_default_course_materials
 from utils.validators import require_fields
 from services.scoring import compute_result
-
 answerer_bp = Blueprint("answerer", __name__)
+
+
+@answerer_bp.before_request
+def enforce_candidate_active_status():
+    """
+    Strict security gate: Block suspended/inactive candidates from accessing any answerer API.
+    """
+    user_id = (
+        request.args.get("userId")
+        or request.headers.get("X-User-Id")
+        or ""
+    )
+    if not user_id and request.is_json:
+        body = request.get_json(silent=True) or {}
+        user_id = body.get("userId", "")
+
+    if not user_id:
+        return None
+
+    user_id = str(user_id).strip()
+    db = get_db()
+    user = db.users.find_one({
+        "$or": [{"userId": user_id}, {"naxUnid": user_id}],
+        "role": "answerer"
+    })
+    if user and not user.get("isActive", True):
+        status_reason = user.get("statusReason", "")
+        if status_reason == "security_violation_screenshot":
+            msg = "Your account is suspended due to unauthorized screenshot activity. Contact the admin for unblock."
+        elif status_reason == "security_violation_recording":
+            msg = "Your account is suspended due to screen recording/sharing violations. Contact the admin for unblock."
+        else:
+            msg = "Your account is suspended. Contact the admin for unblock."
+        return jsonify({"error": msg, "blocked": True, "statusReason": status_reason}), 403
+
 
 
 def _exam_availability(exam, now=None):
@@ -1050,6 +1084,7 @@ def submit_attempt(attempt_id):
     payload = request.get_json(silent=True) or {}
     answers = payload.get("answers", [])
     time_spent = int(payload.get("timeSpentSec", 0))
+    user_id = str(payload.get("userId", "")).strip()
 
     db = get_db()
 
@@ -1121,6 +1156,18 @@ def submit_attempt(attempt_id):
         {"$set": {"status": "submitted"}}
     )
 
+    # Audit log the exam submission
+    audit_log(
+        "EXAM_SUBMITTED",
+        user_id=str(result_doc.get("userId", user_id)),
+        details={
+            "attemptId": attempt_id,
+            "examId": str(exam_id),
+            "percentage": computed["percentage"],
+            "passed": computed["passed"],
+        },
+    )
+
     # Return JSON-safe identifiers and the candidate score summary.
     response_data = {
         "attemptId": str(result_doc["attemptId"]),
@@ -1137,6 +1184,7 @@ def submit_attempt(attempt_id):
     }
 
     return jsonify({"result": response_data, **response_data})
+
 
 
 @answerer_bp.route("/attempts/submit", methods=["POST"])

@@ -19,6 +19,11 @@ from routes.master_data import master_data_bp, public_bp
 from routes.offer_letter import offer_letter_bp
 from routes.exam_categories import admin_exam_categories_bp, answerer_exam_categories_bp
 from routes.learning_resources import admin_documents_bp, admin_announcements_bp, answerer_resources_bp
+from routes.security_routes import security_bp
+from routes.admin_violations import admin_violations_bp
+from routes.admin_audit import admin_audit_bp
+from routes.admin_security_controls import admin_security_controls_bp, public_security_bp
+from utils.security import add_security_headers
 
 
 def create_app() -> Flask:
@@ -53,6 +58,57 @@ def create_app() -> Flask:
     app.register_blueprint(master_data_bp, url_prefix="/admin/master-data")
     app.register_blueprint(public_bp,      url_prefix="/public")
     app.register_blueprint(offer_letter_bp, url_prefix="/admin/offer-letter")
+    app.register_blueprint(security_bp,    url_prefix="/security")
+    app.register_blueprint(admin_violations_bp, url_prefix="/admin/violations")
+    app.register_blueprint(admin_audit_bp,      url_prefix="/admin/audit-logs")
+    app.register_blueprint(admin_security_controls_bp, url_prefix="/admin")
+    app.register_blueprint(public_security_bp, url_prefix="/public/security")
+
+
+    # Global firewall: If a candidate account is inactive/suspended, block all requests
+    @app.before_request
+    def global_candidate_security_gate():
+        from flask import request
+        path = request.path
+        if (
+            path.startswith("/admin")
+            or path.startswith("/public")
+            or path.startswith("/uploads")
+            or path == "/"
+            or path == "/auth/login"
+            or path == "/security/violation/block"
+        ):
+            return None
+
+        user_id = (
+            request.headers.get("X-User-Id")
+            or request.args.get("userId")
+            or ""
+        )
+        if not user_id and request.is_json:
+            body = request.get_json(silent=True) or {}
+            user_id = body.get("userId", "")
+
+        if not user_id:
+            return None
+
+        from config.db import get_db
+        db = get_db()
+        user = db.users.find_one({
+            "$or": [{"userId": str(user_id).strip()}, {"naxUnid": str(user_id).strip()}],
+            "role": "answerer"
+        })
+        if user and not user.get("isActive", True):
+            status_reason = user.get("statusReason", "")
+            return jsonify({
+                "error": "Your account is suspended. Contact the admin for unblock.",
+                "blocked": True,
+                "statusReason": status_reason
+            }), 403
+
+    # Add security headers to every API response
+    app.after_request(add_security_headers)
+
 
     @app.errorhandler(404)
     def not_found(_):

@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { API_BASE, apiGet, apiPost, apiPut, apiPostForm } from "../services/api";
 import { normalizeSearchText } from "../utils/filterUtils";
+import ConfirmDialog, { DialogVariant } from "./ConfirmDialog";
 import "./UserManagement.css";
 import "./UserManagementFilters.css";
 
 interface Student {
   id: string; name: string; email: string; userId: string; isActive: boolean;
   createdAt?: string; lastLoginAt?: string; attempts?: number; validUntil?: string; isExpired?: boolean;
+  statusReason?: string; blockedDueTo?: string; statusUpdatedAt?: string;
 }
+
 
 interface BulkResult {
   success: boolean;
@@ -41,6 +44,20 @@ const UserManagement: React.FC = () => {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: React.ReactNode;
+    confirmText: string;
+    variant: DialogVariant;
+    icon?: string;
+    action: () => Promise<void>;
+  } | null>(null);
+
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   // Bulk Excel Upload state
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
@@ -91,6 +108,12 @@ const UserManagement: React.FC = () => {
     });
   }, [students, search, status, attemptFilter, activityFilter, joinedFilter, startDate, endDate, sortBy]);
 
+  const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const paginatedStudents = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return visible.slice(start, start + pageSize);
+  }, [visible, currentPage, pageSize]);
+
   const active = students.filter(student => student.isActive).length;
 
   const hasActiveFilters = Boolean(
@@ -106,7 +129,9 @@ const UserManagement: React.FC = () => {
     setStartDate("");
     setEndDate("");
     setSortBy("newest");
+    setCurrentPage(1);
   };
+
 
   const handleExportCSV = () => {
     if (!visible || visible.length === 0) {
@@ -164,16 +189,35 @@ const UserManagement: React.FC = () => {
     }
   };
 
-  const toggleBlock = async (student: Student) => {
-    const action = student.isActive ? "block" : "unblock";
-    if (!window.confirm(`${action[0].toUpperCase() + action.slice(1)} ${student.name}?`)) return;
-    try {
-      await apiPut(`/admin/users/${student.id}/status`, { isActive: !student.isActive });
-      await loadStudents();
-    } catch (error: any) { 
-      alert(error?.message || `Could not ${action} student.`); 
-    }
+  const toggleBlock = (student: Student) => {
+    const isBlocking = student.isActive;
+    setConfirmDialog({
+      isOpen: true,
+      title: isBlocking ? "Block Candidate Access" : "Unblock Candidate Access",
+      message: (
+        <>
+          Are you sure you want to {isBlocking ? "block" : "unblock"}{" "}
+          <strong>{student.name}</strong> (<code>{student.userId}</code>)?
+          <br />
+          {isBlocking
+            ? "They will not be able to log in or write tests until unblocked."
+            : "Their portal access and exam eligibility will be restored."}
+        </>
+      ),
+      confirmText: isBlocking ? "Yes, Block Candidate" : "Yes, Unblock Candidate",
+      variant: isBlocking ? "danger" : "unblock",
+      icon: isBlocking ? "🚫" : "🔓",
+      action: async () => {
+        try {
+          await apiPut(`/admin/users/${student.id}/status`, { isActive: !student.isActive });
+          await loadStudents();
+        } catch (error: any) {
+          alert(error?.message || `Could not update student status.`);
+        }
+      },
+    });
   };
+
 
   const date = (value?: string) => value ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
@@ -351,7 +395,7 @@ const UserManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {visible.map(student => (
+                {paginatedStudents.map(student => (
                   <tr key={student.id}>
                     <td>
                       <div className="student-cell">
@@ -367,7 +411,15 @@ const UserManagement: React.FC = () => {
                     <td>{date(student.lastLoginAt)}</td>
                     <td>
                       <span className={`student-status ${student.isActive ? "active" : "blocked"}`}>
-                        {student.isActive ? "● Active" : student.isExpired ? "● Expired" : "● Blocked"}
+                        {student.isActive 
+                          ? "● Active" 
+                          : student.statusReason === "security_violation_screenshot"
+                          ? "● Suspended (Screenshot)"
+                          : student.statusReason === "security_violation_recording"
+                          ? "● Suspended (Recording)"
+                          : student.isExpired 
+                          ? "● Expired" 
+                          : "● Blocked"}
                       </span>
                     </td>
                     <td>
@@ -384,7 +436,59 @@ const UserManagement: React.FC = () => {
             </table>
           </div>
         )}
+
+        {/* Student Table Pagination */}
+        {visible.length > 0 && (
+          <div className="table-pagination-bar">
+            <div className="pagination-info">
+              Showing <strong>{(currentPage - 1) * pageSize + 1}</strong> to{" "}
+              <strong>{Math.min(currentPage * pageSize, visible.length)}</strong> of{" "}
+              <strong>{visible.length}</strong> students
+            </div>
+
+            <div className="pagination-controls">
+              <label className="page-size-picker">
+                Per page:
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+              </label>
+
+              <button
+                type="button"
+                className="page-nav-btn"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                ‹ Previous
+              </button>
+
+              <span className="page-current-indicator">
+                Page {currentPage} of {totalPages}
+              </span>
+
+              <button
+                type="button"
+                className="page-nav-btn"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next ›
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
 
       {/* Single Account Add/Edit Modal */}
       {(adding || editing) && (
@@ -556,8 +660,27 @@ const UserManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Screen Center Custom Confirm Dialog */}
+      {confirmDialog && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmText={confirmDialog.confirmText}
+          variant={confirmDialog.variant}
+          icon={confirmDialog.icon}
+          onConfirm={async () => {
+            const action = confirmDialog.action;
+            setConfirmDialog(null);
+            await action();
+          }}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
     </section>
   );
 };
 
 export default UserManagement;
+

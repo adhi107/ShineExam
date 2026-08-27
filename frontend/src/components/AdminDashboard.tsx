@@ -8,57 +8,215 @@ import TestResults from "./TestResults";
 import ExamCategoryManagement from "./ExamCategoryManagement";
 import DocumentManagement from "./DocumentManagement";
 import AnnouncementManagement from "./AnnouncementManagement";
+import SecurityViolations from "./SecurityViolations";
+import AuditLogs from "./AuditLogs";
+import AdminSecurityControls from "./AdminSecurityControls";
 import ShineLogo from "./ShineLogo";
 import AppIcon from "./AppIcons";
 import { apiGet, apiPost } from "../services/api";
 import "./AdminDashboard.css";
 import "./AdminPolish.css";
 
-type AdminView="dashboard"|"users"|"categories"|"documents"|"announcements"|"tests"|"create-test"|"edit-test"|"results";
-const paths:Record<AdminView,string>={dashboard:"/admin",users:"/admin/users",categories:"/admin/exam-categories",documents:"/admin/documents",announcements:"/admin/announcements",tests:"/admin/tests","create-test":"/admin/tests/create","edit-test":"/admin/tests/edit",results:"/admin/results"};
-const views:Record<string,AdminView>={"/admin":"dashboard","/admin/users":"users","/admin/exam-categories":"categories","/admin/documents":"documents","/admin/announcements":"announcements","/admin/tests":"tests","/admin/tests/create":"create-test","/admin/tests/edit":"edit-test","/admin/results":"results"};
-interface RecentAttempt{id:string;userId:string;testName:string;percentage:number;passed:boolean;submittedAt:string}
-interface DashboardStats{totalUsers:number;activeUsers:number;blockedUsers:number;totalTests:number;activeTests:number;totalAttempts:number;completedAttempts:number;averageScore:number;passRate:number;recentAttempts:RecentAttempt[]}
-interface Props{adminName:string;onLogout:()=>void}
-const initialStats:DashboardStats={totalUsers:0,activeUsers:0,blockedUsers:0,totalTests:0,activeTests:0,totalAttempts:0,completedAttempts:0,averageScore:0,passRate:0,recentAttempts:[]};
+type AdminView =
+  | "dashboard"
+  | "users"
+  | "violations"
+  | "audit-logs"
+  | "security-controls"
+  | "categories"
+  | "documents"
+  | "announcements"
+  | "tests"
+  | "create-test"
+  | "edit-test"
+  | "results";
 
-const AdminDashboard:React.FC<Props>=({adminName,onLogout})=>{
-  const navigate=useNavigate();const location=useLocation();const currentView=views[location.pathname]||"dashboard";
-  const go=(view:AdminView)=>navigate(paths[view]);
-  const [editingTestId,setEditingTestId]=useState<string|null>(null);
-  const [stats,setStats]=useState(initialStats);
-  const [showPassword,setShowPassword]=useState(false);const [oldPassword,setOldPassword]=useState("");const [newPassword,setNewPassword]=useState("");const [confirmPassword,setConfirmPassword]=useState("");const [savingPassword,setSavingPassword]=useState(false);
-  const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>localStorage.getItem("shine_admin_sidebar_collapsed")==="true");
+const paths: Record<AdminView, string> = {
+  dashboard: "/admin",
+  users: "/admin/users",
+  violations: "/admin/violations",
+  "audit-logs": "/admin/audit-logs",
+  "security-controls": "/admin/security-controls",
+  categories: "/admin/exam-categories",
+  documents: "/admin/documents",
+  announcements: "/admin/announcements",
+  tests: "/admin/tests",
+  "create-test": "/admin/tests/create",
+  "edit-test": "/admin/tests/edit",
+  results: "/admin/results",
+};
 
-  const toggleSidebar=()=>{
-    setSidebarCollapsed(prev=>{
-      const next=!prev;
-      localStorage.setItem("shine_admin_sidebar_collapsed",String(next));
+const views: Record<string, AdminView> = {
+  "/admin": "dashboard",
+  "/admin/users": "users",
+  "/admin/violations": "violations",
+  "/admin/audit-logs": "audit-logs",
+  "/admin/security-controls": "security-controls",
+  "/admin/exam-categories": "categories",
+  "/admin/documents": "documents",
+  "/admin/announcements": "announcements",
+  "/admin/tests": "tests",
+  "/admin/tests/create": "create-test",
+  "/admin/tests/edit": "edit-test",
+  "/admin/results": "results",
+};
+
+interface RecentAttempt {
+  id: string;
+  userId: string;
+  testName: string;
+  percentage: number;
+  passed: boolean;
+  submittedAt: string;
+}
+
+interface DashboardStats {
+  totalUsers: number;
+  activeUsers: number;
+  blockedUsers: number;
+  totalTests: number;
+  activeTests: number;
+  totalAttempts: number;
+  completedAttempts: number;
+  averageScore: number;
+  passRate: number;
+  recentAttempts: RecentAttempt[];
+}
+
+interface Props {
+  adminName: string;
+  onLogout: () => void;
+}
+
+const initialStats: DashboardStats = {
+  totalUsers: 0,
+  activeUsers: 0,
+  blockedUsers: 0,
+  totalTests: 0,
+  activeTests: 0,
+  totalAttempts: 0,
+  completedAttempts: 0,
+  averageScore: 0,
+  passRate: 0,
+  recentAttempts: [],
+};
+
+const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentView = views[location.pathname] || "dashboard";
+  const go = (view: AdminView) => navigate(paths[view]);
+  const [editingTestId, setEditingTestId] = useState<string | null>(null);
+  const [stats, setStats] = useState(initialStats);
+  const [showPassword, setShowPassword] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem("shine_admin_sidebar_collapsed") === "true"
+  );
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("shine_admin_sidebar_collapsed", String(next));
       return next;
     });
   };
 
-  useEffect(()=>{if(currentView==="dashboard")apiGet<DashboardStats>("/admin/dashboard-stats").then(setStats).catch(console.error)},[currentView]);
-  const closePassword=()=>{setShowPassword(false);setOldPassword("");setNewPassword("");setConfirmPassword("")};
-  const changePassword=async()=>{if(!oldPassword||newPassword.length<4||newPassword!==confirmPassword){alert("Enter the current password and matching new passwords of at least 4 characters.");return}setSavingPassword(true);try{await apiPost("/auth/change-password",{userId:adminName,role:"admin",oldPassword,newPassword});closePassword();alert("Password changed successfully.")}catch(error:any){alert(error?.message||"Password could not be changed.")}finally{setSavingPassword(false)}};
-  const render=()=>{if(currentView==="users")return <UserManagement/>;if(currentView==="categories")return <ExamCategoryManagement/>;if(currentView==="documents")return <DocumentManagement/>;if(currentView==="announcements")return <AnnouncementManagement/>;if(currentView==="create-test")return <TestBuilder onBack={()=>go("tests")}/>;if(currentView==="edit-test")return editingTestId?<TestEditor testId={editingTestId} onBack={()=>go("tests")}/>:<TestList onCreateNew={()=>go("create-test")} onEditTest={id=>{setEditingTestId(id);go("edit-test")}}/>;if(currentView==="tests")return <TestList onCreateNew={()=>go("create-test")} onEditTest={id=>{setEditingTestId(id);go("edit-test")}}/>;if(currentView==="results")return <TestResults/>;return <AdminHome adminName={adminName} stats={stats} go={go}/>};
-  
+  useEffect(() => {
+    if (currentView === "dashboard") {
+      apiGet<DashboardStats>("/admin/dashboard-stats").then(setStats).catch(console.error);
+    }
+  }, [currentView]);
+
+  const closePassword = () => {
+    setShowPassword(false);
+    setOldPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+  };
+
+  const changePassword = async () => {
+    if (!oldPassword || newPassword.length < 4 || newPassword !== confirmPassword) {
+      alert("Enter the current password and matching new passwords of at least 4 characters.");
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      await apiPost("/auth/change-password", {
+        userId: adminName,
+        role: "admin",
+        oldPassword,
+        newPassword,
+      });
+      closePassword();
+      alert("Password changed successfully.");
+    } catch (error: any) {
+      alert(error?.message || "Password could not be changed.");
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const render = () => {
+    if (currentView === "users") return <UserManagement />;
+    if (currentView === "violations") return <SecurityViolations />;
+    if (currentView === "audit-logs") return <AuditLogs />;
+    if (currentView === "security-controls") return <AdminSecurityControls />;
+    if (currentView === "categories") return <ExamCategoryManagement />;
+    if (currentView === "documents") return <DocumentManagement />;
+    if (currentView === "announcements") return <AnnouncementManagement />;
+    if (currentView === "create-test") return <TestBuilder onBack={() => go("tests")} />;
+    if (currentView === "edit-test") {
+      return editingTestId ? (
+        <TestEditor testId={editingTestId} onBack={() => go("tests")} />
+      ) : (
+        <TestList
+          onCreateNew={() => go("create-test")}
+          onEditTest={(id) => {
+            setEditingTestId(id);
+            go("edit-test");
+          }}
+        />
+      );
+    }
+    if (currentView === "tests") {
+      return (
+        <TestList
+          onCreateNew={() => go("create-test")}
+          onEditTest={(id) => {
+            setEditingTestId(id);
+            go("edit-test");
+          }}
+        />
+      );
+    }
+    if (currentView === "results") return <TestResults />;
+    return <AdminHome adminName={adminName} stats={stats} go={go} />;
+  };
+
   return (
     <div className="shine-admin-shell">
-      <aside className={`shine-admin-sidebar ${sidebarCollapsed?"collapsed":""}`}>
+      <aside className={`shine-admin-sidebar ${sidebarCollapsed ? "collapsed" : ""}`}>
         <div className="admin-brand">
-          <ShineLogo compact={sidebarCollapsed} inverse={true}/>
+          <ShineLogo compact={sidebarCollapsed} inverse={true} />
           {!sidebarCollapsed && <span>ADMIN CONSOLE</span>}
         </div>
         <nav>
-          <Nav active={currentView==="dashboard"} icon="dashboard" label="Dashboard" collapsed={sidebarCollapsed} onClick={()=>go("dashboard")}/>
-          <Nav active={currentView==="users"} icon="users" label="Students" collapsed={sidebarCollapsed} onClick={()=>go("users")}/>
-          <Nav active={currentView==="categories"} icon="categories" label="Exam Categories" collapsed={sidebarCollapsed} onClick={()=>go("categories")}/>
-          <Nav active={["tests","create-test","edit-test"].includes(currentView)} icon="tests" label="Tests" collapsed={sidebarCollapsed} onClick={()=>go("tests")}/>
-          <Nav active={currentView==="documents"} icon="documents" label="Documents" collapsed={sidebarCollapsed} onClick={()=>go("documents")}/>
-          <Nav active={currentView==="announcements"} icon="documents" label="Announcements" collapsed={sidebarCollapsed} onClick={()=>go("announcements")}/>
-          <Nav active={currentView==="results"} icon="results" label="Analytics" collapsed={sidebarCollapsed} onClick={()=>go("results")}/>
+          <Nav active={currentView === "dashboard"} icon="dashboard" label="Dashboard" collapsed={sidebarCollapsed} onClick={() => go("dashboard")} />
+          <Nav active={currentView === "users"} icon="users" label="Students" collapsed={sidebarCollapsed} onClick={() => go("users")} />
+          <Nav active={currentView === "categories"} icon="categories" label="Exam Categories" collapsed={sidebarCollapsed} onClick={() => go("categories")} />
+          <Nav active={["tests", "create-test", "edit-test"].includes(currentView)} icon="tests" label="Tests" collapsed={sidebarCollapsed} onClick={() => go("tests")} />
+          <Nav active={currentView === "documents"} icon="documents" label="Documents" collapsed={sidebarCollapsed} onClick={() => go("documents")} />
+          <Nav active={currentView === "announcements"} icon="documents" label="Announcements" collapsed={sidebarCollapsed} onClick={() => go("announcements")} />
+          <Nav active={currentView === "results"} icon="results" label="Analytics" collapsed={sidebarCollapsed} onClick={() => go("results")} />
+          <Nav active={currentView === "violations"} icon="violations" label="Violations" collapsed={sidebarCollapsed} onClick={() => go("violations")} />
+          <Nav active={currentView === "audit-logs"} icon="audit" label="Audit Logs" collapsed={sidebarCollapsed} onClick={() => go("audit-logs")} />
+          <Nav active={currentView === "security-controls"} icon="controls" label="Security Controls" collapsed={sidebarCollapsed} onClick={() => go("security-controls")} />
         </nav>
+
 
         <div className="admin-sidebar-user">
           <div>
@@ -69,7 +227,7 @@ const AdminDashboard:React.FC<Props>=({adminName,onLogout})=>{
           </div>
           {!sidebarCollapsed ? (
             <>
-              <button onClick={()=>setShowPassword(true)}>Change password</button>
+              <button onClick={() => setShowPassword(true)}>Change password</button>
               <button className="admin-signout" onClick={onLogout}>Sign out</button>
             </>
           ) : (
@@ -77,13 +235,33 @@ const AdminDashboard:React.FC<Props>=({adminName,onLogout})=>{
           )}
         </div>
       </aside>
-      <main className={`shine-admin-main ${sidebarCollapsed?"collapsed":""}`}>
+      <main className={`shine-admin-main ${sidebarCollapsed ? "collapsed" : ""}`}>
         {render()}
       </main>
-      {showPassword&&<div className="admin-password-backdrop" onMouseDown={closePassword}><section onMouseDown={event=>event.stopPropagation()}><header><div><span>ACCOUNT SECURITY</span><h2>Change password</h2></div><button onClick={closePassword}>×</button></header><label>Current password<input type="password" value={oldPassword} onChange={event=>setOldPassword(event.target.value)}/></label><label>New password<input type="password" value={newPassword} onChange={event=>setNewPassword(event.target.value)}/></label><label>Confirm password<input type="password" value={confirmPassword} onChange={event=>setConfirmPassword(event.target.value)}/></label><footer><button onClick={closePassword}>Cancel</button><button disabled={savingPassword} onClick={changePassword}>{savingPassword?"Updating…":"Update password"}</button></footer></section></div>}
+      {showPassword && (
+        <div className="admin-password-backdrop" onMouseDown={closePassword}>
+          <section onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <div>
+                <span>ACCOUNT SECURITY</span>
+                <h2>Change password</h2>
+              </div>
+              <button onClick={closePassword}>×</button>
+            </header>
+            <label>Current password<input type="password" value={oldPassword} onChange={(event) => setOldPassword(event.target.value)} /></label>
+            <label>New password<input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label>
+            <label>Confirm password<input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></label>
+            <footer>
+              <button onClick={closePassword}>Cancel</button>
+              <button disabled={savingPassword} onClick={changePassword}>{savingPassword ? "Updating…" : "Update password"}</button>
+            </footer>
+          </section>
+        </div>
+      )}
     </div>
   );
 };
+
 const Nav=({active,icon,label,collapsed,onClick}:any)=><button className={active?"active":""} onClick={onClick} title={collapsed ? label : ""}><AppIcon name={icon}/>{!collapsed && <span>{label}</span>}</button>;
 const AdminHome=({adminName="Admin",stats,go}:{adminName:string;stats:DashboardStats;go:(view:AdminView)=>void})=>{
   const totalUsers = Number(stats?.totalUsers || 0);

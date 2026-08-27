@@ -3,36 +3,144 @@ import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
 import AnswererDashboard from './components/AnswererDashboard';
+import { useSecurityContext } from './security';
+import { useInactivityLogout } from './hooks/useInactivityLogout';
 import './App.css';
+
 import './CardMotion.css';
 
 type UserRole = 'admin' | 'answerer';
 
+function AccountSuspendedPage({ onLogout }: { onLogout: () => void }) {
+  return (
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      width: '100vw',
+      height: '100vh',
+      background: '#07070d',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 2147483647,
+      color: '#fff',
+      padding: '20px',
+      fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif",
+    }}>
+      <div style={{
+        maxWidth: '520px',
+        width: '100%',
+        background: 'linear-gradient(180deg, #18111e 0%, #0d0914 100%)',
+        border: '2px solid #ef4444',
+        borderRadius: '20px',
+        padding: '3rem 2.5rem',
+        textAlign: 'center',
+        boxShadow: '0 25px 80px rgba(0,0,0,0.95), 0 0 50px rgba(239, 68, 68, 0.35)',
+      }}>
+        <div style={{ fontSize: '3.5rem', marginBottom: '1rem' }}>🚫</div>
+        <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#ef4444', margin: '0 0 1rem 0' }}>
+          ACCOUNT SUSPENDED
+        </h2>
+        <div style={{
+          fontSize: '1.15rem',
+          fontWeight: 700,
+          color: '#fff',
+          background: 'rgba(239, 68, 68, 0.2)',
+          border: '1px solid rgba(239, 68, 68, 0.6)',
+          borderRadius: '12px',
+          padding: '16px 20px',
+          margin: '1.25rem 0',
+        }}>
+          Your account is suspended. Contact the admin for unblock.
+        </div>
+        <p style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.8)', lineHeight: 1.6, margin: '1rem 0 1.5rem 0' }}>
+          A critical security policy violation (unauthorized screenshot or screen capture) was recorded. Your exam access has been terminated and your account is permanently blocked.
+        </p>
+        <button
+          type="button"
+          onClick={onLogout}
+          style={{
+            background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+            color: '#fff',
+            border: 'none',
+            padding: '12px 28px',
+            fontSize: '1rem',
+            fontWeight: 700,
+            borderRadius: '10px',
+            cursor: 'pointer',
+            boxShadow: '0 4px 14px rgba(239, 68, 68, 0.4)',
+          }}
+        >
+          Exit to Login
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [currentRole, setCurrentRole] = useState<UserRole | null>(null);
   const [currentUser, setCurrentUser] = useState<string>('');
+  const [isSuspended, setIsSuspended] = useState<boolean>(() => {
+    return sessionStorage.getItem('account_permanently_blocked') === 'true';
+  });
   const navigate = useNavigate();
+  const { initSession, clearSession } = useSecurityContext();
 
-  // Restore the Shine Exam session after a page refresh.
+  // Restore session and verify candidate account status on load/refresh.
   useEffect(() => {
+    const isBlockedFlag = sessionStorage.getItem('account_permanently_blocked') === 'true';
+    if (isBlockedFlag) {
+      setIsSuspended(true);
+      return;
+    }
+
     const savedRole = sessionStorage.getItem('role') as UserRole | null;
     const savedUser = sessionStorage.getItem('userId');
     if (savedRole && savedUser) {
-      setCurrentRole(savedRole);
-      setCurrentUser(savedUser);
+      if (savedRole === 'answerer') {
+        const apiBase = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:5000';
+        fetch(`${apiBase}/answerer/dashboard?userId=${encodeURIComponent(savedUser)}`, {
+          headers: { 'X-User-Id': savedUser, 'X-User-Role': savedRole },
+        })
+          .then((res) => {
+            if (res.status === 403) {
+              sessionStorage.setItem('account_permanently_blocked', 'true');
+              setIsSuspended(true);
+            } else {
+              setCurrentRole(savedRole);
+              setCurrentUser(savedUser);
+            }
+          })
+          .catch(() => {
+            setCurrentRole(savedRole);
+            setCurrentUser(savedUser);
+          });
+      } else {
+        setCurrentRole(savedRole);
+        setCurrentUser(savedUser);
+      }
     }
   }, []);
 
-  const handleLogin = (role: UserRole, userId: string) => {
+  const handleLogin = async (role: UserRole, userId: string, sessionId?: string) => {
+    sessionStorage.removeItem('account_permanently_blocked');
+    setIsSuspended(false);
     sessionStorage.setItem('role', role);
     sessionStorage.setItem('userId', userId);
+    if (sessionId) {
+      sessionStorage.setItem('securitySessionId', sessionId);
+    }
     setCurrentRole(role);
     setCurrentUser(userId);
+    await initSession(userId);
     navigate(role === 'admin' ? '/admin' : '/dashboard');
   };
 
   const handleLogout = () => {
+    clearSession();
     sessionStorage.clear();
+    setIsSuspended(false);
     setCurrentRole(null);
     setCurrentUser('');
     navigate('/login');
@@ -40,7 +148,15 @@ function App() {
 
   const isLoggedIn = !!currentRole && !!currentUser;
 
+  // Global inactivity auto-logout tracker
+  useInactivityLogout({ onLogout: handleLogout, isLoggedIn });
+
+  if (isSuspended) {
+    return <AccountSuspendedPage onLogout={handleLogout} />;
+  }
+
   return (
+
     <Routes>
       <Route
         path="/login"

@@ -1,0 +1,404 @@
+/**
+ * security.css
+ * ─────────────
+ * All CSS rules for the Shine Exam screen-capture protection system.
+ *
+ * Sections:
+ *   1. Sensitive Content Wrapper
+ *   2. Dynamic Watermark Canvas
+ *   3. Screen Shield Overlay (screen-sharing / tab-hidden)
+ *   4. Screen Visibility Guard (lightweight blur-only guard)
+ *   5. Print Protection (@media print)
+ *   6. Global copy-protection utilities
+ */
+
+/* ═══════════════════════════════════════════════════════════
+   1. SENSITIVE CONTENT WRAPPER
+   ═══════════════════════════════════════════════════════════ */
+
+.shine-sensitive-content {
+  position: relative;
+  /* Disable text selection for the entire protected zone */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  /* Prevent touch callout (iOS long-press menu) */
+  -webkit-touch-callout: none;
+  /* Prevent tap highlight on mobile */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Allow selection inside inputs and contenteditable elements */
+.shine-sensitive-content input,
+.shine-sensitive-content textarea,
+.shine-sensitive-content [contenteditable='true'] {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/* Blurred state (soft blur when tab is backgrounded in blur mode) */
+.shine-sensitive-content--blurred > *:not(.shine-watermark-canvas) {
+  filter: blur(12px);
+  pointer-events: none;
+  transition: filter 0.3s ease;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   2. DYNAMIC WATERMARK CANVAS
+   ═══════════════════════════════════════════════════════════ */
+
+.shine-watermark-canvas {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 2147483645 !important; /* Top layer above everything in exam */
+  pointer-events: none !important;
+  opacity: 1 !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   2b. ANTI-CAPTURE LAYER
+   A transparent fixed overlay using mix-blend-mode that can
+   interfere with some browser-based screen-capture tools.
+   Does NOT prevent OS-level PrtSc or external recorders.
+   ═══════════════════════════════════════════════════════════ */
+
+.shine-anti-capture-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 8999;
+  pointer-events: none;
+  /* Transparent base — the mix-blend-mode creates a GPU compositing
+     layer that some capture APIs (not OS-level) render as black */
+  background: transparent;
+  mix-blend-mode: difference;
+  /* Continuously cycle opacity to make static captures harder */
+  animation: shine-anticapture-cycle 1.2s ease-in-out infinite;
+}
+
+@keyframes shine-anticapture-cycle {
+  0%, 100% { opacity: 0; }
+  50%       { opacity: 0.01; } /* imperceptible to human eye, detectable by capture tools */
+}
+
+/* ═══════════════════════════════════════════════════════════
+   3. PURE SOLID BLACKOUT SHIELD (100% PITCH BLACK SCREEN)
+   ═══════════════════════════════════════════════════════════ */
+
+.shine-screen-blackout-solid {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background-color: #000000 !important;
+  background: #000000 !important;
+  z-index: 2147483647 !important; /* Above everything */
+  cursor: pointer;
+  opacity: 1 !important;
+}
+
+.shine-screen-shield {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 2147483647 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: rgba(0, 0, 0, 0.96) !important; /* Pitch black backdrop */
+  backdrop-filter: blur(24px) !important;
+}
+
+.shine-suspended-modal-card {
+  text-align: center;
+  color: #ffffff;
+  padding: 3rem 2.5rem;
+  max-width: 520px;
+  width: 90%;
+  margin: auto !important;
+  background: linear-gradient(180deg, #18111e 0%, #0d0914 100%) !important;
+  border: 2px solid #ef4444 !important;
+  border-radius: 20px;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.95), 0 0 50px rgba(239, 68, 68, 0.35) !important;
+  animation: shine-modal-pop 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes shine-modal-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.shine-suspended-title {
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #ef4444 !important;
+  margin: 0 0 1rem 0;
+  text-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+}
+
+.shine-suspended-highlight-msg {
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #ffffff;
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.6);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin: 1.25rem 0;
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.25);
+}
+
+
+.shine-screen-shield__icon {
+  font-size: 3.5rem;
+  margin-bottom: 1rem;
+  display: block;
+  animation: shine-shield-bounce 2s ease-in-out infinite;
+}
+
+@keyframes shine-shield-bounce {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-8px); }
+}
+
+.shine-screen-shield__title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem 0;
+  letter-spacing: -0.5px;
+  color: #f87171;
+}
+
+.shine-screen-shield__message {
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.6;
+  margin: 0 0 1rem 0;
+}
+
+.shine-lock-countdown-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 12px;
+  padding: 12px 20px;
+  margin: 1rem 0;
+}
+
+.shine-lock-countdown-label {
+  font-size: 0.85rem;
+  color: #fca5a5;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.shine-lock-countdown-time {
+  font-size: 2.2rem;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  color: #ef4444;
+  letter-spacing: 2px;
+  text-shadow: 0 0 16px rgba(239, 68, 68, 0.6);
+}
+
+.shine-lock-note-box {
+  background: rgba(239, 68, 68, 0.12);
+  border-left: 3px solid #ef4444;
+  padding: 10px 14px;
+  border-radius: 4px;
+  text-align: left;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.5;
+  margin-top: 1rem;
+}
+
+.shine-lock-note-box strong {
+  color: #f87171;
+}
+
+.shine-shield-action-box {
+  margin-top: 1.5rem;
+}
+
+
+.shine-shield-unlock-btn {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #ffffff;
+  border: none;
+  padding: 12px 24px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
+  transition: all 0.2s ease;
+}
+
+.shine-shield-unlock-btn:hover {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.6);
+}
+
+.shine-screen-shield__sub {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0.25rem 0 0 0;
+  font-style: italic;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   3b. PRINTSCREEN DETECTED BANNER
+   ═══════════════════════════════════════════════════════════ */
+
+
+.shine-prtsc-banner {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(220, 38, 38, 0.45);
+  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  max-width: 520px;
+  text-align: center;
+  animation: shine-prtsc-slide-in 0.25s ease forwards, shine-prtsc-pulse 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes shine-prtsc-slide-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes shine-prtsc-pulse {
+  0%, 100% { box-shadow: 0 8px 32px rgba(220, 38, 38, 0.45); }
+  50%       { box-shadow: 0 8px 48px rgba(220, 38, 38, 0.75); }
+}
+
+.shine-prtsc-banner__icon {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.shine-prtsc-banner__text {
+  line-height: 1.4;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   4. SCREEN VISIBILITY GUARD (lightweight)
+   ═══════════════════════════════════════════════════════════ */
+
+.shine-visibility-guard {
+  position: relative;
+  transition: filter 0.3s ease;
+}
+
+.shine-visibility-guard--blurred {
+  filter: blur(14px);
+  pointer-events: none;
+}
+
+.shine-visibility-guard__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 12, 41, 0.85);
+  backdrop-filter: blur(8px);
+  border-radius: inherit;
+  z-index: 100;
+  color: #fff;
+  font-size: 0.95rem;
+  text-align: center;
+  padding: 1rem;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   5. PRINT PROTECTION
+   ═══════════════════════════════════════════════════════════ */
+
+@media print {
+  /* Hide all sensitive content during printing */
+  .shine-sensitive-content,
+  .shine-sensitive-content *,
+  .shine-visibility-guard,
+  .shine-visibility-guard * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Show the print-protection message instead */
+  body::before {
+    content: '🔒 This content is protected and cannot be printed.\A\A Shine Exam — Unauthorized printing of exam content is prohibited.\A Session content is watermarked and traced.';
+    display: block !important;
+    visibility: visible !important;
+    white-space: pre-line;
+    font-family: Arial, sans-serif;
+    font-size: 18pt;
+    font-weight: bold;
+    text-align: center;
+    padding: 80pt;
+    color: #1a1a2e;
+  }
+
+  /* Watermark canvas gets highest priority in print too */
+  .shine-watermark-canvas {
+    display: block !important;
+    visibility: visible !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   6. GLOBAL UTILITY — .shine-no-select
+   ═══════════════════════════════════════════════════════════ */
+
+/* Apply this class to any element that should not be selectable */
+.shine-no-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}

@@ -12,4 +12,11 @@ class Settings:
     )
     PORT: int = int(os.getenv("PORT", "5000"))
 
+    # Security settings
+    # TTL for security session tokens stored in MongoDB (used for watermark session IDs)
+    SESSION_TTL_HOURS: int = int(os.getenv("SESSION_TTL_HOURS", "8"))
+    # Default rate-limit: max calls per window for the login endpoint
+    RATE_LIMIT_LOGIN_MAX: int = int(os.getenv("RATE_LIMIT_LOGIN_MAX", "10"))
+    RATE_LIMIT_LOGIN_PERIOD: int = int(os.getenv("RATE_LIMIT_LOGIN_PERIOD", "60"))
+
 settings = Settings()
