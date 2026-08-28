@@ -15,8 +15,6 @@ from routes.admin_dashboard import admin_dashboard_bp
 from routes.admin_results import admin_results_bp
 from routes.admin_courses import admin_courses_bp
 from routes.answerer import answerer_bp
-from routes.master_data import master_data_bp, public_bp
-from routes.offer_letter import offer_letter_bp
 from routes.exam_categories import admin_exam_categories_bp, answerer_exam_categories_bp
 from routes.learning_resources import admin_documents_bp, admin_announcements_bp, answerer_resources_bp
 from routes.security_routes import security_bp
@@ -42,7 +40,7 @@ def create_app() -> Flask:
         uploads_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
         return send_from_directory(uploads_dir, filename)
 
-    # Register Shine Exam API route groups.
+    # Register active Shine Exam API route groups.
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(admin_users_bp, url_prefix="/api/admin/users")
     app.register_blueprint(admin_exams_bp, url_prefix="/api/admin/exams")
@@ -55,14 +53,12 @@ def create_app() -> Flask:
     app.register_blueprint(admin_documents_bp, url_prefix="/api/admin/documents")
     app.register_blueprint(admin_announcements_bp, url_prefix="/api/admin/announcements")
     app.register_blueprint(answerer_resources_bp, url_prefix="/api/answerer")
-    app.register_blueprint(master_data_bp, url_prefix="/api/admin/master-data")
-    app.register_blueprint(public_bp,      url_prefix="/api/public")
-    app.register_blueprint(offer_letter_bp, url_prefix="/api/admin/offer-letter")
     app.register_blueprint(security_bp,    url_prefix="/api/security")
     app.register_blueprint(admin_violations_bp, url_prefix="/api/admin/violations")
     app.register_blueprint(admin_audit_bp,      url_prefix="/api/admin/audit-logs")
     app.register_blueprint(admin_security_controls_bp, url_prefix="/api/admin")
     app.register_blueprint(public_security_bp, url_prefix="/api/public/security")
+
 
 
     # Global firewall: If a candidate account is inactive/suspended, block all requests
@@ -71,12 +67,12 @@ def create_app() -> Flask:
         from flask import request
         path = request.path
         if (
-            path.startswith("/admin")
-            or path.startswith("/public")
+            path.startswith("/api/admin")
+            or path.startswith("/api/public")
             or path.startswith("/uploads")
             or path == "/"
-            or path == "/auth/login"
-            or path == "/security/violation/block"
+            or path == "/api/auth/login"
+            or path == "/api/security/violation/block"
         ):
             return None
 
@@ -105,6 +101,8 @@ def create_app() -> Flask:
                 "blocked": True,
                 "statusReason": status_reason
             }), 403
+
+
 
     # Add security headers to every API response
     app.after_request(add_security_headers)

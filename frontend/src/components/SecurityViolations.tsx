@@ -15,6 +15,8 @@ interface ViolationRecord {
   statusReason?: string;
   primaryReason: string;
   violationCount: number;
+  screenshotCount: number;
+  recordingCount: number;
   lastIncidentAt: string;
   blockedDueTo?: string;
   attemptsCount?: number;
@@ -195,7 +197,9 @@ const SecurityViolations: React.FC = () => {
       {/* Metric Cards */}
       <div className="violations-stats-grid">
         <div className="v-stat-card total">
-          <div className="v-stat-icon">⚠️</div>
+          <div className="v-stat-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
           <div className="v-stat-content">
             <span className="v-stat-label">Total Violations</span>
             <strong className="v-stat-val">{stats.totalViolations}</strong>
@@ -204,7 +208,9 @@ const SecurityViolations: React.FC = () => {
         </div>
 
         <div className="v-stat-card screenshot">
-          <div className="v-stat-icon">📸</div>
+          <div className="v-stat-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          </div>
           <div className="v-stat-content">
             <span className="v-stat-label">Screenshot Attempts</span>
             <strong className="v-stat-val">{stats.screenshotCount}</strong>
@@ -213,7 +219,9 @@ const SecurityViolations: React.FC = () => {
         </div>
 
         <div className="v-stat-card recording">
-          <div className="v-stat-icon">🎥</div>
+          <div className="v-stat-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          </div>
           <div className="v-stat-content">
             <span className="v-stat-label">Recording / Sharing</span>
             <strong className="v-stat-val">{stats.recordingCount}</strong>
@@ -222,7 +230,9 @@ const SecurityViolations: React.FC = () => {
         </div>
 
         <div className="v-stat-card blocked">
-          <div className="v-stat-icon">🚫</div>
+          <div className="v-stat-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+          </div>
           <div className="v-stat-content">
             <span className="v-stat-label">Currently Suspended</span>
             <strong className="v-stat-val">{stats.currentlyBlocked}</strong>
@@ -312,7 +322,9 @@ const SecurityViolations: React.FC = () => {
           </div>
         ) : filtered.length === 0 ? (
           <div className="violations-empty-state">
-            <span className="empty-icon">🛡️</span>
+            <span className="empty-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </span>
             <h3>No Security Violations Found</h3>
             <p>No candidates match your selected filter criteria, or no security violations have occurred.</p>
           </div>
@@ -354,11 +366,11 @@ const SecurityViolations: React.FC = () => {
                       <td>{v.email || "—"}</td>
                       <td>
                         <span className={`v-reason-badge ${isScreenshot ? "badge-screenshot" : isRecording ? "badge-recording" : "badge-other"}`}>
-                          {isScreenshot ? "📸 Screenshot" : isRecording ? "🎥 Recording" : v.primaryReason}
+                          {isScreenshot ? "Screenshot" : isRecording ? "Screen Recording" : v.primaryReason}
                         </span>
                       </td>
                       <td>
-                        <span className={`v-count-badge ${v.violationCount > 1 ? "count-high" : "count-low"}`}>
+                        <span className={`v-count-badge ${v.violationCount > 3 ? "count-critical" : v.violationCount > 1 ? "count-high" : "count-low"}`}>
                           {v.violationCount} {v.violationCount === 1 ? "time" : "times"}
                         </span>
                       </td>
@@ -388,7 +400,7 @@ const SecurityViolations: React.FC = () => {
                             onClick={() => handleViewIncidents(v)}
                             title="View incident logs timeline"
                           >
-                            Details 👁
+                            View Details
                           </button>
                         </div>
                       </td>
@@ -458,7 +470,11 @@ const SecurityViolations: React.FC = () => {
               <div>
                 <span className="modal-eyebrow">STUDENT INCIDENT LOGS</span>
                 <h2>{selectedUser.name || selectedUser.userId}</h2>
-                <p>User ID: <code>{selectedUser.userId}</code> &bull; Total Incidents: {selectedUser.violationCount}</p>
+                <p>
+                  User ID: <code>{selectedUser.userId}</code> &bull; Total Violations: <strong>{selectedUser.violationCount}</strong>
+                  {selectedUser.screenshotCount > 0 && <> &bull; Screenshot: <strong>{selectedUser.screenshotCount}</strong></>}
+                  {selectedUser.recordingCount > 0 && <> &bull; Recording: <strong>{selectedUser.recordingCount}</strong></>}
+                </p>
               </div>
               <button className="close-btn" onClick={() => setSelectedUser(null)}>×</button>
             </header>
@@ -521,7 +537,6 @@ const SecurityViolations: React.FC = () => {
         confirmText="Yes, Unblock Candidate"
         cancelText="Cancel"
         variant="unblock"
-        icon="🔓"
         onConfirm={executeUnblock}
         onCancel={() => setUnblockTarget(null)}
       />

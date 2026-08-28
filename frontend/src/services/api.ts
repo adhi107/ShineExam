@@ -1,4 +1,14 @@
-export const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:5000";
+const rawBase = (process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:5000").replace(/\/+$/, "");
+export const API_BASE = rawBase.endsWith("/api") ? rawBase : `${rawBase}/api`;
+
+export function buildUrl(path: string): string {
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  if (cleanPath.startsWith("/api/")) {
+    const rootBase = rawBase.replace(/\/api$/, "");
+    return `${rootBase}${cleanPath}`;
+  }
+  return `${API_BASE}${cleanPath}`;
+}
 
 function getAuthHeaders(): Record<string, string> {
   const userId = sessionStorage.getItem("userId") || "";
@@ -29,10 +39,11 @@ async function handleResponse<T>(res: Response): Promise<T> {
       if (!isAlertingSuspension) {
         isAlertingSuspension = true;
         sessionStorage.clear();
-        alert("Account Suspended\n\nYour account is suspended. Contact the admin for unblock.");
+        sessionStorage.setItem("account_permanently_blocked", "true");
         window.location.href = "/login";
       }
     }
+
 
     throw new Error(message);
   }
@@ -40,7 +51,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export async function apiGet<T>(url: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${url}`, {
+  const res = await fetch(buildUrl(url), {
     headers: {
       ...getAuthHeaders(),
     },
@@ -49,7 +60,7 @@ export async function apiGet<T>(url: string): Promise<T> {
 }
 
 export async function apiPost<T>(url: string, body: any): Promise<T> {
-  const res = await fetch(`${API_BASE}${url}`, {
+  const res = await fetch(buildUrl(url), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -61,7 +72,7 @@ export async function apiPost<T>(url: string, body: any): Promise<T> {
 }
 
 export async function apiPut<T>(url: string, body: any): Promise<T> {
-  const res = await fetch(`${API_BASE}${url}`, {
+  const res = await fetch(buildUrl(url), {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -73,7 +84,7 @@ export async function apiPut<T>(url: string, body: any): Promise<T> {
 }
 
 export async function apiPatch<T>(url: string, body: any): Promise<T> {
-  const res = await fetch(`${API_BASE}${url}`, {
+  const res = await fetch(buildUrl(url), {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -85,7 +96,7 @@ export async function apiPatch<T>(url: string, body: any): Promise<T> {
 }
 
 export async function apiPostForm<T>(url: string, body: FormData): Promise<T> {
-  const res = await fetch(`${API_BASE}${url}`, {
+  const res = await fetch(buildUrl(url), {
     method: "POST",
     headers: {
       ...getAuthHeaders(),
@@ -96,7 +107,7 @@ export async function apiPostForm<T>(url: string, body: FormData): Promise<T> {
 }
 
 export async function apiPutForm<T>(url: string, body: FormData): Promise<T> {
-  const res = await fetch(`${API_BASE}${url}`, {
+  const res = await fetch(buildUrl(url), {
     method: "PUT",
     headers: {
       ...getAuthHeaders(),
@@ -107,7 +118,7 @@ export async function apiPutForm<T>(url: string, body: FormData): Promise<T> {
 }
 
 export async function apiDelete<T>(url: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${url}`, {
+  const res = await fetch(buildUrl(url), {
     method: "DELETE",
     headers: {
       ...getAuthHeaders(),

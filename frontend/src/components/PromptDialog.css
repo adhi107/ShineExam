@@ -1,0 +1,45 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   PromptDialog.css — In-Screen Center Input Modal
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.prompt-card {
+  max-width: 480px !important;
+}
+
+.prompt-form {
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 20px !important;
+}
+
+.prompt-input-wrap {
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.prompt-text-input {
+  width: 100% !important;
+  height: 48px !important;
+  background: #f8fafc !important;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  padding: 0 16px !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: #0f172a !important;
+  box-sizing: border-box !important;
+  transition: all 0.18s ease !important;
+  outline: none !important;
+}
+
+.prompt-text-input:focus {
+  background: #ffffff !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15) !important;
+}
+
+.prompt-text-input::placeholder {
+  color: #94a3b8 !important;
+  font-weight: 400 !important;
+}

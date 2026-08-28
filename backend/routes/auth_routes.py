@@ -44,14 +44,25 @@ def login():
         return jsonify({"error": "Invalid credentials. Please check your User ID and password."}), 401
     
     valid_until = user.get("validUntil")
-    if role == "answerer" and valid_until and valid_until < datetime.utcnow():
-        db.users.update_one(
-            {"_id": user["_id"]},
-            {"$set": {"isActive": False, "statusReason": "validity_expired", "statusUpdatedAt": datetime.utcnow()}}
-        )
-        audit_log("LOGIN_FAILED", user_id=userId,
-                  details={"reason": "validity_expired"}, severity="warning")
-        return jsonify({"error": "Your account validity has expired. Please contact your administrator."}), 403
+    if role == "answerer" and valid_until:
+        try:
+            dt_valid = None
+            if isinstance(valid_until, datetime):
+                dt_valid = valid_until
+            elif isinstance(valid_until, str):
+                dt_valid = datetime.fromisoformat(valid_until.replace("Z", "").split(".")[0])
+            
+            if dt_valid and dt_valid < datetime.utcnow():
+                db.users.update_one(
+                    {"_id": user["_id"]},
+                    {"$set": {"isActive": False, "statusReason": "validity_expired", "statusUpdatedAt": datetime.utcnow()}}
+                )
+                audit_log("LOGIN_FAILED", user_id=userId,
+                          details={"reason": "validity_expired"}, severity="warning")
+                return jsonify({"error": "Your account validity has expired. Please contact your administrator."}), 403
+        except Exception:
+            pass
+
 
     if role == "answerer" and not user.get("isActive", True):
         status_reason = user.get("statusReason", "")

@@ -704,43 +704,68 @@
 
 @media (max-width: 768px) {
   .test-list {
-    padding-right: 0;
+    padding: 14px 14px 40px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .test-list > .page-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+
+  .test-list > .page-header h2 {
+    font-size: 20px !important;
   }
 
   .test-list-toolbar {
-    justify-content: flex-start;
+    width: 100% !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
   }
 
   .filter-toggle-btn {
-    padding-right: 0.9rem;
+    padding: 0.6rem 0.9rem !important;
+    font-size: 0.82rem !important;
   }
 
   .filters-panel {
-    padding: 1rem;
+    padding: 1rem !important;
   }
 
   .test-list-filters {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
 
   .test-range-filters {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
 
   .tests-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .test-stats,
+  .test-metrics {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
   }
 
   .test-card-actions {
-    flex-direction: column;
+    flex-direction: column !important;
+    gap: 6px !important;
   }
 
   .action-btn {
-    width: 100%;
+    width: 100% !important;
+    height: 36px !important;
+    font-size: 12px !important;
   }
 
   .assign-filter-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
 }
 

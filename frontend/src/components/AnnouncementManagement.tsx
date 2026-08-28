@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { apiDelete, apiGet, apiPost, apiPostForm } from "../services/api";
 import { normalizeSearchText } from "../utils/filterUtils";
+import ConfirmDialog, { DialogVariant } from "./ConfirmDialog";
+import AlertDialog, { AlertVariant } from "./AlertDialog";
 import "./DocumentManagement.css";
 
 interface Announcement {
@@ -50,6 +52,24 @@ const AnnouncementManagement: React.FC = () => {
   const [showImage, setShowImage] = useState(false);
   const [notice, setNotice] = useState("");
 
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: React.ReactNode;
+    confirmText: string;
+    variant: DialogVariant;
+    icon?: string;
+    onConfirm: () => Promise<void>;
+  } | null>(null);
+
+  const [alertDialog, setAlertDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: React.ReactNode;
+    variant?: AlertVariant;
+    icon?: string;
+  } | null>(null);
+
   const imageRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
@@ -62,7 +82,7 @@ const AnnouncementManagement: React.FC = () => {
   };
 
   useEffect(() => {
-    load().catch(error => setNotice(error?.message || "Could not load announcements"));
+    load().catch(console.error);
   }, []);
 
   const visibleStudents = useMemo(() => {
@@ -74,18 +94,6 @@ const AnnouncementManagement: React.FC = () => {
     normalizeSearchText(`${item.title} ${item.message} ${item.linkUrl}`).includes(normalizeSearchText(search)) && 
     (status === "all" || status === announcementState(item))
   ), [items, search, status]);
-
-  const reset = () => {
-    setTitle("");
-    setMessage("");
-    setLinkUrl("");
-    setImage(null);
-    setPublishAt("");
-    setExpiresAt("");
-    setShowLink(false);
-    setShowImage(false);
-    if (imageRef.current) imageRef.current.value = "";
-  };
 
   const publish = async () => {
     setNotice("");
@@ -109,11 +117,17 @@ const AnnouncementManagement: React.FC = () => {
       if (expiresAt) body.append("expiresAt", new Date(expiresAt).toISOString());
       if (image) body.append("image", image);
       await apiPostForm("/admin/announcements", body);
-      reset();
+      setTitle(""); setMessage(""); setLinkUrl(""); setImage(null); setPublishAt(""); setExpiresAt(""); setShowLink(false); setShowImage(false);
+      if (imageRef.current) imageRef.current.value = "";
       setNotice("✓ Announcement created and published successfully.");
       await load();
     } catch (e: any) {
-      setNotice(e?.message || "Announcement could not be published");
+      setAlertDialog({
+        isOpen: true,
+        title: "Announcement Error",
+        message: e?.message || "Announcement could not be published",
+        variant: "danger"
+      });
     } finally {
       setUploading(false);
     }
@@ -133,16 +147,44 @@ const AnnouncementManagement: React.FC = () => {
       setNotice("Announcement assignment updated.");
       await load();
     } catch (error: any) {
-      setNotice(error?.message || "Announcement assignment could not be saved.");
+      setAlertDialog({
+        isOpen: true,
+        title: "Assignment Error",
+        message: error?.message || "Announcement assignment could not be saved.",
+        variant: "danger"
+      });
     }
   };
 
-  const remove = async (item: Announcement) => {
-    if (window.confirm(`Delete announcement "${item.title}"?`)) {
-      await apiDelete(`/admin/announcements/${item.id}`);
-      setNotice("Announcement deleted successfully.");
-      await load();
-    }
+  const remove = (item: Announcement) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: "Delete Announcement",
+      message: (
+        <>
+          Are you sure you want to delete announcement <strong>"{item.title}"</strong>?
+          <br />
+          This notice will be permanently removed from candidate boards.
+        </>
+      ),
+      confirmText: "Yes, Delete Announcement",
+      variant: "danger",
+      icon: "🗑️",
+      onConfirm: async () => {
+        try {
+          await apiDelete(`/admin/announcements/${item.id}`);
+          setNotice("Announcement deleted successfully.");
+          await load();
+        } catch(err: any) {
+          setAlertDialog({
+            isOpen: true,
+            title: "Delete Failed",
+            message: err?.message || "Could not delete announcement.",
+            variant: "danger"
+          });
+        }
+      }
+    });
   };
 
   return (
@@ -402,8 +444,39 @@ const AnnouncementManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Screen Center Custom Confirm Dialog */}
+      {confirmDialog && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmText={confirmDialog.confirmText}
+          variant={confirmDialog.variant}
+          icon={confirmDialog.icon}
+          onConfirm={async () => {
+            const cb = confirmDialog.onConfirm;
+            setConfirmDialog(null);
+            await cb();
+          }}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
+
+      {/* Screen Center Custom Alert Dialog */}
+      {alertDialog && (
+        <AlertDialog
+          isOpen={alertDialog.isOpen}
+          title={alertDialog.title}
+          message={alertDialog.message}
+          variant={alertDialog.variant}
+          icon={alertDialog.icon}
+          onClose={() => setAlertDialog(null)}
+        />
+      )}
     </section>
   );
 };
 
 export default AnnouncementManagement;
+

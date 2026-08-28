@@ -945,24 +945,353 @@
   border-color: #2563eb;
 }
 
-/* Responsive Media Queries */
-@media (max-width: 1200px) {
-  .admin-dashboard-cards { grid-template-columns: repeat(2, 1fr); }
-  .admin-home-lower { grid-template-columns: 1fr; }
+/* ── Mobile Responsive: Slide-in Sidebar Drawer ── */
+@media (max-width: 960px) {
+
+  /* Shell stays flex row but sidebar slides off-screen by default */
+  .shine-admin-shell {
+    display: block;
+    position: relative;
+  }
+
+  /* Sidebar hides off-screen left, slides in when .mobile-open */
+  .shine-admin-sidebar {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 270px !important;
+    z-index: 900;
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: none;
+  }
+
+  .shine-admin-sidebar.mobile-open {
+    transform: translateX(0);
+    box-shadow: 6px 0 40px rgba(0, 0, 0, 0.35);
+  }
+
+  /* Backdrop overlay when sidebar is open */
+  .admin-mobile-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(3px);
+    z-index: 899;
+    animation: fadeIn 0.22s ease;
+  }
+
+  .admin-mobile-overlay.visible {
+    display: block;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* Mobile topbar — thin bar with hamburger + logo */
+  .admin-mobile-topbar {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    height: 58px;
+    padding: 0 18px;
+    background: linear-gradient(90deg, #09132b 0%, #0d1e40 100%);
+    position: sticky;
+    top: 0;
+    z-index: 800;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+  }
+
+  .admin-hamburger-btn {
+    display: flex !important;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 38px;
+    height: 38px;
+    padding: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  .admin-hamburger-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
+  }
+
+  .admin-hamburger-btn span {
+    display: block;
+    width: 18px;
+    height: 2px;
+    background: #ffffff;
+    border-radius: 2px;
+    transition: all 0.22s ease;
+  }
+
+  .admin-hamburger-btn.open span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+  }
+
+  .admin-hamburger-btn.open span:nth-child(2) {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+
+  .admin-hamburger-btn.open span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+  }
+
+  .admin-mobile-title {
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .admin-mobile-topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .admin-mobile-signout-btn {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  .admin-mobile-signout-btn:hover {
+    background: rgba(239, 68, 68, 0.28);
+  }
+
+  /* Main content takes full width on mobile */
+  .shine-admin-main {
+    margin-left: 0 !important;
+  }
+
+  /* Hide collapsed state controls on mobile */
+  .shine-admin-sidebar.collapsed {
+    width: 270px !important;
+  }
+
+  /* Content padding adjustments */
+  .admin-home { 
+    padding: 14px 14px 40px !important; 
+    width: 100% !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+
+  .admin-home-header { 
+    flex-direction: column; 
+    align-items: flex-start; 
+    gap: 10px; 
+    margin-bottom: 16px !important;
+  }
+
+  .admin-kicker {
+    font-size: 9.5px;
+    padding: 3px 10px;
+    margin-bottom: 6px;
+  }
+
+  .admin-home-header h1 { 
+    font-size: 20px !important; 
+    line-height: 1.2;
+  }
+
+  .admin-home-header p {
+    font-size: 12px;
+    margin-top: 4px;
+  }
+
+  .admin-header-actions {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .admin-date-badge {
+    padding: 6px 12px;
+    font-size: 11.5px;
+  }
+
+  .btn-create-test {
+    padding: 7px 14px;
+    font-size: 12.5px;
+    height: 36px;
+  }
+
+  /* Compact 2x2 Coloured Metric Cards */
+  .admin-dashboard-cards { 
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important; 
+    gap: 10px !important;
+    margin-top: 0 !important;
+  }
+
+  .admin-card {
+    padding: 12px 14px 10px !important;
+    border-radius: 12px !important;
+    min-height: auto !important;
+  }
+
+  .admin-card-top {
+    margin-bottom: 8px !important;
+  }
+
+  .admin-card-icon-wrap {
+    width: 30px !important;
+    height: 30px !important;
+    border-radius: 8px !important;
+  }
+
+  .admin-card-icon-wrap svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  .admin-card-link {
+    font-size: 9px !important;
+    padding: 2px 7px !important;
+    border-radius: 12px !important;
+  }
+
+  .admin-card-label {
+    font-size: 9px !important;
+    letter-spacing: 0.02em !important;
+  }
+
+  .admin-card-val {
+    font-size: 20px !important;
+    margin-top: 2px !important;
+  }
+
+  .admin-card-help {
+    font-size: 9.5px !important;
+    margin-top: 2px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  /* Command Bar Compact */
+  .admin-command-bar { 
+    grid-template-columns: 1fr !important; 
+    gap: 8px !important;
+    margin-bottom: 16px !important;
+  }
+
+  .admin-command-bar > button {
+    padding: 10px 14px !important;
+    border-radius: 12px !important;
+    gap: 10px !important;
+  }
+
+  .cmd-num {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 11px !important;
+    border-radius: 8px !important;
+  }
+
+  .admin-command-bar strong {
+    font-size: 12.5px !important;
+  }
+
+  .admin-command-bar small {
+    font-size: 10.5px !important;
+  }
+
+  /* Lower Section Responsive Stack */
+  .admin-home-lower {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+    margin-top: 16px !important;
+    width: 100% !important;
+  }
+
+  .activity-article, 
+  .readiness-aside {
+    padding: 16px !important;
+    border-radius: 14px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  .activity-article header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+    padding-bottom: 12px !important;
+    margin-bottom: 14px !important;
+  }
+
+  .activity-article header button {
+    align-self: flex-start !important;
+    font-size: 11.5px !important;
+    padding: 5px 12px !important;
+  }
+
+  .recent-attempts > button { 
+    grid-template-columns: 36px 1fr 50px !important; 
+    padding: 10px 12px !important;
+    gap: 10px !important;
+    border-radius: 10px !important;
+  }
+
+  .user-avatar-badge {
+    width: 34px !important;
+    height: 34px !important;
+    font-size: 13px !important;
+    border-radius: 8px !important;
+  }
+
+  .attempt-info strong {
+    font-size: 12.5px !important;
+  }
+
+  .attempt-info small {
+    font-size: 10.5px !important;
+  }
+
+  .attempt-score {
+    font-size: 13.5px !important;
+  }
+
+  .attempt-time, 
+  .status-pill { 
+    display: none !important; 
+  }
+
+  /* Admin Security Controls Mobile Responsiveness */
+  .sec-controls-grid { grid-template-columns: 1fr !important; }
+  .sec-controls-header { flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px 16px !important; }
+  .sec-header-right { width: 100%; justify-content: space-between; }
+  .sec-header-badge { display: none; }
+  .controls-footer-card { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .footer-actions { width: 100%; justify-content: flex-end; }
+  .sec-card { padding: 16px !important; }
 }
 
-@media (max-width: 768px) {
-  .shine-admin-shell { display: block; }
-  .shine-admin-sidebar { position: relative; width: 100%; height: auto; }
-  .admin-brand { height: 80px; }
-  .shine-admin-sidebar nav { display: flex; flex-direction: row; overflow-x: auto; padding: 10px; }
-  .shine-admin-sidebar nav > button { min-width: 130px; }
-  .admin-sidebar-user { display: none; }
-  .shine-admin-main { margin-left: 0; }
-  .admin-home { padding: 20px; }
-  .admin-home-header { flex-direction: column; align-items: flex-start; gap: 16px; }
-  .admin-command-bar { grid-template-columns: 1fr; }
-  .admin-dashboard-cards { grid-template-columns: 1fr; }
-  .recent-attempts > button { grid-template-columns: 36px 1fr 60px; }
-  .attempt-time, .status-pill { display: none; }
-}
+/* Hide mobile-only elements on desktop */
+.admin-mobile-topbar { display: none; }
+.admin-mobile-overlay { display: none; }
+.admin-hamburger-btn { display: none; }

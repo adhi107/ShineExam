@@ -212,8 +212,9 @@ def invalidate_session():
 @security_bp.post("/violation/block")
 def block_user_on_violation():
     """
-    Permanently block a candidate account due to screenshot / screen recording violation.
-    The account can only be restored/unblocked by an Administrator from User Management.
+    Handle a screenshot / screen recording violation.
+    If screenshotAllowedAttempts > 1, issue a warning for the first N-1 attempts.
+    On the Nth attempt, permanently block the account.
     """
     payload = request.get_json(silent=True) or {}
     user_id = str(payload.get("userId", "")).strip()
@@ -224,16 +225,74 @@ def block_user_on_violation():
         return jsonify({"error": "userId required"}), 400
 
     db = get_db()
+
+    # Read configured threshold
+    settings = db.system_settings.find_one({"type": "security_config"}) or {}
+    allowed_attempts = max(1, int(settings.get("screenshotAllowedAttempts", 1)))
+    strict_lock = bool(settings.get("strictScreenshotLock", True))
+
     status_reason = "security_violation_screenshot" if reason == "screenshot" else "security_violation_recording"
-    
-    # Permanently block the candidate account
+
+    # Count previous violations of this type for this user
+    previous_violations = db.security_violations.count_documents({
+        "userId": user_id,
+        "type": {"$in": ["screenshot", "recording"]},
+    })
+
+    # Record this violation event regardless
+    db.security_violations.insert_one({
+        "userId": user_id,
+        "type": reason,
+        "sessionId": session_id,
+        "attemptNumber": previous_violations + 1,
+        "recordedAt": datetime.utcnow(),
+    })
+
+    current_attempt = previous_violations + 1
+
+    # If strict lock is disabled, just warn — never block
+    if not strict_lock:
+        audit_log(
+            action=f"VIOLATION_WARNED_{reason.upper()}",
+            user_id=user_id,
+            details={"sessionId": session_id, "attempt": current_attempt, "mode": "warning_only"},
+            severity="warning"
+        )
+        return jsonify({
+            "blocked": False,
+            "warned": True,
+            "attempt": current_attempt,
+            "allowedAttempts": allowed_attempts,
+            "remainingAttempts": max(0, allowed_attempts - current_attempt),
+            "message": f"Screenshot attempt {current_attempt} recorded. Strict lock is disabled."
+        })
+
+    # Check if threshold is exceeded
+    if current_attempt < allowed_attempts:
+        remaining = allowed_attempts - current_attempt
+        audit_log(
+            action=f"VIOLATION_WARNING_{reason.upper()}",
+            user_id=user_id,
+            details={"sessionId": session_id, "attempt": current_attempt, "remaining": remaining},
+            severity="warning"
+        )
+        return jsonify({
+            "blocked": False,
+            "warned": True,
+            "attempt": current_attempt,
+            "allowedAttempts": allowed_attempts,
+            "remainingAttempts": remaining,
+            "message": f"Warning {current_attempt} of {allowed_attempts - 1}. Account will be blocked on attempt {allowed_attempts}."
+        })
+
+    # Threshold reached — permanently block the account
     db.users.update_many(
         {"$or": [{"userId": user_id}, {"naxUnid": user_id}]},
         {"$set": {
             "isActive": False,
             "statusReason": status_reason,
             "statusUpdatedAt": datetime.utcnow(),
-            "blockedDueTo": "Permanent security suspension: unauthorized screenshot or screen capture attempt."
+            "blockedDueTo": f"Permanent security suspension: {current_attempt} unauthorized screenshot/screen capture attempts."
         }}
     )
 
@@ -249,15 +308,14 @@ def block_user_on_violation():
         {"$set": {
             "status": "terminated_security_violation",
             "terminatedAt": datetime.utcnow(),
-            "terminationReason": "Screenshot / screen capture violation detected during exam"
+            "terminationReason": f"Attempt {current_attempt}: Screenshot / screen capture violation detected during exam"
         }}
     )
 
     audit_log(
-
         action=f"ACCOUNT_PERMANENTLY_BLOCKED_{reason.upper()}",
         user_id=user_id,
-        details={"sessionId": session_id, "reason": reason, "statusReason": status_reason},
+        details={"sessionId": session_id, "reason": reason, "statusReason": status_reason, "attempt": current_attempt},
         severity="critical"
     )
 
@@ -265,5 +323,7 @@ def block_user_on_violation():
         "blocked": True,
         "userId": user_id,
         "reason": status_reason,
-        "message": "Account has been permanently blocked due to security violations. Please contact your administrator to unblock."
+        "attempt": current_attempt,
+        "message": "Account has been permanently blocked due to repeated security violations. Please contact your administrator to unblock."
     })
+

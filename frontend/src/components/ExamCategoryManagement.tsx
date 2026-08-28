@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { apiDelete, apiGet, apiPost, apiPut } from "../services/api";
+import ConfirmDialog, { DialogVariant } from "./ConfirmDialog";
+import PromptDialog from "./PromptDialog";
+import AlertDialog, { AlertVariant } from "./AlertDialog";
 import "./ExamCategoryManagement.css";
 
 export interface ExamSubcategory { id:string;name:string;slug:string;stages:string[];isActive?:boolean }
@@ -16,30 +19,66 @@ const STAGE_PRESETS = [
   { label: "Single Stage Exam", value: "Single Exam" }
 ];
 
-const ExamCategoryManagement:React.FC=()=>{
-  const [categories,setCategories]=useState<ExamCategory[]>([]);
-  const [name,setName]=useState("");
-  const [addModalOpen,setAddModalOpen]=useState(false);
+const ExamCategoryManagement: React.FC = () => {
+  const [categories, setCategories] = useState<ExamCategory[]>([]);
+  const [name, setName] = useState("");
+  const [addModalOpen, setAddModalOpen] = useState(false);
   const [modalSubcategories, setModalSubcategories] = useState<Array<{ name: string; stages: string }>>([
     { name: "", stages: "Prelims, Mains" }
   ]);
 
-  const [drafts,setDrafts]=useState<Record<string,{name:string;stages:string}>>({});
-  const [loading,setLoading]=useState(true);
-  const [adding,setAdding]=useState(false);
-  const [feedback,setFeedback]=useState<{type:"success"|"error";text:string}|null>(null);
+  const [drafts, setDrafts] = useState<Record<string,{name:string;stages:string}>>({});
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [feedback, setFeedback] = useState<{type:"success"|"error";text:string}|null>(null);
 
-  const load=async()=>{
+  // In-Screen Custom Modal Dialog States
+  const [promptDialog, setPromptDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message?: string;
+    defaultValue: string;
+    placeholder?: string;
+    confirmText?: string;
+    icon?: string;
+    onConfirm: (val: string) => Promise<void>;
+  } | null>(null);
+
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: React.ReactNode;
+    confirmText: string;
+    variant: DialogVariant;
+    icon?: string;
+    onConfirm: () => Promise<void>;
+  } | null>(null);
+
+  const [alertDialog, setAlertDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: React.ReactNode;
+    variant?: AlertVariant;
+    icon?: string;
+  } | null>(null);
+
+  const load = async () => {
     setLoading(true);
     try {
-      const res=await apiGet<{categories:ExamCategory[]}>("/admin/exam-categories");
-      setCategories(res.categories||[]);
+      const res = await apiGet<{categories:ExamCategory[]}>("/admin/exam-categories");
+      setCategories(res.categories || []);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(()=>{ load(); },[]);
+  useEffect(() => { load(); }, []);
+
+  const totalSubcategories = categories.reduce((sum, cat) => sum + cat.subcategories.length, 0);
+  const totalStages = categories.reduce(
+    (sum, cat) => sum + cat.subcategories.reduce((sSum, sub) => sSum + sub.stages.length, 0),
+    0
+  );
 
   const addModalSubRow = () => {
     setModalSubcategories(prev => [...prev, { name: "", stages: "Prelims, Mains" }]);
@@ -70,10 +109,18 @@ const ExamCategoryManagement:React.FC=()=>{
     setAddModalOpen(true);
   };
 
-  const addCategory=async()=>{
-    const categoryName=name.trim();
-    if(!categoryName||adding){
-      if(!categoryName) alert("Please enter a category name.");
+  const addCategory = async () => {
+    const categoryName = name.trim();
+    if (!categoryName || adding) {
+      if (!categoryName) {
+        setAlertDialog({
+          isOpen: true,
+          title: "Category Name Required",
+          message: "Please enter a valid name for the new exam category.",
+          variant: "warning",
+          icon: "⚠️"
+        });
+      }
       return;
     }
     setAdding(true);
@@ -106,88 +153,203 @@ const ExamCategoryManagement:React.FC=()=>{
         type: "success",
         text: `Category "${categoryName}" ${subCount > 0 ? `and ${subCount} subcategory(ies)` : ""} created successfully.`
       });
-    } catch(error:any) {
-      setFeedback({type:"error",text:error?.message||"Category could not be added."});
+    } catch(error: any) {
+      setFeedback({type:"error", text: error?.message || "Category could not be added."});
     } finally {
       setAdding(false);
     }
   };
 
-  const addSubcategory=async(categoryId:string)=>{
-    const draft=drafts[categoryId]||{name:"",stages:"Prelims, Mains"};
-    if(!draft.name.trim()) return;
+  const addSubcategory = async (categoryId: string) => {
+    const draft = drafts[categoryId] || { name: "", stages: "Prelims, Mains" };
+    if (!draft.name.trim()) return;
     try {
-      await apiPost(`/admin/exam-categories/${categoryId}/subcategories`,{
-        name:draft.name.trim(),
-        stages:draft.stages.split(",").map(v=>v.trim()).filter(Boolean)
+      await apiPost(`/admin/exam-categories/${categoryId}/subcategories`, {
+        name: draft.name.trim(),
+        stages: draft.stages.split(",").map(v => v.trim()).filter(Boolean)
       });
-      setDrafts(current=>({...current,[categoryId]:{name:"",stages:"Prelims, Mains"}}));
+      setDrafts(current => ({ ...current, [categoryId]: { name: "", stages: "Prelims, Mains" } }));
       await load();
-    } catch(error:any) {
-      alert(error?.message||"Subcategory could not be added");
+    } catch(error: any) {
+      setAlertDialog({
+        isOpen: true,
+        title: "Error Adding Subcategory",
+        message: error?.message || "Subcategory could not be added.",
+        variant: "danger",
+        icon: "🚫"
+      });
     }
   };
 
-  const editCategory=async(category:ExamCategory)=>{
-    const next=window.prompt("Category name",category.name)?.trim();
-    if(!next||next===category.name) return;
-    try {
-      await apiPut(`/admin/exam-categories/${category.id}`,{name:next,order:category.order,isActive:category.isActive});
-      await load();
-    } catch(error:any) {
-      alert(error?.message||"Category could not be updated");
-    }
-  };
-
-  const removeCategory=async(category:ExamCategory)=>{
-    if(!window.confirm(`Delete ${category.name}?`)) return;
-    try {
-      await apiDelete(`/admin/exam-categories/${category.id}`);
-      await load();
-    } catch(error:any) {
-      if (window.confirm(`Category "${category.name}" contains assigned tests. Would you like to force delete it and unassign the tests?`)) {
+  const editCategory = (category: ExamCategory) => {
+    setPromptDialog({
+      isOpen: true,
+      title: "Rename Exam Category",
+      message: `Update name for category: ${category.name}`,
+      defaultValue: category.name,
+      placeholder: "e.g. Banking, SSC, Railway",
+      confirmText: "Update Category",
+      icon: "📁",
+      onConfirm: async (nextName) => {
+        if (!nextName || nextName === category.name) return;
         try {
-          await apiDelete(`/admin/exam-categories/${category.id}?force=true`);
+          await apiPut(`/admin/exam-categories/${category.id}`, {
+            name: nextName,
+            order: category.order,
+            isActive: category.isActive
+          });
           await load();
-        } catch(err:any) {
-          alert(err?.message || "Category could not be deleted");
+        } catch(error: any) {
+          setAlertDialog({
+            isOpen: true,
+            title: "Update Failed",
+            message: error?.message || "Category could not be updated",
+            variant: "danger"
+          });
         }
       }
-    }
+    });
   };
 
-  const editSubcategory=async(category:ExamCategory,sub:ExamSubcategory)=>{
-    const nextName=window.prompt("Subcategory name",sub.name)?.trim();
-    if(!nextName) return;
-    const stages=window.prompt("Stages separated by commas",sub.stages.join(", "));
-    if(stages===null) return;
-    try {
-      await apiPut(`/admin/exam-categories/${category.id}/subcategories/${sub.id}`,{
-        name:nextName,
-        stages:stages.split(",").map(v=>v.trim()).filter(Boolean),
-        isActive:sub.isActive!==false
-      });
-      await load();
-    } catch(error:any) {
-      alert(error?.message||"Subcategory could not be updated");
-    }
-  };
-
-  const removeSubcategory=async(category:ExamCategory,sub:ExamSubcategory)=>{
-    if(!window.confirm(`Delete ${sub.name}?`)) return;
-    try {
-      await apiDelete(`/admin/exam-categories/${category.id}/subcategories/${sub.id}`);
-      await load();
-    } catch(error:any) {
-      if (window.confirm(`Subcategory "${sub.name}" contains assigned tests. Would you like to force delete it and unassign the tests?`)) {
+  const removeCategory = (category: ExamCategory) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: "Delete Exam Category",
+      message: (
+        <>
+          Are you sure you want to delete category <strong>"{category.name}"</strong>?
+          <br />
+          This will also remove all associated subcategories and exam stage assignments.
+        </>
+      ),
+      confirmText: "Yes, Delete Category",
+      variant: "danger",
+      icon: "🗑️",
+      onConfirm: async () => {
         try {
-          await apiDelete(`/admin/exam-categories/${category.id}/subcategories/${sub.id}?force=true`);
+          await apiDelete(`/admin/exam-categories/${category.id}`);
           await load();
-        } catch(err:any) {
-          alert(err?.message || "Subcategory could not be deleted");
+        } catch(error: any) {
+          setConfirmDialog({
+            isOpen: true,
+            title: "Category Contains Tests",
+            message: (
+              <>
+                Category <strong>"{category.name}"</strong> contains active assigned tests.
+                <br /><br />
+                Would you like to <strong>force delete</strong> it and unassign the tests?
+              </>
+            ),
+            confirmText: "Force Delete & Unassign",
+            variant: "danger",
+            icon: "⚠️",
+            onConfirm: async () => {
+              try {
+                await apiDelete(`/admin/exam-categories/${category.id}?force=true`);
+                await load();
+              } catch(err: any) {
+                setAlertDialog({
+                  isOpen: true,
+                  title: "Delete Failed",
+                  message: err?.message || "Category could not be deleted",
+                  variant: "danger"
+                });
+              }
+            }
+          });
         }
       }
-    }
+    });
+  };
+
+  const editSubcategory = (category: ExamCategory, sub: ExamSubcategory) => {
+    setPromptDialog({
+      isOpen: true,
+      title: "Edit Subcategory Name",
+      message: `Updating subcategory in ${category.name}`,
+      defaultValue: sub.name,
+      placeholder: "e.g. SBI Clerk, IBPS PO",
+      confirmText: "Next: Edit Stages",
+      icon: "📑",
+      onConfirm: async (nextName) => {
+        if (!nextName) return;
+        setPromptDialog({
+          isOpen: true,
+          title: `Edit Exam Stages for "${nextName}"`,
+          message: "Enter exam stages separated by commas (e.g. Prelims, Mains, Interview):",
+          defaultValue: sub.stages.join(", "),
+          placeholder: "Prelims, Mains",
+          confirmText: "Save Subcategory",
+          icon: "🎯",
+          onConfirm: async (stagesStr) => {
+            try {
+              await apiPut(`/admin/exam-categories/${category.id}/subcategories/${sub.id}`, {
+                name: nextName,
+                stages: stagesStr.split(",").map(v => v.trim()).filter(Boolean),
+                isActive: sub.isActive !== false
+              });
+              await load();
+            } catch(error: any) {
+              setAlertDialog({
+                isOpen: true,
+                title: "Update Failed",
+                message: error?.message || "Subcategory could not be updated",
+                variant: "danger"
+              });
+            }
+          }
+        });
+      }
+    });
+  };
+
+  const removeSubcategory = (category: ExamCategory, sub: ExamSubcategory) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: "Delete Subcategory",
+      message: (
+        <>
+          Are you sure you want to delete subcategory <strong>"{sub.name}"</strong> from <strong>{category.name}</strong>?
+        </>
+      ),
+      confirmText: "Yes, Delete Subcategory",
+      variant: "danger",
+      icon: "🗑️",
+      onConfirm: async () => {
+        try {
+          await apiDelete(`/admin/exam-categories/${category.id}/subcategories/${sub.id}`);
+          await load();
+        } catch(error: any) {
+          setConfirmDialog({
+            isOpen: true,
+            title: "Subcategory Contains Tests",
+            message: (
+              <>
+                Subcategory <strong>"{sub.name}"</strong> contains assigned tests.
+                <br /><br />
+                Would you like to <strong>force delete</strong> it and unassign the tests?
+              </>
+            ),
+            confirmText: "Force Delete & Unassign",
+            variant: "danger",
+            icon: "⚠️",
+            onConfirm: async () => {
+              try {
+                await apiDelete(`/admin/exam-categories/${category.id}/subcategories/${sub.id}?force=true`);
+                await load();
+              } catch(err: any) {
+                setAlertDialog({
+                  isOpen: true,
+                  title: "Delete Failed",
+                  message: err?.message || "Subcategory could not be deleted",
+                  variant: "danger"
+                });
+              }
+            }
+          });
+        }
+      }
+    });
   };
 
   return (
@@ -198,153 +360,180 @@ const ExamCategoryManagement:React.FC=()=>{
           <h1>Exam Categories</h1>
           <p>Manage the hierarchy used in My Tests and during test creation.</p>
         </div>
-        <button className="add-category-btn" onClick={openCreateModal}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add category
+        <button type="button" className="add-category-btn" onClick={openCreateModal}>
+          + Add Category
         </button>
       </header>
 
       {feedback && (
         <div className={`category-feedback ${feedback.type}`}>
-          {feedback.type === "success" ? "✓" : "!"} {feedback.text}
+          <span>{feedback.text}</span>
+          <button type="button" onClick={() => setFeedback(null)}>✕</button>
         </div>
       )}
 
+      {/* Summary Stat Cards */}
       <div className="category-summary">
-        <div><span>Categories</span><strong>{categories.length}</strong></div>
-        <div><span>Subcategories</span><strong>{categories.reduce((sum,item)=>sum+item.subcategories.length,0)}</strong></div>
-        <div><span>Stages</span><strong>{categories.reduce((sum,item)=>sum+item.subcategories.reduce((count,sub)=>count+sub.stages.length,0),0)}</strong></div>
+        <div>
+          <span>Total Categories</span>
+          <strong>{categories.length}</strong>
+        </div>
+        <div>
+          <span>Total Subcategories</span>
+          <strong>{totalSubcategories}</strong>
+        </div>
+        <div>
+          <span>Configured Stages</span>
+          <strong>{totalStages}</strong>
+        </div>
       </div>
 
       {loading ? (
-        <div className="category-empty">Loading exam structure…</div>
+        <div className="category-empty">Loading categories...</div>
       ) : categories.length === 0 ? (
-        <div className="category-empty">No categories yet. Click <strong>+ Add category</strong> above to create your first category.</div>
+        <div className="category-empty">
+          <p>No exam categories yet. Click "+ Add Category" above to create your first exam structure.</p>
+        </div>
       ) : (
         <div className="category-grid">
-          {categories.map((category,index)=>(
-            <article key={category.id} className="category-card">
-              <div className="category-card-head">
-                <span>{String(index+1).padStart(2,"0")}</span>
-                <div>
-                  <h2>{category.name}</h2>
-                  <small>{category.subcategories.length} subcategories</small>
+          {categories.map((category, index) => {
+            const draft = drafts[category.id] || { name: "", stages: "Prelims, Mains" };
+            return (
+              <article key={category.id} className="category-card">
+                <div className="category-card-head">
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <div>
+                    <h2>{category.name}</h2>
+                    <small>{category.subcategories.length} subcategories</small>
+                  </div>
+                  <button type="button" onClick={() => editCategory(category)}>Edit</button>
+                  <button type="button" className="danger" onClick={() => removeCategory(category)}>Delete</button>
                 </div>
-                <button onClick={()=>editCategory(category)}>Edit</button>
-                <button className="danger" onClick={()=>removeCategory(category)}>Delete</button>
-              </div>
 
-              <div className="subcategory-list">
-                {category.subcategories.map(sub=>(
-                  <div key={sub.id} className="subcategory-row">
-                    <div className="subcategory-main-info">
-                      <strong>{sub.name}</strong>
-                      <div className="sub-stage-badges">
-                        {sub.stages.map(stage=><i key={stage}>{stage}</i>)}
+                <div className="subcategory-list">
+                  {category.subcategories.length === 0 ? (
+                    <div style={{ padding: "16px 8px", color: "#94a3b8", fontSize: "13px" }}>No subcategories added yet.</div>
+                  ) : (
+                    category.subcategories.map(sub => (
+                      <div key={sub.id} className="subcategory-row">
+                        <div className="subcategory-main-info">
+                          <strong>{sub.name}</strong>
+                          <div className="sub-stage-badges">
+                            {sub.stages.map(stage => (
+                              <i key={stage}>{stage}</i>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="sub-row-actions">
+                          <button type="button" className="sub-edit-btn" onClick={() => editSubcategory(category, sub)}>Edit</button>
+                          <button type="button" className="sub-delete-btn" onClick={() => removeSubcategory(category, sub)}>Delete</button>
+                        </div>
                       </div>
-                    </div>
-                    <div className="sub-row-actions">
-                      <button className="sub-edit-btn" onClick={()=>editSubcategory(category,sub)}>Edit</button>
-                      <button className="sub-delete-btn" onClick={()=>removeSubcategory(category,sub)} title="Delete subcategory">Delete</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="add-subcategory">
-                <div className="add-sub-inputs-top">
-                  <input 
-                    value={drafts[category.id]?.name||""} 
-                    onChange={e=>setDrafts({...drafts,[category.id]:{name:e.target.value,stages:drafts[category.id]?.stages||"Prelims, Mains"}})} 
-                    placeholder="Subcategory name (e.g. RBI Grade B, SSC CGL)"
-                    className="add-sub-name-input"
-                  />
-                  <button className="add-sub-submit-btn" onClick={()=>addSubcategory(category.id)}>+ Add Subcategory</button>
+                    ))
+                  )}
                 </div>
 
-                <div className="add-sub-options-row">
-                  <select 
-                    value={
-                      STAGE_PRESETS.find(p => p.value === (drafts[category.id]?.stages || "Prelims, Mains"))?.value || "custom"
-                    }
-                    onChange={e => {
-                      if (e.target.value !== "custom") {
-                        setDrafts({ ...drafts, [category.id]: { name: drafts[category.id]?.name || "", stages: e.target.value } });
-                      }
-                    }}
-                    className="card-stage-select"
-                  >
-                    {STAGE_PRESETS.map(preset => (
-                      <option key={preset.value} value={preset.value}>{preset.label}</option>
-                    ))}
-                    <option value="custom">Custom Selection…</option>
-                  </select>
+                <div className="add-subcategory">
+                  <div className="add-sub-inputs-top">
+                    <input
+                      type="text"
+                      value={draft.name}
+                      onChange={e => setDrafts(current => ({
+                        ...current,
+                        [category.id]: { ...draft, name: e.target.value }
+                      }))}
+                      placeholder="Subcategory name (e.g. RBI Grade B, SSC CGL)"
+                      className="add-sub-name-input"
+                    />
+                    <button
+                      type="button"
+                      className="add-sub-submit-btn"
+                      disabled={!draft.name.trim()}
+                      onClick={() => addSubcategory(category.id)}
+                    >
+                      + Add Subcategory
+                    </button>
+                  </div>
 
-                  <div className="card-stage-pills-row">
-                    {AVAILABLE_STAGES.slice(0, 6).map(stage => {
-                      const currentStages = (drafts[category.id]?.stages || "Prelims, Mains").split(",").map(s => s.trim()).filter(Boolean);
-                      const isSelected = currentStages.includes(stage);
-                      return (
-                        <button
-                          key={stage}
-                          type="button"
-                          className={`stage-pill ${isSelected ? "selected" : ""}`}
-                          onClick={() => {
-                            const newList = isSelected
-                              ? currentStages.filter(s => s !== stage)
-                              : [...currentStages, stage];
-                            setDrafts({
-                              ...drafts,
-                              [category.id]: {
-                                name: drafts[category.id]?.name || "",
-                                stages: newList.join(", "),
-                              },
-                            });
-                          }}
-                        >
-                          {isSelected ? "✓ " : "+ "}{stage}
-                        </button>
-                      );
-                    })}
+                  <div className="add-sub-options-row">
+                    <select
+                      value={STAGE_PRESETS.find(p => p.value === draft.stages)?.value || "custom"}
+                      onChange={e => {
+                        if (e.target.value !== "custom") {
+                          setDrafts(current => ({
+                            ...current,
+                            [category.id]: { ...draft, stages: e.target.value }
+                          }));
+                        }
+                      }}
+                      className="card-stage-select"
+                    >
+                      {STAGE_PRESETS.map(preset => (
+                        <option key={preset.value} value={preset.value}>{preset.label}</option>
+                      ))}
+                      <option value="custom">Custom Selection…</option>
+                    </select>
+
+                    <div className="card-stage-pills-row">
+                      {AVAILABLE_STAGES.map(stage => {
+                        const currentList = draft.stages.split(",").map(s => s.trim()).filter(Boolean);
+                        const isSelected = currentList.includes(stage);
+                        return (
+                          <button
+                            key={stage}
+                            type="button"
+                            className={`stage-pill ${isSelected ? "selected" : ""}`}
+                            onClick={() => {
+                              const newList = isSelected
+                                ? currentList.filter(s => s !== stage)
+                                : [...currentList, stage];
+                              setDrafts(current => ({
+                                ...current,
+                                [category.id]: { ...draft, stages: newList.join(", ") }
+                              }));
+                            }}
+                          >
+                            {isSelected ? "✓ " : "+ "}{stage}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       )}
 
-      {/* Add Category + Subcategories Modal Popup */}
+      {/* Create Category Modal */}
       {addModalOpen && (
-        <div className="category-modal-backdrop" onMouseDown={() => setAddModalOpen(false)}>
-          <div className="category-modal" onMouseDown={e => e.stopPropagation()}>
+        <div className="category-modal-backdrop" onClick={() => setAddModalOpen(false)}>
+          <div className="category-modal" onClick={e => e.stopPropagation()}>
             <header className="category-modal-header">
               <div>
-                <span>CREATE EXAM CATEGORY</span>
-                <h2>Add New Category</h2>
+                <span>NEW EXAM CATEGORY</span>
+                <h2>Create Category & Subcategories</h2>
               </div>
-              <button className="modal-close-btn" onClick={() => setAddModalOpen(false)}>×</button>
+              <button type="button" className="modal-close-btn" onClick={() => setAddModalOpen(false)}>✕</button>
             </header>
 
-            <form onSubmit={e => { e.preventDefault(); void addCategory(); }} className="category-modal-body">
-              <label>
-                Category Name
-                <input 
-                  autoFocus 
-                  type="text" 
-                  value={name} 
-                  onChange={e => setName(e.target.value)} 
-                  placeholder="e.g. Railway, Banking, SSC, UPSC" 
-                  required
-                />
-              </label>
+            <form onSubmit={e => { e.preventDefault(); addCategory(); }} className="category-modal-body">
+              <label>Category Name *</label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="e.g. Banking, SSC, Railway, State PSC"
+                required
+                autoFocus
+              />
 
-              {/* Optional Subcategories Section */}
               <div className="modal-subcategories-section">
                 <div className="modal-sub-head">
-                  <label>Subcategories (Optional)</label>
+                  <label>Subcategories & Stages</label>
                   <button type="button" className="add-sub-row-btn" onClick={addModalSubRow}>
-                    + Add Subcategory
+                    + Add Another Subcategory
                   </button>
                 </div>
                 <p className="modal-sub-desc">Select stage presets or toggle stages like Prelims & Mains with 1 click.</p>
@@ -412,6 +601,55 @@ const ExamCategoryManagement:React.FC=()=>{
             </form>
           </div>
         </div>
+      )}
+
+      {/* Screen Center Custom Prompt Dialog */}
+      {promptDialog && (
+        <PromptDialog
+          isOpen={promptDialog.isOpen}
+          title={promptDialog.title}
+          message={promptDialog.message}
+          defaultValue={promptDialog.defaultValue}
+          placeholder={promptDialog.placeholder}
+          confirmText={promptDialog.confirmText}
+          icon={promptDialog.icon}
+          onConfirm={async (val) => {
+            const cb = promptDialog.onConfirm;
+            setPromptDialog(null);
+            await cb(val);
+          }}
+          onCancel={() => setPromptDialog(null)}
+        />
+      )}
+
+      {/* Screen Center Custom Confirm Dialog */}
+      {confirmDialog && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmText={confirmDialog.confirmText}
+          variant={confirmDialog.variant}
+          icon={confirmDialog.icon}
+          onConfirm={async () => {
+            const cb = confirmDialog.onConfirm;
+            setConfirmDialog(null);
+            await cb();
+          }}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
+
+      {/* Screen Center Custom Alert Dialog */}
+      {alertDialog && (
+        <AlertDialog
+          isOpen={alertDialog.isOpen}
+          title={alertDialog.title}
+          message={alertDialog.message}
+          variant={alertDialog.variant}
+          icon={alertDialog.icon}
+          onClose={() => setAlertDialog(null)}
+        />
       )}
     </section>
   );

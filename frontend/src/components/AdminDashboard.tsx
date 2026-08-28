@@ -125,6 +125,10 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
     });
   };
 
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const closeMobileSidebar = () => setMobileOpen(false);
+  const goMobile = (view: AdminView) => { go(view); closeMobileSidebar(); };
+
   useEffect(() => {
     if (currentView === "dashboard") {
       apiGet<DashboardStats>("/admin/dashboard-stats").then(setStats).catch(console.error);
@@ -199,24 +203,44 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
 
   return (
     <div className="shine-admin-shell">
-      <aside className={`shine-admin-sidebar ${sidebarCollapsed ? "collapsed" : ""}`}>
+      {/* Mobile-only topbar with hamburger */}
+      <div className="admin-mobile-topbar">
+        <button
+          className={`admin-hamburger-btn ${mobileOpen ? "open" : ""}`}
+          onClick={() => setMobileOpen((o) => !o)}
+          aria-label="Toggle navigation"
+        >
+          <span /><span /><span />
+        </button>
+        <span className="admin-mobile-title">Admin Console</span>
+        <div className="admin-mobile-topbar-right">
+          <button className="admin-mobile-signout-btn" onClick={onLogout}>Sign out</button>
+        </div>
+      </div>
+
+      {/* Backdrop overlay (mobile) */}
+      <div
+        className={`admin-mobile-overlay ${mobileOpen ? "visible" : ""}`}
+        onClick={closeMobileSidebar}
+      />
+
+      <aside className={`shine-admin-sidebar ${sidebarCollapsed ? "collapsed" : ""} ${mobileOpen ? "mobile-open" : ""}`}>
         <div className="admin-brand">
           <ShineLogo compact={sidebarCollapsed} inverse={true} />
           {!sidebarCollapsed && <span>ADMIN CONSOLE</span>}
         </div>
         <nav>
-          <Nav active={currentView === "dashboard"} icon="dashboard" label="Dashboard" collapsed={sidebarCollapsed} onClick={() => go("dashboard")} />
-          <Nav active={currentView === "users"} icon="users" label="Students" collapsed={sidebarCollapsed} onClick={() => go("users")} />
-          <Nav active={currentView === "categories"} icon="categories" label="Exam Categories" collapsed={sidebarCollapsed} onClick={() => go("categories")} />
-          <Nav active={["tests", "create-test", "edit-test"].includes(currentView)} icon="tests" label="Tests" collapsed={sidebarCollapsed} onClick={() => go("tests")} />
-          <Nav active={currentView === "documents"} icon="documents" label="Documents" collapsed={sidebarCollapsed} onClick={() => go("documents")} />
-          <Nav active={currentView === "announcements"} icon="documents" label="Announcements" collapsed={sidebarCollapsed} onClick={() => go("announcements")} />
-          <Nav active={currentView === "results"} icon="results" label="Analytics" collapsed={sidebarCollapsed} onClick={() => go("results")} />
-          <Nav active={currentView === "violations"} icon="violations" label="Violations" collapsed={sidebarCollapsed} onClick={() => go("violations")} />
-          <Nav active={currentView === "audit-logs"} icon="audit" label="Audit Logs" collapsed={sidebarCollapsed} onClick={() => go("audit-logs")} />
-          <Nav active={currentView === "security-controls"} icon="controls" label="Security Controls" collapsed={sidebarCollapsed} onClick={() => go("security-controls")} />
+          <Nav active={currentView === "dashboard"} icon="dashboard" label="Dashboard" collapsed={sidebarCollapsed} onClick={() => goMobile("dashboard")} />
+          <Nav active={currentView === "users"} icon="users" label="Students" collapsed={sidebarCollapsed} onClick={() => goMobile("users")} />
+          <Nav active={currentView === "categories"} icon="categories" label="Exam Categories" collapsed={sidebarCollapsed} onClick={() => goMobile("categories")} />
+          <Nav active={["tests", "create-test", "edit-test"].includes(currentView)} icon="tests" label="Tests" collapsed={sidebarCollapsed} onClick={() => goMobile("tests")} />
+          <Nav active={currentView === "documents"} icon="documents" label="Documents" collapsed={sidebarCollapsed} onClick={() => goMobile("documents")} />
+          <Nav active={currentView === "announcements"} icon="documents" label="Announcements" collapsed={sidebarCollapsed} onClick={() => goMobile("announcements")} />
+          <Nav active={currentView === "results"} icon="results" label="Analytics" collapsed={sidebarCollapsed} onClick={() => goMobile("results")} />
+          <Nav active={currentView === "violations"} icon="violations" label="Violations" collapsed={sidebarCollapsed} onClick={() => goMobile("violations")} />
+          <Nav active={currentView === "audit-logs"} icon="audit" label="Audit Logs" collapsed={sidebarCollapsed} onClick={() => goMobile("audit-logs")} />
+          <Nav active={currentView === "security-controls"} icon="controls" label="Security Controls" collapsed={sidebarCollapsed} onClick={() => goMobile("security-controls")} />
         </nav>
-
 
         <div className="admin-sidebar-user">
           <div>
@@ -231,7 +255,9 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
               <button className="admin-signout" onClick={onLogout}>Sign out</button>
             </>
           ) : (
-            <button className="admin-signout icon-only" onClick={onLogout} title="Sign out">🚪</button>
+            <button className="admin-signout icon-only" onClick={onLogout} title="Sign out">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            </button>
           )}
         </div>
       </aside>

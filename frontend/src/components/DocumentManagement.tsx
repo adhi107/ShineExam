@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { apiDelete, apiGet, apiPost, apiPostForm } from "../services/api";
 import { normalizeSearchText } from "../utils/filterUtils";
+import ConfirmDialog, { DialogVariant } from "./ConfirmDialog";
+import AlertDialog, { AlertVariant } from "./AlertDialog";
 import "./DocumentManagement.css";
 
 interface Doc {
@@ -35,6 +37,24 @@ const DocumentManagement: React.FC = () => {
   const [fileType, setFileType] = useState("all");
   const [assignment, setAssignment] = useState("all");
   const [feedbackNotice, setFeedbackNotice] = useState("");
+
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: React.ReactNode;
+    confirmText: string;
+    variant: DialogVariant;
+    icon?: string;
+    onConfirm: () => Promise<void>;
+  } | null>(null);
+
+  const [alertDialog, setAlertDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: React.ReactNode;
+    variant?: AlertVariant;
+    icon?: string;
+  } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -72,17 +92,18 @@ const DocumentManagement: React.FC = () => {
     return matchesSearch && matchesType && matchesAssignment;
   }), [documents, documentSearch, fileType, assignment]);
 
-  const upload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim() || !file) return;
+  const upload = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!file || !title.trim()) return;
+
     setUploading(true);
-    setFeedbackNotice("");
     try {
-      const body = new FormData();
-      body.append("title", title.trim());
-      body.append("description", description.trim());
-      body.append("file", file);
-      await apiPostForm("/admin/documents", body);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("title", title.trim());
+      formData.append("description", description.trim());
+
+      await apiPostForm("/admin/documents", formData);
       setTitle("");
       setDescription("");
       setFile(null);
@@ -90,7 +111,13 @@ const DocumentManagement: React.FC = () => {
       setFeedbackNotice("✓ Document uploaded successfully.");
       await load();
     } catch (error: any) {
-      alert(error?.message || "Upload failed");
+      setAlertDialog({
+        isOpen: true,
+        title: "Upload Failed",
+        message: error?.message || "Document upload could not be completed.",
+        variant: "danger",
+        icon: "🚫"
+      });
     } finally {
       setUploading(false);
     }
@@ -102,6 +129,7 @@ const DocumentManagement: React.FC = () => {
     setStudentSearch("");
   };
 
+
   const saveAssignments = async () => {
     if (!assigning) return;
     try {
@@ -110,19 +138,45 @@ const DocumentManagement: React.FC = () => {
       setFeedbackNotice("✓ Document assignments updated.");
       await load();
     } catch (error: any) {
-      alert(error?.message || "Assignment failed");
+      setAlertDialog({
+        isOpen: true,
+        title: "Assignment Failed",
+        message: error?.message || "Could not update document assignments.",
+        variant: "danger",
+        icon: "🚫"
+      });
     }
   };
 
-  const remove = async (doc: Doc) => {
-    if (!window.confirm(`Delete document "${doc.title}"?`)) return;
-    try {
-      await apiDelete(`/admin/documents/${doc.id}`);
-      setFeedbackNotice("Document deleted.");
-      await load();
-    } catch (error: any) {
-      alert(error?.message || "Delete failed");
-    }
+  const remove = (doc: Doc) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: "Delete Document",
+      message: (
+        <>
+          Are you sure you want to permanently delete document <strong>"{doc.title}"</strong>?
+          <br />
+          Candidates will no longer be able to view or download this resource.
+        </>
+      ),
+      confirmText: "Yes, Delete Document",
+      variant: "danger",
+      icon: "🗑️",
+      onConfirm: async () => {
+        try {
+          await apiDelete(`/admin/documents/${doc.id}`);
+          setFeedbackNotice("Document deleted.");
+          await load();
+        } catch (error: any) {
+          setAlertDialog({
+            isOpen: true,
+            title: "Delete Failed",
+            message: error?.message || "Could not delete document.",
+            variant: "danger"
+          });
+        }
+      }
+    });
   };
 
   const size = (bytes: number) => bytes >= 1048576 
@@ -342,8 +396,39 @@ const DocumentManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Screen Center Custom Confirm Dialog */}
+      {confirmDialog && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmText={confirmDialog.confirmText}
+          variant={confirmDialog.variant}
+          icon={confirmDialog.icon}
+          onConfirm={async () => {
+            const cb = confirmDialog.onConfirm;
+            setConfirmDialog(null);
+            await cb();
+          }}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
+
+      {/* Screen Center Custom Alert Dialog */}
+      {alertDialog && (
+        <AlertDialog
+          isOpen={alertDialog.isOpen}
+          title={alertDialog.title}
+          message={alertDialog.message}
+          variant={alertDialog.variant}
+          icon={alertDialog.icon}
+          onClose={() => setAlertDialog(null)}
+        />
+      )}
     </section>
   );
 };
 
 export default DocumentManagement;
+

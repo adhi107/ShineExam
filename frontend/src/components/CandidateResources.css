@@ -469,3 +469,100 @@
   transform: translateX(3px);
 }
 
+/* ═══════════════════════════════════════════════════════════
+   Mobile Responsive Rules for Candidate Resources & Docs
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .resource-page {
+    padding-top: 14px;
+  }
+
+  .resource-hero {
+    min-height: auto;
+    padding: 16px 18px;
+    gap: 14px;
+    border-radius: 12px;
+  }
+
+  .resource-hero > span {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+    border-radius: 10px;
+  }
+
+  .resource-hero h2,
+  .portal-page .resource-hero h2 {
+    font-size: 17px !important;
+    margin-bottom: 3px;
+  }
+
+  .resource-hero p,
+  .portal-page .resource-hero p {
+    font-size: 11px !important;
+  }
+
+  .resource-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .candidate-document-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .doc-card-info h3 {
+    font-size: 14px !important;
+    white-space: normal;
+  }
+
+  .doc-name {
+    max-width: 180px;
+  }
+
+  .resource-actions,
+  .bookmark-actions {
+    width: 100% !important;
+    justify-content: flex-end;
+    gap: 8px !important;
+    padding-top: 10px;
+    border-top: 1px solid #f1f5f9;
+  }
+
+  .view-resource-btn,
+  .download-resource-btn,
+  .open-test-btn,
+  .remove-bookmark-btn {
+    flex: 1;
+    justify-content: center;
+    font-size: 11.5px;
+    height: 34px;
+  }
+
+  .announcement-list article {
+    flex-direction: column;
+  }
+
+  .announcement-list article > img {
+    width: 100%;
+    height: 140px;
+    margin-left: 0;
+  }
+
+  .announcement-list article > div {
+    padding: 14px 16px;
+  }
+
+  .announcement-list article h3 {
+    font-size: 14px !important;
+  }
+
+  .announcement-list article p {
+    font-size: 12px !important;
+  }
+}
+

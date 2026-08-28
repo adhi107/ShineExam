@@ -2,10 +2,13 @@
  * SensitiveContent
  * ─────────────────
  * Full-protection wrapper:
- * When a screenshot or screen recording violation is detected:
- *  1. Calls backend /security/violation/block to permanently suspend the user account.
- *  2. Displays a full-screen locked popup: "Your account is suspended. Contact the admin for unblock."
- *  3. Admin can unblock the user from User Management in Admin Dashboard.
+ * On screenshot or screen recording violation:
+ *  1. Checks if current module is enabled in screenshotProtectedModules.
+ *  2. Calls backend /security/violation/block.
+ *  3. If backend returns blocked=true  → full suspension screen (permanent).
+ *  4. If backend returns warned=true   → in-screen warning banner (grace attempt),
+ *     candidate can continue until the threshold is reached.
+ *  5. Respects strictScreenshotLock: if disabled, shows a soft warning only.
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
@@ -15,9 +18,12 @@ import { useSecurityContext } from './SecurityContext';
 import DynamicWatermark from './DynamicWatermark';
 import './security.css';
 
+export type ProtectedModuleType = 'exam' | 'results' | 'documents' | 'dashboard';
+
 interface SensitiveContentProps {
   children: React.ReactNode;
   userId?: string;
+  module?: ProtectedModuleType;
   showWatermark?: boolean;
   hideOnTabSwitch?: boolean;
   blurOnTabSwitch?: boolean;
@@ -30,9 +36,21 @@ interface SensitiveContentProps {
   shieldMessage?: string;
 }
 
+interface ViolationResult {
+  blocked: boolean;
+  warned: boolean;
+  attempt: number;
+  allowedAttempts: number;
+  remainingAttempts: number;
+  message: string;
+}
+
+const API_BASE = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:5000';
+
 const SensitiveContent: React.FC<SensitiveContentProps> = ({
   children,
   userId: userIdProp,
+  module = 'exam',
   showWatermark = true,
   hideOnTabSwitch = true,
   blurOnTabSwitch = false,
@@ -46,42 +64,116 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
   const { userId: ctxUserId, sessionId, clearSession } = useSecurityContext();
   const userId = userIdProp || ctxUserId || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('userId') || '' : '');
 
+  // === Dynamic Module Protection Status ===
+  const [isModuleProtected, setIsModuleProtected] = useState<boolean>(true);
+
+  // === Suspension state (permanent block) ===
   const [isPermanentlySuspended, setIsPermanentlySuspended] = useState<boolean>(false);
   const [suspensionReason, setSuspensionReason] = useState<string>('');
 
-  const triggerPermanentAccountBlock = useCallback(async (reason: 'screenshot' | 'recording') => {
-    setIsPermanentlySuspended(true);
-    setSuspensionReason(reason);
+  // === Warning state (grace period — threshold not reached yet) ===
+  const [warningBanner, setWarningBanner] = useState<{
+    visible: boolean;
+    attempt: number;
+    allowedAttempts: number;
+    remainingAttempts: number;
+    message: string;
+  } | null>(null);
 
+  // Track in-flight calls to avoid duplicate rapid triggers
+  const violationInFlightRef = useRef<boolean>(false);
+
+  // Fetch active public security config to check if this module is protected
+  useEffect(() => {
+    fetch(`${API_BASE}/public/security/config`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data.screenshotProtectedModules)) {
+          const protectedList: string[] = data.screenshotProtectedModules;
+          setIsModuleProtected(protectedList.includes(module));
+        }
+      })
+      .catch(() => {
+        // Fallback: active for exam and results
+        setIsModuleProtected(['exam', 'results', 'documents'].includes(module));
+      });
+  }, [module]);
+
+  const callViolationBlock = useCallback(async (reason: 'screenshot' | 'recording'): Promise<ViolationResult | null> => {
     const activeUserId = userId || sessionStorage.getItem('userId') || '';
-    if (!activeUserId) return;
+    if (!activeUserId) return null;
 
-    sessionStorage.setItem('account_permanently_blocked', 'true');
-    const apiBase = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:5000';
     const payload = JSON.stringify({
       userId: activeUserId,
       reason,
       sessionId: sessionId || sessionStorage.getItem('securitySessionId') || '',
+      module,
     });
 
+    // Best-effort beacon
     if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
       try {
         const blob = new Blob([payload], { type: 'application/json' });
-        navigator.sendBeacon(`${apiBase}/security/violation/block`, blob);
+        navigator.sendBeacon(`${API_BASE}/security/violation/block`, blob);
       } catch {}
     }
 
+    // Awaited fetch to get structured response
     try {
-      await fetch(`${apiBase}/security/violation/block`, {
+      const res = await fetch(`${API_BASE}/security/violation/block`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: payload,
       });
+      if (res.ok) {
+        return await res.json() as ViolationResult;
+      }
     } catch {
-      // Backend logged best-effort
+      // Backend offline — treat as blocked for safety
     }
-  }, [userId, sessionId]);
+    return null;
+  }, [userId, sessionId, module]);
 
+  const triggerViolation = useCallback(async (reason: 'screenshot' | 'recording') => {
+    // If this module is not in the protected list, bypass
+    if (!isModuleProtected) return;
+
+    // Avoid duplicate rapid calls (e.g. blur + visibilitychange both fire at once)
+    if (violationInFlightRef.current || isPermanentlySuspended) return;
+    violationInFlightRef.current = true;
+
+    try {
+      const result = await callViolationBlock(reason);
+
+      if (!result) {
+        // Backend unreachable — block locally for safety
+        setIsPermanentlySuspended(true);
+        setSuspensionReason(reason);
+        sessionStorage.setItem('account_permanently_blocked', 'true');
+        return;
+      }
+
+      if (result.blocked) {
+        // Threshold reached — permanently suspend
+        setIsPermanentlySuspended(true);
+        setSuspensionReason(reason);
+        sessionStorage.setItem('account_permanently_blocked', 'true');
+        setWarningBanner(null);
+      } else if (result.warned) {
+        // Grace period — show warning banner without full suspension
+        setWarningBanner({
+          visible: true,
+          attempt: result.attempt,
+          allowedAttempts: result.allowedAttempts,
+          remainingAttempts: result.remainingAttempts,
+          message: result.message,
+        });
+        setTimeout(() => setWarningBanner(null), 8000);
+      }
+    } finally {
+      setTimeout(() => { violationInFlightRef.current = false; }, 2000);
+    }
+  }, [isModuleProtected, isPermanentlySuspended, callViolationBlock]);
 
   const {
     isPageHidden,
@@ -89,56 +181,55 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
     isPrintScreenAttempted,
     isWindowBlurred,
   } = useScreenProtection({
-    blockCopy: true,
-    blockContextMenu: true,
-    blockDrag: true,
-    flashOnPrintScreen: true,
+    blockCopy: isModuleProtected,
+    blockContextMenu: isModuleProtected,
+    blockDrag: isModuleProtected,
+    flashOnPrintScreen: isModuleProtected,
     onPrintScreenAttempt: () => {
-      triggerPermanentAccountBlock('screenshot');
+      if (isModuleProtected) triggerViolation('screenshot');
     },
     onScreenShareStart: () => {
-      triggerPermanentAccountBlock('recording');
+      if (isModuleProtected) triggerViolation('recording');
     },
   });
 
   // Check if screen sharing started
   useEffect(() => {
-    if (isScreenSharing && !isPermanentlySuspended) {
-      triggerPermanentAccountBlock('recording');
+    if (isModuleProtected && isScreenSharing && !isPermanentlySuspended) {
+      triggerViolation('recording');
     }
-  }, [isScreenSharing, isPermanentlySuspended, triggerPermanentAccountBlock]);
+  }, [isModuleProtected, isScreenSharing, isPermanentlySuspended, triggerViolation]);
 
   // Check if printscreen attempted
   useEffect(() => {
-    if (isPrintScreenAttempted && !isPermanentlySuspended) {
-      triggerPermanentAccountBlock('screenshot');
+    if (isModuleProtected && isPrintScreenAttempted && !isPermanentlySuspended) {
+      triggerViolation('screenshot');
     }
-  }, [isPrintScreenAttempted, isPermanentlySuspended, triggerPermanentAccountBlock]);
+  }, [isModuleProtected, isPrintScreenAttempted, isPermanentlySuspended, triggerViolation]);
 
-  // Check if window blurred (Snipping Tool overlay / Alt+Tab) during exam
+  // Check if window blurred (Snipping Tool overlay / Alt+Tab)
   useEffect(() => {
-    if (hideOnWindowBlur && isWindowBlurred && !isPermanentlySuspended) {
-      triggerPermanentAccountBlock('screenshot');
+    if (isModuleProtected && hideOnWindowBlur && isWindowBlurred && !isPermanentlySuspended) {
+      triggerViolation('screenshot');
     }
-  }, [hideOnWindowBlur, isWindowBlurred, isPermanentlySuspended, triggerPermanentAccountBlock]);
+  }, [isModuleProtected, hideOnWindowBlur, isWindowBlurred, isPermanentlySuspended, triggerViolation]);
 
-  // Check if tab switched / minimized during exam
+  // Check if tab switched / minimized
   useEffect(() => {
-    if (hideOnTabSwitch && isPageHidden && !isPermanentlySuspended) {
-      triggerPermanentAccountBlock('screenshot');
+    if (isModuleProtected && hideOnTabSwitch && isPageHidden && !isPermanentlySuspended) {
+      triggerViolation('screenshot');
     }
-  }, [hideOnTabSwitch, isPageHidden, isPermanentlySuspended, triggerPermanentAccountBlock]);
+  }, [isModuleProtected, hideOnTabSwitch, isPageHidden, isPermanentlySuspended, triggerViolation]);
 
   // Hardware GPU video overlay
-  useVideoOverlayProtection(enableVideoOverlay);
+  useVideoOverlayProtection(enableVideoOverlay && isModuleProtected);
 
+  const shouldShieldShare = isModuleProtected && shieldOnScreenShare && isScreenSharing;
+  const shouldHideTab     = isModuleProtected && hideOnTabSwitch && isPageHidden && !blurOnTabSwitch;
+  const shouldBlurTab     = isModuleProtected && blurOnTabSwitch && isPageHidden;
+  const shouldHideBlur    = isModuleProtected && hideOnWindowBlur && isWindowBlurred;
 
-  const shouldShieldShare = shieldOnScreenShare && isScreenSharing;
-  const shouldHideTab     = hideOnTabSwitch && isPageHidden && !blurOnTabSwitch;
-  const shouldBlurTab     = blurOnTabSwitch && isPageHidden;
-  const shouldHideBlur    = hideOnWindowBlur && isWindowBlurred;
-
-  // Full blackout if suspended, screenshot attempted, window blurred, tab hidden, or screen shared
+  // Full blackout only if actually permanently suspended
   const isShielded = isPermanentlySuspended || shouldShieldShare || shouldHideTab || shouldHideBlur;
   const isBlurred  = shouldBlurTab && !isShielded;
 
@@ -161,32 +252,66 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
       ref={containerRef}
       className={wrapperClasses}
       onCopy={(e) => {
+        if (!isModuleProtected) return;
         const t = e.target as HTMLElement;
         if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t.isContentEditable) return;
         e.preventDefault();
       }}
       onCut={(e) => {
+        if (!isModuleProtected) return;
         const t = e.target as HTMLElement;
         if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t.isContentEditable) return;
         e.preventDefault();
       }}
       onDragStart={(e) => {
+        if (!isModuleProtected) return;
         const t = e.target as HTMLElement;
         if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t.isContentEditable) return;
         e.preventDefault();
       }}
       onContextMenu={(e) => {
+        if (!isModuleProtected) return;
         const t = e.target as HTMLElement;
         if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t.isContentEditable) return;
         e.preventDefault();
       }}
     >
-      {/* ── Protected content (COMPLETELY unmounted when shielded/suspended) ── */}
+      {/* ── Protected content (COMPLETELY unmounted when permanently suspended) ── */}
       {!isShielded && children}
 
       {/* ── Anti-capture GPU compositing overlay ── */}
-      {!isShielded && (
+      {!isShielded && isModuleProtected && (
         <div className="shine-anti-capture-layer" aria-hidden="true" />
+      )}
+
+      {/* ── Warning Banner (Grace period — threshold NOT yet reached) ── */}
+      {!isPermanentlySuspended && warningBanner?.visible && (
+        <div className="shine-violation-warning-banner" role="alert">
+          <div className="shine-violation-warning-inner">
+            <div className="shine-violation-warning-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
+            <div className="shine-violation-warning-text">
+              <strong>Security Warning — Attempt {warningBanner.attempt} of {warningBanner.allowedAttempts}</strong>
+              <span>
+                {warningBanner.remainingAttempts > 0
+                  ? `${warningBanner.remainingAttempts} attempt${warningBanner.remainingAttempts !== 1 ? 's' : ''} remaining before your account is permanently blocked.`
+                  : 'This was your final warning. Next attempt will permanently block your account.'}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="shine-violation-warning-close"
+              onClick={() => setWarningBanner(null)}
+              aria-label="Dismiss warning"
+            >
+              &#x2715;
+            </button>
+          </div>
+        </div>
       )}
 
       {/* ── Full-Screen Suspended / Shield Overlay Modal ── */}
@@ -194,7 +319,9 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
         <div className="shine-screen-shield shine-screen-suspended-backdrop" role="alert" aria-live="assertive">
           <div className="shine-screen-shield__inner shine-suspended-modal-card">
             <div className="shine-screen-shield__icon" aria-hidden="true">
-              🚫
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+              </svg>
             </div>
             
             <h2 className="shine-screen-shield__title shine-suspended-title">

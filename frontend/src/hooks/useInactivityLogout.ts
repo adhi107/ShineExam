@@ -48,10 +48,12 @@ export function useInactivityLogout({ onLogout, isLoggedIn }: InactivityOptions)
 
     timeoutRef.current = setTimeout(() => {
       if (!isLoggedIn) return;
+      const mins = idleMinutesRef.current;
       sessionStorage.clear();
-      alert(`Session Expired\n\nYou were automatically logged out due to ${idleMinutesRef.current} minutes of inactivity.`);
+      sessionStorage.setItem("inactivity_logout_alert", String(mins));
       onLogout();
     }, timeoutMs);
+
   }, [isLoggedIn, onLogout]);
 
   useEffect(() => {

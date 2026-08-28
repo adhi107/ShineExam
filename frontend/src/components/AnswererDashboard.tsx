@@ -275,6 +275,8 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
   const formatTime = (seconds: number) => `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 
   const [studentSidebarCollapsed, setStudentSidebarCollapsed] = useState(() => localStorage.getItem("shine_student_sidebar_collapsed") === "true");
+  const [studentMobileOpen, setStudentMobileOpen] = useState(false);
+  const closeStudentMobile = () => setStudentMobileOpen(false);
 
   const toggleStudentSidebar = () => {
     setStudentSidebarCollapsed(prev => {
@@ -282,6 +284,16 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
       localStorage.setItem("shine_student_sidebar_collapsed", String(next));
       return next;
     });
+  };
+
+  const handleGoTo = (next: PortalView) => {
+    goTo(next);
+    closeStudentMobile();
+  };
+
+  const handleOpenExamPage = (page: ExamPage) => {
+    openExamPage(page);
+    closeStudentMobile();
   };
 
   if (activeExam) return (
@@ -304,7 +316,13 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
 
   return (
     <div className="candidate-shell">
-      <aside className={`candidate-sidebar ${studentSidebarCollapsed ? "collapsed" : ""}`}>
+      {/* Mobile Drawer Overlay Backdrop */}
+      <div
+        className={`candidate-mobile-overlay ${studentMobileOpen ? "visible" : ""}`}
+        onClick={closeStudentMobile}
+      />
+
+      <aside className={`candidate-sidebar ${studentSidebarCollapsed ? "collapsed" : ""} ${studentMobileOpen ? "sidebar-open" : ""}`}>
         <div className="candidate-logo">
           <button 
             type="button" 
@@ -323,7 +341,7 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
 
         <nav className="candidate-nav">
           <div className={`my-tests-nav ${view === "tests" ? "active" : ""}`} title={studentSidebarCollapsed ? "My Tests" : ""}>
-            <button className="my-tests-main" onClick={() => goTo("tests")}>
+            <button className="my-tests-main" onClick={() => handleGoTo("tests")}>
               <span className="candidate-nav-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -347,11 +365,11 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
                   <svg className={`subgroup-chevron ${expandedExams.includes(exam.slug) ? "open" : ""}`} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                   <b className="exam-label">{exam.label}</b>
                 </button>
-                {expandedExams.includes(exam.slug) && <div className="exam-stage-links">{examPages.filter(page => page.subcategoryId === exam.id).map(page => <button key={page.stageSlug} className={selectedExamPage?.subcategoryId === page.subcategoryId && selectedExamPage.stageSlug === page.stageSlug ? "active" : ""} onClick={() => openExamPage(page)}><i className="stage-dot" />{page.stageLabel}</button>)}</div>}
+                {expandedExams.includes(exam.slug) && <div className="exam-stage-links">{examPages.filter(page => page.subcategoryId === exam.id).map(page => <button key={page.stageSlug} className={selectedExamPage?.subcategoryId === page.subcategoryId && selectedExamPage.stageSlug === page.stageSlug ? "active" : ""} onClick={() => handleOpenExamPage(page)}><i className="stage-dot" />{page.stageLabel}</button>)}</div>}
               </div>)}</div>}
             </div>)}
           </div>}
-          {navItems.filter(item => item.view !== "tests").map(item => <button key={item.view} className={`candidate-nav-item ${view === item.view ? "active" : ""}`} onClick={() => goTo(item.view)} title={studentSidebarCollapsed ? item.label : ""}><span className="candidate-nav-icon">{item.icon}</span>{!studentSidebarCollapsed && <span>{item.label}</span>}</button>)}
+          {navItems.filter(item => item.view !== "tests").map(item => <button key={item.view} className={`candidate-nav-item ${view === item.view ? "active" : ""}`} onClick={() => handleGoTo(item.view)} title={studentSidebarCollapsed ? item.label : ""}><span className="candidate-nav-icon">{item.icon}</span>{!studentSidebarCollapsed && <span>{item.label}</span>}</button>)}
         </nav>
 
         {!studentSidebarCollapsed && (
@@ -365,8 +383,18 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
       <main className={`candidate-main ${studentSidebarCollapsed ? "collapsed" : ""}`}>
         <header className="candidate-topbar">
           <div className="topbar-left-brand">
-            <span className="mobile-brand">SHINE</span>
-            <h1>{view === "tests" ? (selectedExamPage ? `${selectedExamPage.examLabel} ${selectedExamPage.stageLabel}` : "My Tests") : view === "report" ? "Performance Report" : navItems.find(n => n.view === view)?.label}</h1>
+            <button
+              type="button"
+              className={`candidate-hamburger-btn ${studentMobileOpen ? "open" : ""}`}
+              onClick={() => setStudentMobileOpen(o => !o)}
+              aria-label="Toggle student navigation menu"
+            >
+              <span /><span /><span />
+            </button>
+            <div className="topbar-title-wrap">
+              <span className="mobile-brand">SHINE EXAM</span>
+              <h1>{view === "tests" ? (selectedExamPage ? `${selectedExamPage.examLabel} ${selectedExamPage.stageLabel}` : "My Tests") : view === "report" ? "Performance Report" : navItems.find(n => n.view === view)?.label}</h1>
+            </div>
           </div>
           <div className="candidate-top-actions">
             {view === "tests" && <div className="portal-value-help"><ValueHelpField label="Search Tests" placeholder="Search assigned tests" value={search} options={tests.map(test=>({value:test.name,label:test.name,keywords:[`${test.duration} minutes`,`${test.questions} questions`]}))} onChange={setSearch} allowFreeText compact/></div>}
