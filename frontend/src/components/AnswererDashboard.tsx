@@ -4,13 +4,14 @@ import { apiGet, apiPost } from "../services/api";
 import { normalizeSearchText } from "../utils/filterUtils";
 import TestInterface from "./TestInterface";
 import ShineLogo from "./ShineLogo";
+import StudentClasses from "./StudentClasses";
 import { CandidateAnnouncements, CandidateBookmarks, CandidateDocuments, CandidateBookmark } from "./CandidateResources";
 import ValueHelpField from "./ValueHelpField";
 import { ParsedQuestionPreview } from "./ParsedQuestionPreview";
 import "./AnswererDashboard.css";
 import "./CandidateValidity.css";
 
-type PortalView = "tests" | "report" | "bookmarks" | "documents" | "announcements";
+type PortalView = "tests" | "report" | "classes" | "bookmarks" | "documents" | "announcements";
 type TestTab = "active" | "upcoming" | "missed" | "completed";
 type ReportTab = "score" | "subject" | "solution" | "questions" | "compare";
 
@@ -63,6 +64,16 @@ const navItems: Array<{ view: PortalView; label: string; icon: React.ReactNode }
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
         <polyline points="14 2 14 8 20 8" />
         <path d="m9 15 2 2 4-4" />
+      </svg>
+    ),
+  },
+  {
+    view: "classes",
+    label: "Classes",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="23 7 16 12 23 17 23 7" />
+        <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
       </svg>
     ),
   },
@@ -139,7 +150,8 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
   const [passwordMessage, setPasswordMessage] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
 
-  const view: PortalView = location.pathname.includes("history") || location.pathname.includes("report")
+  const view: PortalView = location.pathname.includes("classes") || location.pathname.includes("videos")
+    ? "classes" : location.pathname.includes("history") || location.pathname.includes("report")
     ? "report" : location.pathname.includes("bookmark") ? "bookmarks"
     : location.pathname.includes("document") || location.pathname.includes("courses") ? "documents"
     : location.pathname.includes("announcement") ? "announcements" : "tests";
@@ -529,6 +541,7 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
           </>}
         </section>}
 
+        {view === "classes" && <StudentClasses userId={userName} />}
         {view === "bookmarks" && <CandidateBookmarks userId={userName} bookmarks={bookmarks} onChanged={loadBookmarks} onOpenTest={openBookmarkedTest} />}
         {view === "documents" && <CandidateDocuments userId={userName} />}
         {view === "announcements" && <CandidateAnnouncements userId={userName} />}

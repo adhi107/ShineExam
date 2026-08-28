@@ -17,6 +17,7 @@ from routes.admin_courses import admin_courses_bp
 from routes.answerer import answerer_bp
 from routes.exam_categories import admin_exam_categories_bp, answerer_exam_categories_bp
 from routes.learning_resources import admin_documents_bp, admin_announcements_bp, answerer_resources_bp
+from routes.admin_videos import admin_videos_bp, answerer_videos_bp
 from routes.security_routes import security_bp
 from routes.admin_violations import admin_violations_bp
 from routes.admin_audit import admin_audit_bp
@@ -52,6 +53,8 @@ def create_app() -> Flask:
     app.register_blueprint(answerer_exam_categories_bp, url_prefix="/api/answerer/exam-categories")
     app.register_blueprint(admin_documents_bp, url_prefix="/api/admin/documents")
     app.register_blueprint(admin_announcements_bp, url_prefix="/api/admin/announcements")
+    app.register_blueprint(admin_videos_bp, url_prefix="/api/admin/videos")
+    app.register_blueprint(answerer_videos_bp, url_prefix="/api/answerer/classes")
     app.register_blueprint(answerer_resources_bp, url_prefix="/api/answerer")
     app.register_blueprint(security_bp,    url_prefix="/api/security")
     app.register_blueprint(admin_violations_bp, url_prefix="/api/admin/violations")

@@ -71,25 +71,27 @@
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
 }
 
-/* ── KPI Stat Cards ── */
+/* ── KPI Stat Cards (Compact SaaS Layout) ── */
 .violations-stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 22px;
+  gap: 12px;
+  margin-bottom: 20px;
 }
 
 .v-stat-card {
-  padding: 20px 22px;
-  border-radius: 20px;
+  padding: 12px 16px;
+  border-radius: 12px;
   position: relative;
   overflow: hidden;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   color: #ffffff;
   cursor: pointer;
-  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.22s ease;
+  min-height: 68px;
+  box-sizing: border-box;
+  transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.18s ease;
 }
 
 .v-stat-card::after {
@@ -102,74 +104,86 @@
 
 .v-stat-card.total {
   background: linear-gradient(135deg, #4338ca 0%, #4f46e5 50%, #6366f1 100%);
-  box-shadow: 0 8px 24px -3px rgba(79, 70, 229, 0.45);
+  box-shadow: 0 4px 14px -2px rgba(79, 70, 229, 0.35);
 }
 
 .v-stat-card.screenshot {
   background: linear-gradient(135deg, #b91c1c 0%, #dc2626 50%, #ef4444 100%);
-  box-shadow: 0 8px 24px -3px rgba(220, 38, 38, 0.45);
+  box-shadow: 0 4px 14px -2px rgba(220, 38, 38, 0.35);
 }
 
 .v-stat-card.recording {
   background: linear-gradient(135deg, #b45309 0%, #d97706 50%, #f59e0b 100%);
-  box-shadow: 0 8px 24px -3px rgba(217, 119, 6, 0.45);
+  box-shadow: 0 4px 14px -2px rgba(217, 119, 6, 0.35);
 }
 
 .v-stat-card.blocked {
   background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
-  box-shadow: 0 8px 24px -3px rgba(15, 23, 42, 0.45);
+  box-shadow: 0 4px 14px -2px rgba(15, 23, 42, 0.35);
 }
 
 .v-stat-card:hover {
-  transform: translateY(-4px);
+  transform: translateY(-2px);
 }
 
-.v-stat-card.total:hover { box-shadow: 0 16px 36px -4px rgba(79, 70, 229, 0.6); }
-.v-stat-card.screenshot:hover { box-shadow: 0 16px 36px -4px rgba(220, 38, 38, 0.6); }
-.v-stat-card.recording:hover { box-shadow: 0 16px 36px -4px rgba(217, 119, 6, 0.6); }
-.v-stat-card.blocked:hover { box-shadow: 0 16px 36px -4px rgba(15, 23, 42, 0.6); }
+.v-stat-card.total:hover { box-shadow: 0 8px 20px -2px rgba(79, 70, 229, 0.5); }
+.v-stat-card.screenshot:hover { box-shadow: 0 8px 20px -2px rgba(220, 38, 38, 0.5); }
+.v-stat-card.recording:hover { box-shadow: 0 8px 20px -2px rgba(217, 119, 6, 0.5); }
+.v-stat-card.blocked:hover { box-shadow: 0 8px 20px -2px rgba(15, 23, 42, 0.5); }
 
 .v-stat-icon {
-  font-size: 26px;
-  width: 54px;
-  height: 54px;
+  font-size: 18px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(8px);
-  border-radius: 16px;
+  border-radius: 9px;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.v-stat-icon svg {
+  width: 18px;
+  height: 18px;
 }
 
 .v-stat-content {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  flex: 1;
 }
 
 .v-stat-label {
-  font-size: 11.5px;
-  font-weight: 800;
-  color: rgba(255, 255, 255, 0.85);
+  font-size: 10px;
+  font-weight: 750;
+  color: rgba(255, 255, 255, 0.9);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .v-stat-val {
-  font-size: 32px;
+  font-size: 20px;
   font-weight: 900;
   color: #ffffff;
-  line-height: 1.1;
-  letter-spacing: -0.04em;
-  margin: 4px 0 2px;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 1px 0 0;
 }
 
 .v-stat-content small {
-  font-size: 11.5px;
+  font-size: 10px;
   color: rgba(255, 255, 255, 0.75);
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
 }
 
 /* ── Filter Card ── */

@@ -12,6 +12,7 @@ import SecurityViolations from "./SecurityViolations";
 import AuditLogs from "./AuditLogs";
 import AdminSecurityControls from "./AdminSecurityControls";
 import ShineLogo from "./ShineLogo";
+import AdminVideos from "./AdminVideos";
 import AppIcon from "./AppIcons";
 import { apiGet, apiPost } from "../services/api";
 import "./AdminDashboard.css";
@@ -26,6 +27,7 @@ type AdminView =
   | "categories"
   | "documents"
   | "announcements"
+  | "videos"
   | "tests"
   | "create-test"
   | "edit-test"
@@ -40,6 +42,7 @@ const paths: Record<AdminView, string> = {
   categories: "/admin/exam-categories",
   documents: "/admin/documents",
   announcements: "/admin/announcements",
+  videos: "/admin/videos",
   tests: "/admin/tests",
   "create-test": "/admin/tests/create",
   "edit-test": "/admin/tests/edit",
@@ -55,6 +58,7 @@ const views: Record<string, AdminView> = {
   "/admin/exam-categories": "categories",
   "/admin/documents": "documents",
   "/admin/announcements": "announcements",
+  "/admin/videos": "videos",
   "/admin/tests": "tests",
   "/admin/tests/create": "create-test",
   "/admin/tests/edit": "edit-test",
@@ -197,6 +201,7 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
         />
       );
     }
+    if (currentView === "videos") return <AdminVideos />;
     if (currentView === "results") return <TestResults />;
     return <AdminHome adminName={adminName} stats={stats} go={go} />;
   };
@@ -234,6 +239,7 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
           <Nav active={currentView === "users"} icon="users" label="Students" collapsed={sidebarCollapsed} onClick={() => goMobile("users")} />
           <Nav active={currentView === "categories"} icon="categories" label="Exam Categories" collapsed={sidebarCollapsed} onClick={() => goMobile("categories")} />
           <Nav active={["tests", "create-test", "edit-test"].includes(currentView)} icon="tests" label="Tests" collapsed={sidebarCollapsed} onClick={() => goMobile("tests")} />
+          <Nav active={currentView === "videos"} icon="videos" label="Videos" collapsed={sidebarCollapsed} onClick={() => goMobile("videos")} />
           <Nav active={currentView === "documents"} icon="documents" label="Documents" collapsed={sidebarCollapsed} onClick={() => goMobile("documents")} />
           <Nav active={currentView === "announcements"} icon="documents" label="Announcements" collapsed={sidebarCollapsed} onClick={() => goMobile("announcements")} />
           <Nav active={currentView === "results"} icon="results" label="Analytics" collapsed={sidebarCollapsed} onClick={() => goMobile("results")} />

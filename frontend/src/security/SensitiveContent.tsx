@@ -18,7 +18,7 @@ import { useSecurityContext } from './SecurityContext';
 import DynamicWatermark from './DynamicWatermark';
 import './security.css';
 
-export type ProtectedModuleType = 'exam' | 'results' | 'documents' | 'dashboard';
+export type ProtectedModuleType = 'exam' | 'results' | 'documents' | 'classes' | 'dashboard';
 
 interface SensitiveContentProps {
   children: React.ReactNode;
@@ -45,7 +45,8 @@ interface ViolationResult {
   message: string;
 }
 
-const API_BASE = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:5000';
+const rawBase = (process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:5000').replace(/\/+$/, '');
+const API_BASE = rawBase.endsWith('/api') ? rawBase : `${rawBase}/api`;
 
 const SensitiveContent: React.FC<SensitiveContentProps> = ({
   children,

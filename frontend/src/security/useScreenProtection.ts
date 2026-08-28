@@ -27,6 +27,7 @@ interface UseScreenProtectionOptions {
   blockDrag?: boolean;
   flashOnPrintScreen?: boolean;
   screenshotLockDurationSec?: number;
+  enableBlurDetection?: boolean;
   onScreenShareStart?: () => void;
   onScreenShareStop?: () => void;
   onPageHide?: () => void;
@@ -82,6 +83,7 @@ export function useScreenProtection(
     blockDrag = true,
     flashOnPrintScreen = true,
     screenshotLockDurationSec = 300,
+    enableBlurDetection = true,
     onScreenShareStart,
     onScreenShareStop,
     onPageHide,
@@ -128,11 +130,13 @@ export function useScreenProtection(
   const preventDrag = useCallback((e: Event) => {
     if (isInputTarget(e.target)) return;
     e.preventDefault();
+    e.stopPropagation();
   }, []);
 
   const preventContextMenu = useCallback((e: MouseEvent) => {
     if (isInputTarget(e.target)) return;
     e.preventDefault();
+    e.stopPropagation();
   }, []);
 
   // ── PrintScreen / Screenshot Detection ──────────────────────────────────
@@ -180,8 +184,15 @@ export function useScreenProtection(
   // ── Window blur/focus (Snipping Tool trigger, Alt+Tab, focus loss) ───────
   useEffect(() => {
     const onBlur = () => {
-      setIsWindowBlurred(true);
-      handlePrintScreenDetected();
+      if (!enableBlurDetection) return;
+      // Do not trigger screenshot violation if focus shifted to an embedded video iframe (YouTube/Vimeo)
+      setTimeout(() => {
+        if (document.activeElement && document.activeElement.tagName === 'IFRAME') {
+          return;
+        }
+        setIsWindowBlurred(true);
+        handlePrintScreenDetected();
+      }, 50);
     };
     const onFocus = () => {
       setIsWindowBlurred(false);
@@ -192,7 +203,7 @@ export function useScreenProtection(
       window.removeEventListener('blur', onBlur);
       window.removeEventListener('focus', onFocus);
     };
-  }, [handlePrintScreenDetected]);
+  }, [enableBlurDetection, handlePrintScreenDetected]);
 
   // ── Print event protection ──────────────────────────────────────────────
   useEffect(() => {

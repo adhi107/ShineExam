@@ -22,7 +22,7 @@ DEFAULT_SECURITY_SETTINGS = {
     "autoLogoutMinutes": 15,
     "strictScreenshotLock": True,
     "screenshotAllowedAttempts": 1,       # 1 = instant permanent block on first attempt
-    "screenshotProtectedModules": ["exam", "results", "documents"],  # modules where protection is active
+    "screenshotProtectedModules": ["exam", "results", "documents", "classes"],  # modules where protection is active
     "watermarkEnabled": True,
     "watermarkIntervalSec": 8,
     "allowCandidateDocumentView": True,
@@ -63,7 +63,7 @@ def get_security_settings():
             "autoLogoutMinutes": int(settings.get("autoLogoutMinutes", 15)),
             "strictScreenshotLock": bool(settings.get("strictScreenshotLock", True)),
             "screenshotAllowedAttempts": int(settings.get("screenshotAllowedAttempts", 1)),
-            "screenshotProtectedModules": list(settings.get("screenshotProtectedModules", ["exam", "results", "documents"])),
+            "screenshotProtectedModules": list(settings.get("screenshotProtectedModules", ["exam", "results", "documents", "classes"])),
             "watermarkEnabled": bool(settings.get("watermarkEnabled", True)),
             "watermarkIntervalSec": int(settings.get("watermarkIntervalSec", 8)),
             "allowCandidateDocumentView": bool(settings.get("allowCandidateDocumentView", True)),
@@ -93,14 +93,14 @@ def update_security_settings():
     payload = request.get_json(silent=True) or {}
     db = get_db()
 
-    VALID_MODULES = {"exam", "results", "documents", "dashboard"}
-    raw_modules = payload.get("screenshotProtectedModules", ["exam", "results", "documents"])
+    VALID_MODULES = {"exam", "results", "documents", "classes", "dashboard"}
+    raw_modules = payload.get("screenshotProtectedModules", ["exam", "results", "documents", "classes"])
     if not isinstance(raw_modules, list):
-        raw_modules = ["exam", "results", "documents"]
+        raw_modules = ["exam", "results", "documents", "classes"]
     validated_modules = [m for m in raw_modules if m in VALID_MODULES]
     if not validated_modules:
-        validated_modules = ["exam"]
-
+        validated_modules = ["exam", "results", "documents", "classes"]
+    
     raw_retention = payload.get("retentionPolicy") or {}
     current_doc = db.system_settings.find_one({"type": "security_config"}) or {}
     curr_ret = current_doc.get("retentionPolicy") or {}
@@ -303,7 +303,7 @@ def get_public_security_config():
         "autoLogoutMinutes": int(settings.get("autoLogoutMinutes", 15)),
         "strictScreenshotLock": bool(settings.get("strictScreenshotLock", True)),
         "screenshotAllowedAttempts": int(settings.get("screenshotAllowedAttempts", 1)),
-        "screenshotProtectedModules": list(settings.get("screenshotProtectedModules", ["exam", "results", "documents"])),
+        "screenshotProtectedModules": list(settings.get("screenshotProtectedModules", ["exam", "results", "documents", "classes"])),
         "watermarkEnabled": bool(settings.get("watermarkEnabled", True)),
         "watermarkIntervalSec": int(settings.get("watermarkIntervalSec", 8)),
         "allowCandidateDocumentView": bool(settings.get("allowCandidateDocumentView", True)),

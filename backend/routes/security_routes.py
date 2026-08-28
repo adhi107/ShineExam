@@ -216,15 +216,31 @@ def block_user_on_violation():
     If screenshotAllowedAttempts > 1, issue a warning for the first N-1 attempts.
     On the Nth attempt, permanently block the account.
     """
+    import re
     payload = request.get_json(silent=True) or {}
     user_id = str(payload.get("userId", "")).strip()
     reason = str(payload.get("reason", "screenshot")).strip()
     session_id = str(payload.get("sessionId", "")).strip()
+    module_name = str(payload.get("module", "classes")).strip()
 
     if not user_id:
         return jsonify({"error": "userId required"}), 400
 
     db = get_db()
+
+    # Find the matching user in db.users flexibly
+    user_doc = db.users.find_one({
+        "$or": [
+            {"userId": {"$regex": f"^{re.escape(user_id)}$", "$options": "i"}},
+            {"name": {"$regex": f"^{re.escape(user_id)}$", "$options": "i"}},
+            {"email": {"$regex": f"^{re.escape(user_id)}$", "$options": "i"}},
+            {"naxUnid": user_id},
+        ]
+    })
+
+    canonical_user_id = user_doc.get("userId", user_id) if user_doc else user_id
+    user_name = user_doc.get("name", canonical_user_id) if user_doc else canonical_user_id
+    user_email = user_doc.get("email", "") if user_doc else ""
 
     # Read configured threshold
     settings = db.system_settings.find_one({"type": "security_config"}) or {}
@@ -235,27 +251,31 @@ def block_user_on_violation():
 
     # Count previous violations of this type for this user
     previous_violations = db.security_violations.count_documents({
-        "userId": user_id,
+        "userId": {"$regex": f"^{re.escape(canonical_user_id)}$", "$options": "i"},
         "type": {"$in": ["screenshot", "recording"]},
     })
 
-    # Record this violation event regardless
+    current_attempt = previous_violations + 1
+
+    # Record this violation event with detailed metadata
     db.security_violations.insert_one({
-        "userId": user_id,
+        "userId": canonical_user_id,
+        "userName": user_name,
+        "userEmail": user_email,
         "type": reason,
+        "module": module_name,
         "sessionId": session_id,
-        "attemptNumber": previous_violations + 1,
+        "attemptNumber": current_attempt,
+        "status": "blocked" if (strict_lock and current_attempt >= allowed_attempts) else "warned",
         "recordedAt": datetime.utcnow(),
     })
-
-    current_attempt = previous_violations + 1
 
     # If strict lock is disabled, just warn — never block
     if not strict_lock:
         audit_log(
             action=f"VIOLATION_WARNED_{reason.upper()}",
-            user_id=user_id,
-            details={"sessionId": session_id, "attempt": current_attempt, "mode": "warning_only"},
+            user_id=canonical_user_id,
+            details={"sessionId": session_id, "module": module_name, "attempt": current_attempt, "mode": "warning_only"},
             severity="warning"
         )
         return jsonify({
@@ -264,7 +284,7 @@ def block_user_on_violation():
             "attempt": current_attempt,
             "allowedAttempts": allowed_attempts,
             "remainingAttempts": max(0, allowed_attempts - current_attempt),
-            "message": f"Screenshot attempt {current_attempt} recorded. Strict lock is disabled."
+            "message": f"Screenshot attempt {current_attempt} recorded in {module_name}. Strict lock is disabled."
         })
 
     # Check if threshold is exceeded
@@ -272,8 +292,8 @@ def block_user_on_violation():
         remaining = allowed_attempts - current_attempt
         audit_log(
             action=f"VIOLATION_WARNING_{reason.upper()}",
-            user_id=user_id,
-            details={"sessionId": session_id, "attempt": current_attempt, "remaining": remaining},
+            user_id=canonical_user_id,
+            details={"sessionId": session_id, "module": module_name, "attempt": current_attempt, "remaining": remaining},
             severity="warning"
         )
         return jsonify({
@@ -285,43 +305,59 @@ def block_user_on_violation():
             "message": f"Warning {current_attempt} of {allowed_attempts - 1}. Account will be blocked on attempt {allowed_attempts}."
         })
 
-    # Threshold reached — permanently block the account
-    db.users.update_many(
-        {"$or": [{"userId": user_id}, {"naxUnid": user_id}]},
-        {"$set": {
-            "isActive": False,
-            "statusReason": status_reason,
-            "statusUpdatedAt": datetime.utcnow(),
-            "blockedDueTo": f"Permanent security suspension: {current_attempt} unauthorized screenshot/screen capture attempts."
-        }}
-    )
+    # Threshold reached — permanently block the candidate account in db.users
+    block_description = f"Permanent security suspension: unauthorized {reason} attempt in {module_name} module (Attempt {current_attempt})."
+    
+    if user_doc:
+        db.users.update_one(
+            {"_id": user_doc["_id"]},
+            {"$set": {
+                "isActive": False,
+                "statusReason": status_reason,
+                "statusUpdatedAt": datetime.utcnow(),
+                "blockedDueTo": block_description,
+            }}
+        )
+    else:
+        db.users.update_many(
+            {"$or": [
+                {"userId": {"$regex": f"^{re.escape(canonical_user_id)}$", "$options": "i"}},
+                {"name": {"$regex": f"^{re.escape(canonical_user_id)}$", "$options": "i"}},
+            ]},
+            {"$set": {
+                "isActive": False,
+                "statusReason": status_reason,
+                "statusUpdatedAt": datetime.utcnow(),
+                "blockedDueTo": block_description,
+            }}
+        )
 
     # Invalidate active security sessions
     db.security_sessions.update_many(
-        {"userId": user_id},
+        {"userId": {"$regex": f"^{re.escape(canonical_user_id)}$", "$options": "i"}},
         {"$set": {"active": False, "invalidatedAt": datetime.utcnow()}}
     )
 
     # Immediately terminate any in-progress exam attempts
     db.attempts.update_many(
-        {"userId": user_id, "status": {"$ne": "submitted"}},
+        {"userId": {"$regex": f"^{re.escape(canonical_user_id)}$", "$options": "i"}, "status": {"$ne": "submitted"}},
         {"$set": {
             "status": "terminated_security_violation",
             "terminatedAt": datetime.utcnow(),
-            "terminationReason": f"Attempt {current_attempt}: Screenshot / screen capture violation detected during exam"
+            "terminationReason": f"Attempt {current_attempt}: Screenshot / screen capture violation detected in {module_name}"
         }}
     )
 
     audit_log(
         action=f"ACCOUNT_PERMANENTLY_BLOCKED_{reason.upper()}",
-        user_id=user_id,
-        details={"sessionId": session_id, "reason": reason, "statusReason": status_reason, "attempt": current_attempt},
+        user_id=canonical_user_id,
+        details={"sessionId": session_id, "module": module_name, "reason": reason, "statusReason": status_reason, "attempt": current_attempt},
         severity="critical"
     )
 
     return jsonify({
         "blocked": True,
-        "userId": user_id,
+        "userId": canonical_user_id,
         "reason": status_reason,
         "attempt": current_attempt,
         "message": "Account has been permanently blocked due to repeated security violations. Please contact your administrator to unblock."

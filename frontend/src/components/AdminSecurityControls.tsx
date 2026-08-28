@@ -68,6 +68,19 @@ const availableModules = [
     ),
   },
   {
+    id: "classes",
+    label: "Video Classes & Lectures",
+    badge: "Video DRM",
+    badgeType: "critical",
+    description: "Enforces anti-capture screen lock and anti-recording guards across in-screen video player and lectures.",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="23 7 16 12 23 17 23 7"/>
+        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+      </svg>
+    ),
+  },
+  {
     id: "dashboard",
     label: "Student Portal & Dashboard",
     badge: "General Portal",
@@ -116,7 +129,7 @@ const AdminSecurityControls: React.FC = () => {
     autoLogoutMinutes: 15,
     strictScreenshotLock: true,
     screenshotAllowedAttempts: 1,
-    screenshotProtectedModules: ["exam", "results", "documents"],
+    screenshotProtectedModules: ["exam", "results", "documents", "classes"],
     watermarkEnabled: true,
     watermarkIntervalSec: 8,
     allowCandidateDocumentView: true,
@@ -159,7 +172,7 @@ const AdminSecurityControls: React.FC = () => {
       if (res.settings) {
         setSettings({
           ...res.settings,
-          screenshotProtectedModules: res.settings.screenshotProtectedModules || ["exam", "results", "documents"],
+          screenshotProtectedModules: res.settings.screenshotProtectedModules || ["exam", "results", "documents", "classes"],
           retentionPolicy: {
             autoPurgeEnabled: Boolean(res.settings.retentionPolicy?.autoPurgeEnabled),
             auditLogsRetentionDays: res.settings.retentionPolicy?.auditLogsRetentionDays ?? 30,
@@ -200,7 +213,7 @@ const AdminSecurityControls: React.FC = () => {
 
   const toggleModule = (moduleId: string) => {
     setSettings((prev) => {
-      const current = prev.screenshotProtectedModules || ["exam", "results", "documents"];
+      const current = prev.screenshotProtectedModules || ["exam", "results", "documents", "classes"];
       const exists = current.includes(moduleId);
       let updated: string[];
       if (exists) {
