@@ -24,7 +24,14 @@ answerer_bp = Blueprint("answerer", __name__)
 def enforce_candidate_active_status():
     """
     Strict security gate: Block suspended/inactive candidates from accessing any answerer API.
+    NOTE: Submit endpoints are deliberately exempted — a candidate must always be able to
+    submit their exam regardless of account suspension to prevent data loss.
     """
+    # Always allow submit endpoints regardless of account status
+    from flask import request as _req
+    if "/submit" in _req.path or _req.path.endswith("/submit"):
+        return None
+
     user_id = (
         request.args.get("userId")
         or request.headers.get("X-User-Id")

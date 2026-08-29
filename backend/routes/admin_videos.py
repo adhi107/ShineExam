@@ -9,7 +9,12 @@ from config.db import get_db
 admin_videos_bp = Blueprint("admin_videos", __name__)
 answerer_videos_bp = Blueprint("answerer_videos", __name__)
 
-ALLOWED_VIDEO_EXTENSIONS = {"mp4", "webm", "ogg", "mov", "m4v", "mkv"}
+ALLOWED_VIDEO_EXTENSIONS = {
+    "mp4", "webm", "ogg", "mov", "m4v", "mkv",
+    "avi", "flv", "wmv", "3gp", "3g2", "ts", "m2ts",
+    "mpeg", "mpg", "f4v", "rm", "rmvb", "vob", "divx",
+    "asf", "mxf", "dv", "ogv"
+}
 UPLOAD_SUBDIR = "videos"
 
 
@@ -24,12 +29,59 @@ def allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_VIDEO_EXTENSIONS
 
 
+# Extended MIME type map for formats not in mimetypes stdlib
+EXTRA_MIME_TYPES = {
+    "mp4": "video/mp4",
+    "m4v": "video/x-m4v",
+    "webm": "video/webm",
+    "ogg": "video/ogg",
+    "ogv": "video/ogg",
+    "mov": "video/quicktime",
+    "mkv": "video/x-matroska",
+    "avi": "video/x-msvideo",
+    "flv": "video/x-flv",
+    "wmv": "video/x-ms-wmv",
+    "3gp": "video/3gpp",
+    "3g2": "video/3gpp2",
+    "ts": "video/mp2t",
+    "m2ts": "video/mp2t",
+    "mpeg": "video/mpeg",
+    "mpg": "video/mpeg",
+    "f4v": "video/x-f4v",
+    "rm": "application/vnd.rn-realmedia",
+    "rmvb": "application/vnd.rn-realmedia-vbr",
+    "vob": "video/dvd",
+    "divx": "video/divx",
+    "asf": "video/x-ms-asf",
+    "dv": "video/x-dv",
+    "mxf": "application/mxf",
+}
+
+
 def normalize_video_url(url: str) -> dict:
-    """Detect platform and construct embed/direct stream URL."""
+    """Detect platform and construct embed/direct stream URL.
+    Supports: YouTube (standard, shorts, live, playlist links), Vimeo, direct URLs.
+    """
     url = url.strip()
-    # YouTube check
+
+    # ── YouTube Shorts  (https://youtube.com/shorts/<id>)
+    yt_shorts_match = re.search(
+        r"youtube\.com\/shorts\/([A-Za-z0-9_-]{11})",
+        url,
+    )
+    if yt_shorts_match:
+        video_id = yt_shorts_match.group(1)
+        return {
+            "type": "link",
+            "provider": "youtube",
+            "videoId": video_id,
+            "embedUrl": f"https://www.youtube-nocookie.com/embed/{video_id}?rel=0&modestbranding=1&enablejsapi=1",
+            "originalUrl": url,
+        }
+
+    # ── YouTube standard / embed / youtu.be short links
     yt_match = re.search(
-        r"(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^\"&?\/\s]{11})",
+        r"(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|live)\/|.*[?&]v=)|youtu\.be\/)([A-Za-z0-9_-]{11})",
         url,
     )
     if yt_match:
@@ -42,8 +94,11 @@ def normalize_video_url(url: str) -> dict:
             "originalUrl": url,
         }
 
-    # Vimeo check
-    vimeo_match = re.search(r"vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/[^\/]*\/videos\/|album\/(?:\d+\/)?video\/|video\/|)(\d+)", url)
+    # ── Vimeo
+    vimeo_match = re.search(
+        r"vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/[^\/]*\/videos\/|album\/(?:\d+\/)?video\/|video\/|)(\d+)",
+        url,
+    )
     if vimeo_match:
         video_id = vimeo_match.group(1)
         return {
@@ -54,7 +109,7 @@ def normalize_video_url(url: str) -> dict:
             "originalUrl": url,
         }
 
-    # Direct video URL / Stream
+    # ── Direct video URL / Stream
     return {
         "type": "link",
         "provider": "direct",
@@ -328,9 +383,11 @@ def stream_video(filename: str):
         if not os.path.exists(video_path):
             return jsonify({"error": "Video file not found"}), 404
 
+        # Try stdlib mimetypes first, fall back to our extended map
+        ext = safe_filename.rsplit(".", 1)[-1].lower() if "." in safe_filename else ""
         mime, _ = mimetypes.guess_type(video_path)
         if not mime or not mime.startswith("video/"):
-            mime = "video/mp4"
+            mime = EXTRA_MIME_TYPES.get(ext, "video/mp4")
 
         # Flask conditional=True natively supports HTTP 206 Byte-Range streaming & video scrubbing
         response = send_file(

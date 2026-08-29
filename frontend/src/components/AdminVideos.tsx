@@ -97,6 +97,7 @@ const AdminVideos: React.FC = () => {
 
   // Toast
   const [toast, setToast] = useState<string>("");
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(""), 3500);
@@ -227,7 +228,7 @@ const AdminVideos: React.FC = () => {
         // Create video
         if (sourceType === "file") {
           if (!selectedFile) {
-            alert("Please select an MP4 or WebM video file to upload.");
+            alert("Please select a video file to upload.");
             setSubmitting(false);
             return;
           }
@@ -242,14 +243,35 @@ const AdminVideos: React.FC = () => {
           formData.append("file", selectedFile);
 
           const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:5000";
-          const res = await fetch(`${API_BASE}/api/admin/videos`, {
-            method: "POST",
-            body: formData,
+
+          // Use XMLHttpRequest for upload progress tracking
+          await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", `${API_BASE}/api/admin/videos`);
+            xhr.upload.onprogress = (e) => {
+              if (e.lengthComputable) {
+                setUploadProgress(Math.round((e.loaded / e.total) * 100));
+              }
+            };
+            xhr.onload = () => {
+              setUploadProgress(0);
+              if (xhr.status >= 200 && xhr.status < 300) {
+                resolve();
+              } else {
+                try {
+                  const errData = JSON.parse(xhr.responseText);
+                  reject(new Error(errData.error || "Failed to upload video file."));
+                } catch {
+                  reject(new Error("Failed to upload video file."));
+                }
+              }
+            };
+            xhr.onerror = () => {
+              setUploadProgress(0);
+              reject(new Error("Network error during upload."));
+            };
+            xhr.send(formData);
           });
-          if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            throw new Error(errData.error || "Failed to upload video file.");
-          }
         } else {
           if (!videoUrl.trim()) {
             alert("Please enter a valid YouTube, Vimeo, or video stream link.");
@@ -563,31 +585,31 @@ const AdminVideos: React.FC = () => {
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                     </svg>
-                    Upload Video File (MP4, WebM)
+                    Upload Video File (MP4, MKV, AVI &amp; more)
                   </button>
                 </div>
               )}
 
               {/* Source Input */}
               {sourceType === "link" ? (
-                <div className="form-group">
+                  <div className="form-group">
                   <label>Video URL / Stream Link *</label>
                   <input
                     type="url"
-                    placeholder="https://www.youtube.com/watch?v=... or https://vimeo.com/... or https://domain.com/video.mp4"
+                    placeholder="YouTube, YouTube Shorts, Vimeo, or direct video URL"
                     value={videoUrl}
                     onChange={(e) => setVideoUrl(e.target.value)}
                     required
                   />
-                  <small className="form-hint">Supports YouTube, Vimeo, direct MP4 URLs, and cloud video streams.</small>
+                  <small className="form-hint">Supports: YouTube (watch, shorts, live), Vimeo, direct MP4/WebM/MKV URLs, cloud video streams.</small>
                 </div>
               ) : (
                 <div className="form-group">
-                  <label>Upload Video File (MP4, WebM) *</label>
+                  <label>Upload Video File *</label>
                   <div className="file-upload-box">
                     <input
                       type="file"
-                      accept="video/mp4,video/webm,video/ogg,video/quicktime"
+                      accept="video/mp4,video/webm,video/ogg,video/quicktime,video/x-matroska,video/x-msvideo,video/x-flv,video/x-ms-wmv,video/3gpp,video/mpeg,.mp4,.webm,.ogg,.mov,.mkv,.avi,.flv,.wmv,.3gp,.m4v,.ts,.mpeg,.mpg"
                       onChange={(e) => {
                         if (e.target.files && e.target.files[0]) {
                           setSelectedFile(e.target.files[0]);
@@ -600,7 +622,13 @@ const AdminVideos: React.FC = () => {
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                       </svg>
                       <strong>{selectedFile ? selectedFile.name : "Click or drag video file here"}</strong>
-                      <small>{selectedFile ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB` : "Allowed formats: MP4, WebM, MOV, OGG"}</small>
+                      <small>{selectedFile ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB` : "MP4, WebM, MKV, MOV, AVI, FLV, WMV, 3GP, MPEG and more"}</small>
+                      {uploadProgress > 0 && (
+                        <div className="upload-progress-bar">
+                          <div className="upload-progress-fill" style={{ width: `${uploadProgress}%` }} />
+                          <span>{uploadProgress}%</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

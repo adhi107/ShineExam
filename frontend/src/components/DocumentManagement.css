@@ -884,3 +884,158 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Mobile Responsive — Document & Announcement Management
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 960px) {
+  /* Page wrapper */
+  .document-admin {
+    padding: 14px 14px 48px !important;
+  }
+
+  .document-admin h1 {
+    font-size: 22px !important;
+  }
+
+  /* Upload card */
+  .document-upload-card {
+    padding: 18px 16px !important;
+    border-radius: 14px !important;
+  }
+
+  .composer-heading h2 {
+    font-size: 18px !important;
+  }
+
+  /* Form fields grid — single column */
+  .form-fields-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  /* File drop zone */
+  .file-drop-zone {
+    min-height: 100px !important;
+    padding: 20px 16px !important;
+  }
+
+  .drop-zone-inner {
+    gap: 8px !important;
+  }
+
+  /* Stats / summary bar */
+  .doc-stats-row {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .doc-stat-card {
+    padding: 14px !important;
+    border-radius: 12px !important;
+  }
+
+  .doc-stat-val {
+    font-size: 26px !important;
+  }
+
+  /* Toolbar */
+  .doc-toolbar {
+    flex-direction: column !important;
+    gap: 10px !important;
+    align-items: stretch !important;
+  }
+
+  .doc-search-wrap {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .doc-filter-group {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .doc-filter-select {
+    width: 100% !important;
+  }
+
+  /* Document list items */
+  .doc-list-item {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    padding: 14px 12px !important;
+  }
+
+  .doc-item-info {
+    width: 100% !important;
+  }
+
+  .doc-item-actions {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+  }
+
+  /* Assign modal full-width */
+  .assign-students-modal {
+    width: 96vw !important;
+    max-width: 96vw !important;
+  }
+
+  /* Announcement form */
+  .announcement-form {
+    padding: 0 !important;
+  }
+
+  .attachment-toggle-row {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .attachment-toggle-btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .announcement-image-picker {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  /* Announcement list cards */
+  .announcement-card {
+    padding: 14px 12px !important;
+  }
+
+  .announcement-card-header {
+    flex-direction: column !important;
+    gap: 8px !important;
+    align-items: flex-start !important;
+  }
+
+  .announcement-card-actions {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+  }
+
+  /* Assign modal card list — tighter */
+  .student-assign-list {
+    max-height: 220px !important;
+  }
+}
+
+@media (min-width: 600px) and (max-width: 960px) {
+  .doc-stats-row {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+
+  .form-fields-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}

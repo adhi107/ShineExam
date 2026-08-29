@@ -219,7 +219,16 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
       setTestStep("submitted");
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Failed to submit test.");
+      const msg = err.message || "Failed to submit test.";
+      // Don't show raw server error messages — show a friendly version
+      if (msg.toLowerCase().includes("internal server error") || msg.toLowerCase().includes("500")) {
+        alert("Submission encountered a server issue. Please try again or contact support. Your answers have been saved.");
+      } else if (msg.toLowerCase().includes("already submitted")) {
+        // Already submitted — treat as success
+        setTestStep("submitted");
+      } else {
+        alert(msg);
+      }
     } finally {
       setSubmitting(false);
     }

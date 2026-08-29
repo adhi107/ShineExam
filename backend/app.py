@@ -32,6 +32,9 @@ def create_app() -> Flask:
     origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
     CORS(app, resources={r"/*": {"origins": origins}}, supports_credentials=True)
 
+    # Allow large video uploads (up to 2 GB)
+    app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024
+
     @app.get("/")
     def health():
         return jsonify({"status": "ok", "service": "exam-portal-backend"})
@@ -69,6 +72,8 @@ def create_app() -> Flask:
     def global_candidate_security_gate():
         from flask import request
         path = request.path
+
+        # Always allow these paths without account checks
         if (
             path.startswith("/api/admin")
             or path.startswith("/api/public")
@@ -77,6 +82,11 @@ def create_app() -> Flask:
             or path == "/api/auth/login"
             or path == "/api/security/violation/block"
         ):
+            return None
+
+        # CRITICAL: Never block exam submission — candidate must always be able to submit
+        # regardless of account suspension status. This prevents lost exam data.
+        if "/submit" in path or path.endswith("/submit"):
             return None
 
         user_id = (
@@ -118,7 +128,13 @@ def create_app() -> Flask:
     @app.errorhandler(500)
     def server_error(e):
         # Return safe JSON errors without exposing backend stack traces.
-        return jsonify({"error": "Internal server error", "details": str(e)}), 500
+        import traceback
+        print("[500 ERROR]", traceback.format_exc())
+        return jsonify({"error": "Internal server error"}), 500
+
+    @app.errorhandler(413)
+    def request_entity_too_large(_):
+        return jsonify({"error": "File too large. Maximum upload size is 2 GB."}), 413
 
     return app
 

@@ -789,12 +789,152 @@
   box-shadow: none;
 }
 
-@media (max-width: 900px) {
-  .category-summary,
-  .category-grid {
-    grid-template-columns: 1fr;
+/* ═══════════════════════════════════════════════════════════
+   Mobile Responsive — Exam Category Management
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 960px) {
+  .category-admin-page {
+    padding: 14px 14px 48px !important;
   }
-  .add-sub-inputs {
-    grid-template-columns: 1fr;
+
+  .category-page-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    margin-bottom: 16px !important;
+  }
+
+  .category-page-header h1 {
+    font-size: 22px !important;
+  }
+
+  .add-category-btn {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 11px 0 !important;
+  }
+
+  /* Summary stat cards — 1 column on small, 3 col on tablet */
+  .category-summary {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+    margin-bottom: 18px !important;
+  }
+
+  .category-summary > div {
+    padding: 16px 18px 14px !important;
+    border-radius: 16px !important;
+  }
+
+  .category-summary strong {
+    font-size: 28px !important;
+  }
+
+  /* Category cards grid — single column */
+  .category-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  /* Subcategory row — stack on mobile */
+  .subcategory-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+    padding: 12px 8px !important;
+  }
+
+  .subcategory-main-info {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .sub-row-actions {
+    width: 100% !important;
+    justify-content: flex-end !important;
+  }
+
+  /* Add subcategory form */
+  .add-sub-inputs-top {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .add-sub-name-input {
+    width: 100% !important;
+  }
+
+  .add-sub-submit-btn {
+    width: 100% !important;
+  }
+
+  .add-sub-options-row {
+    gap: 8px !important;
+  }
+
+  .card-stage-pills-row {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+
+  /* Modal full-screen on mobile */
+  .category-modal-backdrop {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+
+  .category-modal {
+    width: 100vw !important;
+    max-height: 90dvh !important;
+    border-radius: 20px 20px 0 0 !important;
+    overflow-y: auto !important;
+  }
+
+  .category-modal-header {
+    padding: 20px 18px 16px !important;
+  }
+
+  .category-modal-header h2 {
+    font-size: 18px !important;
+  }
+
+  .category-modal-body {
+    padding: 16px 18px !important;
+  }
+
+  .modal-sub-row {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .modal-sub-name-input {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .modal-sub-preset-select {
+    width: 100% !important;
+  }
+
+  .remove-sub-row-btn {
+    width: 100% !important;
+  }
+
+  .modal-cancel-btn,
+  .modal-save-btn {
+    flex: 1 !important;
+  }
+
+  .category-modal-footer {
+    padding: 14px 18px !important;
+    gap: 10px !important;
+  }
+}
+
+@media (min-width: 600px) and (max-width: 960px) {
+  .category-summary {
+    grid-template-columns: repeat(3, 1fr) !important;
   }
 }
