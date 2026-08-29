@@ -66,18 +66,20 @@ def login():
 
     if role == "answerer" and not user.get("isActive", True):
         status_reason = user.get("statusReason", "")
-        if status_reason == "security_violation_screenshot":
-            error_msg = "Your account has been permanently blocked due to unauthorized screenshot activity. Please contact your administrator to unblock your account."
-        elif status_reason == "security_violation_recording":
-            error_msg = "Your account has been permanently blocked due to screen recording/sharing violations. Please contact your administrator to unblock your account."
+        # Auto-unblock if blocked solely due to screenshot violation
+        if status_reason in ("security_violation_screenshot", "security_violation_recording"):
+            db.users.update_one(
+                {"_id": user["_id"]},
+                {"$set": {"isActive": True, "statusReason": "active"}}
+            )
         elif status_reason == "validity_expired":
             error_msg = "Your account validity has expired. Please contact your administrator."
+            audit_log("LOGIN_FAILED", user_id=userId, details={"reason": "account_blocked", "statusReason": status_reason}, severity="warning")
+            return jsonify({"error": error_msg}), 403
         else:
             error_msg = "Your account is deactivated. Please contact your administrator to regain access."
-            
-        audit_log("LOGIN_FAILED", user_id=userId,
-                  details={"reason": "account_blocked", "statusReason": status_reason}, severity="warning")
-        return jsonify({"error": error_msg}), 403
+            audit_log("LOGIN_FAILED", user_id=userId, details={"reason": "account_blocked", "statusReason": status_reason}, severity="warning")
+            return jsonify({"error": error_msg}), 403
 
 
     db.users.update_one({"_id": user["_id"]}, {"$set": {"lastLoginAt": datetime.utcnow()}})

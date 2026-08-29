@@ -1,6 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { API_BASE, apiGet } from "../services/api";
-import { normalizeSearchText } from "../utils/filterUtils";
 import "./AuditLogs.css";
 
 
@@ -85,6 +84,7 @@ const AuditLogs: React.FC = () => {
 
   useEffect(() => {
     loadLogs(1, pagination.limit);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [severityFilter, categoryFilter, startDate, endDate]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {

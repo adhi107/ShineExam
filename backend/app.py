@@ -71,6 +71,10 @@ def create_app() -> Flask:
     @app.before_request
     def global_candidate_security_gate():
         from flask import request
+        # ALWAYS allow CORS preflight OPTIONS requests
+        if request.method == "OPTIONS":
+            return None
+
         path = request.path
 
         # Always allow these paths without account checks
@@ -84,8 +88,7 @@ def create_app() -> Flask:
         ):
             return None
 
-        # CRITICAL: Never block exam submission — candidate must always be able to submit
-        # regardless of account suspension status. This prevents lost exam data.
+        # CRITICAL: Never block exam submission
         if "/submit" in path or path.endswith("/submit"):
             return None
 
@@ -109,6 +112,14 @@ def create_app() -> Flask:
         })
         if user and not user.get("isActive", True):
             status_reason = user.get("statusReason", "")
+            # Auto-unblock if blocked solely due to screenshot violation during tests
+            if status_reason in ("security_violation_screenshot", "security_violation_recording"):
+                db.users.update_one(
+                    {"_id": user["_id"]},
+                    {"$set": {"isActive": True, "statusReason": "active"}}
+                )
+                return None
+
             return jsonify({
                 "error": "Your account is suspended. Contact the admin for unblock.",
                 "blocked": True,
@@ -142,4 +153,5 @@ app = create_app()
 
 if __name__ == "__main__":
     app = create_app()
-    app.run(host="0.0.0.0", port=settings.PORT, debug=True)
+    # On Windows, use_reloader=False prevents WinError 10038 socket collision
+    app.run(host="0.0.0.0", port=settings.PORT, debug=True, threaded=True, use_reloader=False)

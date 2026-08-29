@@ -155,6 +155,7 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
     apiGet<{ categories: ExamCategory[] }>("/admin/exam-categories")
       .then(res => setCategories(res.categories || []))
       .catch(console.error);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [testId]);
 
   const selectedCategory = categories.find(item => item.id === categoryId);

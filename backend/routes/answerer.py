@@ -25,9 +25,12 @@ answerer_bp = Blueprint("answerer", __name__)
 def enforce_candidate_active_status():
     """
     Strict security gate: Block suspended/inactive candidates from accessing any answerer API.
-    NOTE: Submit endpoints are deliberately exempted — a candidate must always be able to
-    submit their exam regardless of account suspension to prevent data loss.
+    NOTE: Submit endpoints and CORS preflights are deliberately exempted.
     """
+    # Always allow CORS preflight OPTIONS requests
+    if request.method == "OPTIONS":
+        return None
+
     # Always allow submit endpoints regardless of account status
     from flask import request as _req
     if "/submit" in _req.path or _req.path.endswith("/submit"):
@@ -53,6 +56,14 @@ def enforce_candidate_active_status():
     })
     if user and not user.get("isActive", True):
         status_reason = user.get("statusReason", "")
+        # Auto-unblock if blocked solely due to screenshot violation
+        if status_reason in ("security_violation_screenshot", "security_violation_recording"):
+            db.users.update_one(
+                {"_id": user["_id"]},
+                {"$set": {"isActive": True, "statusReason": "active"}}
+            )
+            return None
+
         if status_reason == "security_violation_screenshot":
             msg = "Your account is suspended due to unauthorized screenshot activity. Contact the admin for unblock."
         elif status_reason == "security_violation_recording":
@@ -1102,7 +1113,6 @@ def submit_attempt(attempt_id):
     question_times = payload.get("questionTimes") if isinstance(payload.get("questionTimes"), dict) else (attempt.get("questionTimes") or {})
 
     # Reject duplicate submissions for the same attempt.
-    if attempt.get("status") == "submitted":
     if attempt.get("status") == "submitted":
         return jsonify({"error": "Attempt already submitted"}), 409
 

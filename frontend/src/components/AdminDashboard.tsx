@@ -230,7 +230,7 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
       />
 
       <aside className={`shine-admin-sidebar ${sidebarCollapsed ? "collapsed" : ""} ${mobileOpen ? "mobile-open" : ""}`}>
-        <div className="admin-brand">
+        <div className="admin-brand" onClick={toggleSidebar} style={{ cursor: "pointer" }} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
           <ShineLogo compact={sidebarCollapsed} inverse={true} />
           {!sidebarCollapsed && <span>ADMIN CONSOLE</span>}
         </div>

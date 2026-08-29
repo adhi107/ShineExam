@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { apiGet, apiPut, apiPost } from "../services/api";
-import ConfirmDialog from "./ConfirmDialog";
 import "./AdminSecurityControls.css";
 
 interface RetentionPolicy {
@@ -92,35 +91,6 @@ const availableModules = [
       </svg>
     ),
   },
-];
-
-// Timeline options for retention
-const dayTimelineOptions = [
-  { value: 7, label: "7 Days", sub: "Strict cleanup" },
-  { value: 15, label: "15 Days", sub: "Bi-weekly purge" },
-  { value: 30, label: "30 Days", sub: "Monthly cycle" },
-  { value: 60, label: "60 Days", sub: "2 Months" },
-  { value: 90, label: "90 Days", sub: "Quarterly" },
-  { value: 180, label: "180 Days", sub: "Half-yearly" },
-  { value: 365, label: "1 Year", sub: "Annual archive" },
-  { value: -1, label: "Never", sub: "Keep indefinitely" },
-];
-
-const resultsTimelineOptions = [
-  { value: 30, label: "30 Days", sub: "Mock tests" },
-  { value: 90, label: "90 Days", sub: "Quarterly" },
-  { value: 180, label: "180 Days", sub: "Semester" },
-  { value: 365, label: "1 Year", sub: "Academic year" },
-  { value: 730, label: "2 Years", sub: "Accreditation" },
-  { value: -1, label: "Never", sub: "Permanent transcript" },
-];
-
-const sessionTimelineOptions = [
-  { value: 24, label: "24 Hours", sub: "Daily cleanup" },
-  { value: 48, label: "48 Hours", sub: "Standard" },
-  { value: 72, label: "72 Hours", sub: "3 Days" },
-  { value: 168, label: "7 Days", sub: "Weekly purge" },
-  { value: 720, label: "30 Days", sub: "Monthly purge" },
 ];
 
 const AdminSecurityControls: React.FC = () => {

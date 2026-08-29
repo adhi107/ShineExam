@@ -150,7 +150,12 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
 
     try {
       const result = await callViolationBlock(reason);
-      if (result && result.warned) {
+      if (result && result.blocked) {
+        setIsPermanentlySuspended(true);
+        setSuspensionReason(reason);
+        sessionStorage.setItem('account_permanently_blocked', 'true');
+        setWarningBanner(null);
+      } else if (result && result.warned) {
         setWarningBanner({
           visible: true,
           attempt: result.attempt,

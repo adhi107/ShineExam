@@ -134,6 +134,7 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
       const firstIdx = questions.findIndex((q) => q.section === secName);
       if (firstIdx >= 0) setCurrentQuestionIndex(firstIdx);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSectional]);
 
   const handleNextSection = () => {
@@ -155,6 +156,7 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (testStep !== "exam") return;
     const timer = setInterval(() => {
@@ -173,6 +175,7 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
       });
     }, 1000);
     return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [testStep, isSectional, currentSectionIndex]);
 
   const handleSelectQuestion = (index: number) => {
@@ -200,7 +203,7 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
     );
   };
 
-  const [result, setResult] = useState<ResultPayload | null>(null);
+  const [, setResult] = useState<ResultPayload | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [mobilePaletteOpen, setMobilePaletteOpen] = useState(false);
 

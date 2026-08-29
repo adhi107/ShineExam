@@ -3,7 +3,7 @@ import { apiGet } from "../services/api";
 import { normalizeSearchText } from "../utils/filterUtils";
 import ValueHelpField from "./ValueHelpField";
 import "./TestResults.css";
-import { SensitiveContent, ScreenVisibilityGuard } from "../security";
+import { SensitiveContent } from "../security";
 
 interface TestSummary { id: string; name: string; duration: number; questions: number; totalAttempts: number; avgScore: number; passRate: number }
 interface CandidateResult { id: string; userId: string; userName: string; percentage: number; scoredMarks: number; totalMarks: number; passed: boolean; submittedAt: string; timeSpentSec: number; percentile?: number }
