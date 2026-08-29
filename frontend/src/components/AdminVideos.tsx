@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { apiGet, apiPost, apiPut, apiDelete } from "../services/api";
+import { apiGet, apiPost, apiPut, apiDelete, buildUrl, getMediaUrl, getAuthHeaders } from "../services/api";
 import "./AdminVideos.css";
 
 interface VideoItem {
@@ -36,16 +36,6 @@ interface StudentUser {
   email?: string;
   isActive?: boolean;
 }
-
-const getMediaUrl = (url?: string): string => {
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:") || url.startsWith("data:")) {
-    return url;
-  }
-  const rawBase = (process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:5000").replace(/\/+$/, "").replace(/\/api$/, "");
-  const cleanPath = url.startsWith("/") ? url : `/${url}`;
-  return `${rawBase}${cleanPath}`;
-};
 
 const CATEGORY_OPTIONS = [
   "General",
@@ -242,12 +232,13 @@ const AdminVideos: React.FC = () => {
           formData.append("tags", tags);
           formData.append("file", selectedFile);
 
-          const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:5000";
-
-          // Use XMLHttpRequest for upload progress tracking
+          const authHeaders = getAuthHeaders();
           await new Promise<void>((resolve, reject) => {
             const xhr = new XMLHttpRequest();
-            xhr.open("POST", `${API_BASE}/api/admin/videos`);
+            xhr.open("POST", buildUrl("/admin/videos"));
+            Object.entries(authHeaders).forEach(([k, v]) => {
+              xhr.setRequestHeader(k, v);
+            });
             xhr.upload.onprogress = (e) => {
               if (e.lengthComputable) {
                 setUploadProgress(Math.round((e.loaded / e.total) * 100));
@@ -268,7 +259,7 @@ const AdminVideos: React.FC = () => {
             };
             xhr.onerror = () => {
               setUploadProgress(0);
-              reject(new Error("Network error during upload."));
+              reject(new Error("Network error during video upload. Please check your connection."));
             };
             xhr.send(formData);
           });

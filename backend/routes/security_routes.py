@@ -270,8 +270,8 @@ def block_user_on_violation():
         "recordedAt": datetime.utcnow(),
     })
 
-    # If strict lock is disabled, just warn — never block
-    if not strict_lock:
+    # If strict lock is disabled or if this is during an exam/results, just warn — never block the account
+    if not strict_lock or module_name in ["exam", "results"]:
         audit_log(
             action=f"VIOLATION_WARNED_{reason.upper()}",
             user_id=canonical_user_id,
@@ -284,7 +284,7 @@ def block_user_on_violation():
             "attempt": current_attempt,
             "allowedAttempts": allowed_attempts,
             "remainingAttempts": max(0, allowed_attempts - current_attempt),
-            "message": f"Screenshot attempt {current_attempt} recorded in {module_name}. Strict lock is disabled."
+            "message": f"Violation attempt {current_attempt} recorded in {module_name}."
         })
 
     # Check if threshold is exceeded

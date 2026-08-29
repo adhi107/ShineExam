@@ -1,16 +1,41 @@
-const rawBase = (process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:5000").replace(/\/+$/, "");
-export const API_BASE = rawBase.endsWith("/api") ? rawBase : `${rawBase}/api`;
-
-export function buildUrl(path: string): string {
-  const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  if (cleanPath.startsWith("/api/")) {
-    const rootBase = rawBase.replace(/\/api$/, "");
-    return `${rootBase}${cleanPath}`;
+export function getApiBase(): string {
+  if (process.env.REACT_APP_API_BASE_URL) {
+    return process.env.REACT_APP_API_BASE_URL.replace(/\/+$/, "");
   }
-  return `${API_BASE}${cleanPath}`;
+  if (typeof window !== "undefined" && window.location) {
+    const { hostname, origin } = window.location;
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return "http://127.0.0.1:5000";
+    }
+    return origin;
+  }
+  return "http://127.0.0.1:5000";
 }
 
-function getAuthHeaders(): Record<string, string> {
+export const API_BASE = getApiBase().endsWith("/api") ? getApiBase() : `${getApiBase()}/api`;
+
+export function buildUrl(path: string): string {
+  const base = getApiBase();
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  if (cleanPath.startsWith("/api/")) {
+    const rootBase = base.replace(/\/api$/, "");
+    return `${rootBase}${cleanPath}`;
+  }
+  const apiRoot = base.endsWith("/api") ? base : `${base}/api`;
+  return `${apiRoot}${cleanPath}`;
+}
+
+export function getMediaUrl(url?: string): string {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:") || url.startsWith("data:")) {
+    return url;
+  }
+  const rootBase = getApiBase().replace(/\/api$/, "");
+  const cleanPath = url.startsWith("/") ? url : `/${url}`;
+  return `${rootBase}${cleanPath}`;
+}
+
+export function getAuthHeaders(): Record<string, string> {
   const userId = sessionStorage.getItem("userId") || "";
   const role = sessionStorage.getItem("role") || "";
   const headers: Record<string, string> = {};

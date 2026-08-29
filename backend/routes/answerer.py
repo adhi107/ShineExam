@@ -17,6 +17,7 @@ from utils.json import to_jsonable
 from routes.admin_courses import _ensure_default_course_materials
 from utils.validators import require_fields
 from services.scoring import compute_result
+from utils.security import audit_log
 answerer_bp = Blueprint("answerer", __name__)
 
 
@@ -1102,96 +1103,102 @@ def submit_attempt(attempt_id):
 
     # Reject duplicate submissions for the same attempt.
     if attempt.get("status") == "submitted":
+    if attempt.get("status") == "submitted":
         return jsonify({"error": "Attempt already submitted"}), 409
 
-    exam_id = attempt["examId"]
-    exam = db.exams.find_one({"_id": exam_id})
-    if not exam:
-        return jsonify({"error": "Exam not found"}), 404
-    passing_percentage = float(exam.get("passingPercentage", 40))
+    try:
+        exam_id = attempt["examId"]
+        exam = db.exams.find_one({"$or": [{"_id": exam_id}, {"_id": ObjectId(exam_id) if isinstance(exam_id, str) and len(exam_id) == 24 else None}]})
+        if not exam:
+            exam = db.exams.find_one({"_id": exam_id})
+        if not exam:
+            return jsonify({"error": "Exam not found"}), 404
+        passing_percentage = float(exam.get("passingPercentage", 40))
 
-    questions = list(db.questions.find({"examId": exam_id}))
+        questions = list(db.questions.find({"$or": [{"examId": exam_id}, {"examId": str(exam_id)}, {"examId": ObjectId(exam_id) if isinstance(exam_id, str) and len(exam_id) == 24 else None}]}))
 
-    computed = compute_result(questions, answers, passing_percentage)
-    section_wise = {
-        item["section"]: {
-            "total": item["totalMarks"],
-            "scored": item["scoredMarks"],
+        computed = compute_result(questions, answers, passing_percentage)
+        section_wise = {
+            item["section"]: {
+                "total": item["totalMarks"],
+                "scored": item["scoredMarks"],
+            }
+            for item in computed.get("sectionBreakdown", [])
         }
-        for item in computed["sectionBreakdown"]
-    }
-    question_review = [
-        {
-            "questionId": item["questionId"],
-            "question": item.get("question"),
-            "context": item.get("context", ""),
-            "contextType": item.get("contextType", ""),
-            "type": item.get("type"),
-            "options": item.get("options", []),
-            "isCorrect": item["isCorrect"],
-            "userAnswer": item["userAnswer"],
-            "correctAnswer": item["correctAnswer"],
-            "marks": item["marks"],
-            "section": item["section"],
-            "timeSpentSec": max(0, int(question_times.get(str(item["questionId"]), 0) or 0)),
-        }
-        for item in computed["review"]
-    ]
+        question_review = [
+            {
+                "questionId": item["questionId"],
+                "question": item.get("question"),
+                "context": item.get("context", ""),
+                "contextType": item.get("contextType", ""),
+                "type": item.get("type"),
+                "options": item.get("options", []),
+                "isCorrect": item["isCorrect"],
+                "userAnswer": item["userAnswer"],
+                "correctAnswer": item["correctAnswer"],
+                "marks": item["marks"],
+                "section": item["section"],
+                "timeSpentSec": max(0, int(question_times.get(str(item["questionId"]), 0) or 0)),
+            }
+            for item in computed.get("review", [])
+        ]
 
-    result_doc = {
-        "attemptId": attempt_id,
-        "examId": exam_id,
-        "userId": attempt["userId"],
-        "totalMarks": computed["totalMarks"],
-        "scoredMarks": computed["scoredMarks"],
-        "percentage": computed["percentage"],
-        "passed": computed["passed"],
-        "percentile": 0,
-        "sectionWise": section_wise,
-        "questionReview": question_review,
-        "submittedAt": datetime.utcnow(),
-        "timeSpentSec": time_spent,
-        "questionTimes": question_times,
-    }
-
-    # Store the completed test result in MongoDB.
-    insert_result = db.results.insert_one(result_doc)
-
-    # Mark the attempt as submitted after the result is stored.
-    db.attempts.update_one(
-        {"_id": ObjectId(attempt_id)},
-        {"$set": {"status": "submitted"}}
-    )
-
-    # Audit log the exam submission
-    audit_log(
-        "EXAM_SUBMITTED",
-        user_id=str(result_doc.get("userId", user_id)),
-        details={
-            "attemptId": attempt_id,
+        result_doc = {
+            "attemptId": str(attempt_id),
             "examId": str(exam_id),
-            "percentage": computed["percentage"],
-            "passed": computed["passed"],
-        },
-    )
+            "userId": str(attempt.get("userId", user_id)),
+            "totalMarks": computed.get("totalMarks", 0),
+            "scoredMarks": computed.get("scoredMarks", 0),
+            "percentage": computed.get("percentage", 0),
+            "passed": computed.get("passed", False),
+            "percentile": 0,
+            "sectionWise": section_wise,
+            "questionReview": question_review,
+            "submittedAt": datetime.utcnow(),
+            "timeSpentSec": time_spent,
+            "questionTimes": question_times,
+        }
 
-    # Return JSON-safe identifiers and the candidate score summary.
-    response_data = {
-        "attemptId": str(result_doc["attemptId"]),
-        "examId": str(result_doc["examId"]),
-        "userId": str(result_doc["userId"]),
-        "totalMarks": result_doc["totalMarks"],
-        "scoredMarks": result_doc["scoredMarks"],
-        "percentage": result_doc["percentage"],
-        "passed": result_doc["passed"],
-        "percentile": result_doc["percentile"],
-        "sectionWise": result_doc["sectionWise"],
-        # Keep detailed review in Reports and hide correct answers from the submission response.
-        "questionReview": [],
-    }
+        # Store the completed test result in MongoDB.
+        insert_result = db.results.insert_one(result_doc)
 
-    return jsonify({"result": response_data, **response_data})
+        # Mark the attempt as submitted after the result is stored.
+        db.attempts.update_one(
+            {"_id": ObjectId(attempt_id)},
+            {"$set": {"status": "submitted"}}
+        )
 
+        # Audit log the exam submission
+        audit_log(
+            "EXAM_SUBMITTED",
+            user_id=str(result_doc.get("userId", user_id)),
+            details={
+                "attemptId": str(attempt_id),
+                "examId": str(exam_id),
+                "percentage": computed.get("percentage", 0),
+                "passed": computed.get("passed", False),
+            },
+        )
+
+        # Return JSON-safe identifiers and the candidate score summary.
+        response_data = {
+            "attemptId": str(result_doc["attemptId"]),
+            "examId": str(result_doc["examId"]),
+            "userId": str(result_doc["userId"]),
+            "totalMarks": result_doc["totalMarks"],
+            "scoredMarks": result_doc["scoredMarks"],
+            "percentage": result_doc["percentage"],
+            "passed": result_doc["passed"],
+            "percentile": result_doc["percentile"],
+            "sectionWise": result_doc["sectionWise"],
+            "questionReview": [],
+        }
+
+        return jsonify({"result": response_data, **response_data})
+    except Exception as ex:
+        import traceback
+        print("[SUBMIT_ATTEMPT_ERROR]", traceback.format_exc())
+        return jsonify({"error": f"Failed to calculate exam result: {str(ex)}"}), 500
 
 
 @answerer_bp.route("/attempts/submit", methods=["POST"])

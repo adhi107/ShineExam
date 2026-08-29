@@ -8,6 +8,7 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { buildUrl } from '../services/api';
 
 export interface SecurityContextValue {
   userId: string;
@@ -65,8 +66,7 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Try to fetch a server-issued session token; fall back to local UUID.
     let sid = generateLocalSessionId();
     try {
-      const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      const resp = await fetch(`${apiBase}/security/session`, {
+      const resp = await fetch(buildUrl('/security/session'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: uid }),

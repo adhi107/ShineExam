@@ -960,73 +960,82 @@
     width: 100% !important;
   }
 
-  /* Document list items */
-  .doc-list-item {
-    flex-direction: column !important;
+  /* Document & Announcement list cards on mobile */
+  .document-grid article {
+    display: flex !important;
+    flex-wrap: wrap !important;
     align-items: flex-start !important;
     gap: 12px !important;
-    padding: 14px 12px !important;
+    padding: 14px 14px 12px !important;
+    border-radius: 14px !important;
   }
 
-  .doc-item-info {
-    width: 100% !important;
+  .document-type {
+    width: 38px !important;
+    height: 38px !important;
+    font-size: 10px !important;
+    flex-shrink: 0 !important;
   }
 
-  .doc-item-actions {
-    width: 100% !important;
-    display: flex !important;
-    justify-content: flex-end !important;
-    gap: 8px !important;
+  .document-copy {
+    flex: 1 1 calc(100% - 54px) !important;
+    min-width: 0 !important;
+  }
+
+  .document-copy h3 {
+    font-size: 15px !important;
+    margin: 0 0 3px !important;
+    word-break: break-word !important;
+  }
+
+  .document-copy p {
+    font-size: 12px !important;
+    margin: 0 0 3px !important;
+    word-break: break-word !important;
+  }
+
+  .document-copy span {
+    font-size: 11px !important;
+    word-break: break-all !important;
+  }
+
+  .document-assigned {
+    flex: 1 1 auto !important;
+    text-align: left !important;
+    padding: 4px 10px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    background: #f1f5f9;
+    border-radius: 6px;
+    height: 32px;
+    box-sizing: border-box;
+  }
+
+  .document-assigned strong {
+    font-size: 13px !important;
+    display: inline !important;
+  }
+
+  .document-assigned span {
+    font-size: 11px !important;
+    display: inline !important;
+  }
+
+  .document-grid article > button {
+    flex: 0 0 auto !important;
+    height: 32px !important;
+    padding: 0 14px !important;
+    font-size: 12px !important;
+    border-radius: 8px !important;
+    margin: 0 !important;
   }
 
   /* Assign modal full-width */
-  .assign-students-modal {
+  .assign-students-modal,
+  .document-modal {
     width: 96vw !important;
     max-width: 96vw !important;
-  }
-
-  /* Announcement form */
-  .announcement-form {
-    padding: 0 !important;
-  }
-
-  .attachment-toggle-row {
-    flex-direction: column !important;
-    gap: 8px !important;
-  }
-
-  .attachment-toggle-btn {
-    width: 100% !important;
-    justify-content: center !important;
-  }
-
-  .announcement-image-picker {
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 8px !important;
-  }
-
-  /* Announcement list cards */
-  .announcement-card {
-    padding: 14px 12px !important;
-  }
-
-  .announcement-card-header {
-    flex-direction: column !important;
-    gap: 8px !important;
-    align-items: flex-start !important;
-  }
-
-  .announcement-card-actions {
-    width: 100% !important;
-    display: flex !important;
-    justify-content: flex-end !important;
-    gap: 8px !important;
-  }
-
-  /* Assign modal card list — tighter */
-  .student-assign-list {
-    max-height: 220px !important;
   }
 }
 

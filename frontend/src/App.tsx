@@ -5,6 +5,7 @@ import AdminDashboard from './components/AdminDashboard';
 import AnswererDashboard from './components/AnswererDashboard';
 import { useSecurityContext } from './security';
 import { useInactivityLogout } from './hooks/useInactivityLogout';
+import { buildUrl } from './services/api';
 import './App.css';
 
 import './CardMotion.css';
@@ -99,8 +100,7 @@ function App() {
     const savedUser = sessionStorage.getItem('userId');
     if (savedRole && savedUser) {
       if (savedRole === 'answerer') {
-        const apiBase = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:5000';
-        fetch(`${apiBase}/answerer/dashboard?userId=${encodeURIComponent(savedUser)}`, {
+        fetch(buildUrl(`/answerer/dashboard?userId=${encodeURIComponent(savedUser)}`), {
           headers: { 'X-User-Id': savedUser, 'X-User-Role': savedRole },
         })
           .then((res) => {

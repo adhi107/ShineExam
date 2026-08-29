@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { apiGet, apiPost } from "../services/api";
+import { apiGet, apiPost, getMediaUrl } from "../services/api";
 import SensitiveContent from "../security/SensitiveContent";
 import "./StudentClasses.css";
 
@@ -18,16 +18,6 @@ export interface StudentClassItem {
   viewCount: number;
   createdAt: string;
 }
-
-const getMediaUrl = (url?: string): string => {
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:") || url.startsWith("data:")) {
-    return url;
-  }
-  const rawBase = (process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:5000").replace(/\/+$/, "").replace(/\/api$/, "");
-  const cleanPath = url.startsWith("/") ? url : `/${url}`;
-  return `${rawBase}${cleanPath}`;
-};
 
 interface StudentClassesProps {
   userId: string;
