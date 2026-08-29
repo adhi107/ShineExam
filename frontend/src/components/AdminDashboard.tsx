@@ -206,6 +206,8 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
     return <AdminHome adminName={adminName} stats={stats} go={go} />;
   };
 
+  const isDesktopCollapsed = sidebarCollapsed && !mobileOpen;
+
   return (
     <div className="shine-admin-shell">
       {/* Mobile-only topbar with hamburger */}
@@ -229,33 +231,43 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
         onClick={closeMobileSidebar}
       />
 
-      <aside className={`shine-admin-sidebar ${sidebarCollapsed ? "collapsed" : ""} ${mobileOpen ? "mobile-open" : ""}`}>
-        <div className="admin-brand" onClick={toggleSidebar} style={{ cursor: "pointer" }} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
-          <ShineLogo compact={sidebarCollapsed} inverse={true} />
-          {!sidebarCollapsed && <span>ADMIN CONSOLE</span>}
+      <aside className={`shine-admin-sidebar ${isDesktopCollapsed ? "collapsed" : ""} ${mobileOpen ? "mobile-open" : ""}`}>
+        <div className="admin-brand" onClick={toggleSidebar} style={{ cursor: "pointer" }} title={isDesktopCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
+          <ShineLogo compact={isDesktopCollapsed} inverse={true} />
+          {!isDesktopCollapsed && <span>ADMIN CONSOLE</span>}
+          {mobileOpen && (
+            <button
+              type="button"
+              className="admin-drawer-close-btn"
+              onClick={closeMobileSidebar}
+              aria-label="Close navigation menu"
+            >
+              ✕
+            </button>
+          )}
         </div>
         <nav>
-          <Nav active={currentView === "dashboard"} icon="dashboard" label="Dashboard" collapsed={sidebarCollapsed} onClick={() => goMobile("dashboard")} />
-          <Nav active={currentView === "users"} icon="users" label="Students" collapsed={sidebarCollapsed} onClick={() => goMobile("users")} />
-          <Nav active={currentView === "categories"} icon="categories" label="Exam Categories" collapsed={sidebarCollapsed} onClick={() => goMobile("categories")} />
-          <Nav active={["tests", "create-test", "edit-test"].includes(currentView)} icon="tests" label="Tests" collapsed={sidebarCollapsed} onClick={() => goMobile("tests")} />
-          <Nav active={currentView === "videos"} icon="videos" label="Videos" collapsed={sidebarCollapsed} onClick={() => goMobile("videos")} />
-          <Nav active={currentView === "documents"} icon="documents" label="Documents" collapsed={sidebarCollapsed} onClick={() => goMobile("documents")} />
-          <Nav active={currentView === "announcements"} icon="documents" label="Announcements" collapsed={sidebarCollapsed} onClick={() => goMobile("announcements")} />
-          <Nav active={currentView === "results"} icon="results" label="Analytics" collapsed={sidebarCollapsed} onClick={() => goMobile("results")} />
-          <Nav active={currentView === "violations"} icon="violations" label="Violations" collapsed={sidebarCollapsed} onClick={() => goMobile("violations")} />
-          <Nav active={currentView === "audit-logs"} icon="audit" label="Audit Logs" collapsed={sidebarCollapsed} onClick={() => goMobile("audit-logs")} />
-          <Nav active={currentView === "security-controls"} icon="controls" label="Security Controls" collapsed={sidebarCollapsed} onClick={() => goMobile("security-controls")} />
+          <Nav active={currentView === "dashboard"} icon="dashboard" label="Dashboard" collapsed={isDesktopCollapsed} onClick={() => goMobile("dashboard")} />
+          <Nav active={currentView === "users"} icon="users" label="Students" collapsed={isDesktopCollapsed} onClick={() => goMobile("users")} />
+          <Nav active={currentView === "categories"} icon="categories" label="Exam Categories" collapsed={isDesktopCollapsed} onClick={() => goMobile("categories")} />
+          <Nav active={["tests", "create-test", "edit-test"].includes(currentView)} icon="tests" label="Tests" collapsed={isDesktopCollapsed} onClick={() => goMobile("tests")} />
+          <Nav active={currentView === "videos"} icon="videos" label="Videos" collapsed={isDesktopCollapsed} onClick={() => goMobile("videos")} />
+          <Nav active={currentView === "documents"} icon="documents" label="Documents" collapsed={isDesktopCollapsed} onClick={() => goMobile("documents")} />
+          <Nav active={currentView === "announcements"} icon="documents" label="Announcements" collapsed={isDesktopCollapsed} onClick={() => goMobile("announcements")} />
+          <Nav active={currentView === "results"} icon="results" label="Analytics" collapsed={isDesktopCollapsed} onClick={() => goMobile("results")} />
+          <Nav active={currentView === "violations"} icon="violations" label="Violations" collapsed={isDesktopCollapsed} onClick={() => goMobile("violations")} />
+          <Nav active={currentView === "audit-logs"} icon="audit" label="Audit Logs" collapsed={isDesktopCollapsed} onClick={() => goMobile("audit-logs")} />
+          <Nav active={currentView === "security-controls"} icon="controls" label="Security Controls" collapsed={isDesktopCollapsed} onClick={() => goMobile("security-controls")} />
         </nav>
 
         <div className="admin-sidebar-user">
           <div>
             <span>{(adminName || "A").charAt(0).toUpperCase()}</span>
-            {!sidebarCollapsed && (
+            {!isDesktopCollapsed && (
               <p><strong>{adminName || "Admin"}</strong><small>Administrator</small></p>
             )}
           </div>
-          {!sidebarCollapsed ? (
+          {!isDesktopCollapsed ? (
             <>
               <button onClick={() => setShowPassword(true)}>Change password</button>
               <button className="admin-signout" onClick={onLogout}>Sign out</button>
@@ -267,7 +279,7 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
           )}
         </div>
       </aside>
-      <main className={`shine-admin-main ${sidebarCollapsed ? "collapsed" : ""}`}>
+      <main className={`shine-admin-main ${isDesktopCollapsed ? "collapsed" : ""}`}>
         {render()}
       </main>
       {showPassword && (

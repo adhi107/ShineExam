@@ -310,6 +310,8 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
     closeStudentMobile();
   };
 
+  const isDesktopCollapsed = studentSidebarCollapsed && !studentMobileOpen;
+
   if (activeExam) return (
     <TestInterface userId={userName} examId={activeExam.id} testName={activeExam.testName}
       duration={activeExam.duration} passingPercentage={activeExam.passingPercentage}
@@ -336,13 +338,13 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
         onClick={closeStudentMobile}
       />
 
-      <aside className={`candidate-sidebar ${studentSidebarCollapsed ? "collapsed" : ""} ${studentMobileOpen ? "sidebar-open" : ""}`}>
+      <aside className={`candidate-sidebar ${isDesktopCollapsed ? "collapsed" : ""} ${studentMobileOpen ? "sidebar-open" : ""}`}>
         <div className="candidate-logo">
           <button 
             type="button" 
             className="sidebar-hamburger-btn" 
             onClick={toggleStudentSidebar} 
-            title={studentSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={isDesktopCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="3" y1="6" x2="21" y2="6"/>
@@ -350,11 +352,19 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
               <line x1="3" y1="18" x2="21" y2="18"/>
             </svg>
           </button>
-          <ShineLogo compact={studentSidebarCollapsed} />
+          <ShineLogo compact={isDesktopCollapsed} />
+          <button
+            type="button"
+            className="student-drawer-close-btn"
+            onClick={closeStudentMobile}
+            aria-label="Close navigation"
+          >
+            ✕
+          </button>
         </div>
 
         <nav className="candidate-nav">
-          <div className={`my-tests-nav ${view === "tests" ? "active" : ""}`} title={studentSidebarCollapsed ? "My Tests" : ""}>
+          <div className={`my-tests-nav ${view === "tests" ? "active" : ""}`} title={isDesktopCollapsed ? "My Tests" : ""}>
             <button className="my-tests-main" onClick={() => handleGoTo("tests")}>
               <span className="candidate-nav-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -363,11 +373,11 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
                   <path d="m9 15 2 2 4-4" />
                 </svg>
               </span>
-              {!studentSidebarCollapsed && <span>My Tests</span>}
+              {!isDesktopCollapsed && <span>My Tests</span>}
             </button>
-            {!studentSidebarCollapsed && <button className={`my-tests-collapse ${testsTreeOpen ? "open" : ""}`} onClick={() => setTestsTreeOpen(open => !open)} aria-label={testsTreeOpen ? "Collapse My Tests" : "Expand My Tests"}>⌄</button>}
+            {!isDesktopCollapsed && <button className={`my-tests-collapse ${testsTreeOpen ? "open" : ""}`} onClick={() => setTestsTreeOpen(open => !open)} aria-label={testsTreeOpen ? "Collapse My Tests" : "Expand My Tests"}>⌄</button>}
           </div>
-          {testsTreeOpen && !studentSidebarCollapsed && <div className="exam-categories under-tests">
+          {testsTreeOpen && !isDesktopCollapsed && <div className="exam-categories under-tests">
             {examGroups.map(group => <div className="exam-group" key={group.slug}>
               <button className={`exam-group-button ${expandedGroups.includes(group.slug) ? "open" : ""}`} onClick={() => toggleExpanded(group.slug, expandedGroups, setExpandedGroups)}>
                 <span className="dot-icon" />
@@ -383,10 +393,10 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
               </div>)}</div>}
             </div>)}
           </div>}
-          {navItems.filter(item => item.view !== "tests").map(item => <button key={item.view} className={`candidate-nav-item ${view === item.view ? "active" : ""}`} onClick={() => handleGoTo(item.view)} title={studentSidebarCollapsed ? item.label : ""}><span className="candidate-nav-icon">{item.icon}</span>{!studentSidebarCollapsed && <span>{item.label}</span>}</button>)}
+          {navItems.filter(item => item.view !== "tests").map(item => <button key={item.view} className={`candidate-nav-item ${view === item.view ? "active" : ""}`} onClick={() => handleGoTo(item.view)} title={isDesktopCollapsed ? item.label : ""}><span className="candidate-nav-icon">{item.icon}</span>{!isDesktopCollapsed && <span>{item.label}</span>}</button>)}
         </nav>
 
-        {!studentSidebarCollapsed && (
+        {!isDesktopCollapsed && (
           <div className="candidate-sidebar-footer">
             <div className="support-card"><span>?</span><div><strong>Need help?</strong><small>Visit our support center</small></div></div>
             <small>SHINE EXAM PREP • v2.0</small>
@@ -394,7 +404,7 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
         )}
       </aside>
 
-      <main className={`candidate-main ${studentSidebarCollapsed ? "collapsed" : ""}`}>
+      <main className={`candidate-main ${isDesktopCollapsed ? "collapsed" : ""}`}>
         <header className="candidate-topbar">
           <div className="topbar-left-brand">
             <button
