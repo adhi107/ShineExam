@@ -8,6 +8,7 @@ import StudentClasses from "./StudentClasses";
 import { CandidateAnnouncements, CandidateBookmarks, CandidateDocuments, CandidateBookmark } from "./CandidateResources";
 import ValueHelpField from "./ValueHelpField";
 import { ParsedQuestionPreview } from "./ParsedQuestionPreview";
+import DynamicWatermark from "../security/DynamicWatermark";
 import "./AnswererDashboard.css";
 import "./CandidateValidity.css";
 
@@ -651,6 +652,38 @@ const SolutionReport = ({ testName, userName, review, onClose }: any) => {
   const sections = Array.from(new Set((review || []).map((item: any) => item.section).filter(Boolean))) as string[];
   const [activeSection, setActiveSection] = useState<string>(sections[0] || (review[0]?.section ?? ''));
   const [sectionIndex, setSectionIndex] = useState<number>(0);
+  const [watermarkConfig, setWatermarkConfig] = useState<{
+    enabled: boolean;
+    text: string;
+    color: string;
+    opacity: number;
+    includeCandidate: boolean;
+    includeTimestamp: boolean;
+  }>({
+    enabled: true,
+    text: "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT",
+    color: "#dc2626",
+    opacity: 0.25,
+    includeCandidate: true,
+    includeTimestamp: true,
+  });
+
+  useEffect(() => {
+    apiGet<any>("/security/config")
+      .then((cfg) => {
+        if (cfg) {
+          setWatermarkConfig({
+            enabled: cfg.solutionReportWatermarkEnabled !== false,
+            text: cfg.solutionReportWatermarkText || "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT",
+            color: cfg.solutionReportWatermarkColor || "#dc2626",
+            opacity: typeof cfg.solutionReportWatermarkOpacity === "number" ? cfg.solutionReportWatermarkOpacity : 0.25,
+            includeCandidate: cfg.solutionReportWatermarkIncludeCandidate !== false,
+            includeTimestamp: cfg.solutionReportWatermarkIncludeTimestamp !== false,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const sectionQuestions = (review || []).filter((item: any) => item.section === activeSection);
   const activeQuestions = sectionQuestions.length > 0 ? sectionQuestions : review;
@@ -688,7 +721,20 @@ const SolutionReport = ({ testName, userName, review, onClose }: any) => {
   if (!current) return <div className="solution-paper-empty"><button onClick={onClose}>← Back to score card</button><h3>Solution paper is not available for this attempt.</h3></div>;
 
   return (
-    <div className="solution-paper">
+    <div className="solution-paper" style={{ position: "relative", overflow: "hidden" }}>
+      {/* ── Dynamic Bold Colored Solution Watermark ── */}
+      {watermarkConfig.enabled && (
+        <DynamicWatermark
+          userId={userName}
+          customText={watermarkConfig.text}
+          color={watermarkConfig.color}
+          opacity={watermarkConfig.opacity}
+          isBold={true}
+          includeCandidate={watermarkConfig.includeCandidate}
+          includeTimestamp={watermarkConfig.includeTimestamp}
+        />
+      )}
+
       <header className="solution-paper-header">
         <div><ShineLogo compact /><h2>{testName}</h2></div>
         <div><span className="solution-avatar">{String(userName).charAt(0).toUpperCase()}</span><strong>{userName}</strong><button onClick={onClose}>Exit solution</button></div>

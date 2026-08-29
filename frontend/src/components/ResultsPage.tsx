@@ -1,4 +1,5 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { apiGet } from "../services/api";
 import "./ResultsPage.css";
 import { SensitiveContent } from "../security";
 
@@ -52,6 +53,33 @@ const ResultsPage: React.FC<ResultsPageProps> = ({
   backendResult,
   onBackToDashboard,
 }) => {
+  const [watermarkConfig, setWatermarkConfig] = useState<{
+    enabled: boolean;
+    text: string;
+    color: string;
+    opacity: number;
+  }>({
+    enabled: true,
+    text: "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT",
+    color: "#dc2626",
+    opacity: 0.25,
+  });
+
+  useEffect(() => {
+    apiGet<any>("/security/config")
+      .then((cfg) => {
+        if (cfg) {
+          setWatermarkConfig({
+            enabled: cfg.solutionReportWatermarkEnabled !== false,
+            text: cfg.solutionReportWatermarkText || "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT",
+            color: cfg.solutionReportWatermarkColor || "#dc2626",
+            opacity: typeof cfg.solutionReportWatermarkOpacity === "number" ? cfg.solutionReportWatermarkOpacity : 0.25,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const results = useMemo(() => {
     if (backendResult) return backendResult;
 
@@ -98,7 +126,10 @@ const ResultsPage: React.FC<ResultsPageProps> = ({
 
   return (
     <SensitiveContent
-      showWatermark
+      showWatermark={watermarkConfig.enabled}
+      watermarkColor={watermarkConfig.color}
+      watermarkCustomText={watermarkConfig.text}
+      watermarkOpacity={watermarkConfig.opacity}
       hideOnTabSwitch
       shieldOnScreenShare
       shieldMessage="Result content is protected. Return to this tab to view your results."

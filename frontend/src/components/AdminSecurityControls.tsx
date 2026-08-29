@@ -24,6 +24,13 @@ interface SecuritySettings {
   allowCandidateDocumentView: boolean;
   allowCandidateDocumentDownload: boolean;
   watermarkDocuments: boolean;
+  // Solution Report & Results Watermark
+  solutionReportWatermarkEnabled: boolean;
+  solutionReportWatermarkText: string;
+  solutionReportWatermarkColor: string;
+  solutionReportWatermarkOpacity: number;
+  solutionReportWatermarkIncludeCandidate: boolean;
+  solutionReportWatermarkIncludeTimestamp: boolean;
   retentionPolicy: RetentionPolicy;
   updatedAt?: string;
   updatedBy?: string;
@@ -105,6 +112,12 @@ const AdminSecurityControls: React.FC = () => {
     allowCandidateDocumentView: true,
     allowCandidateDocumentDownload: false,
     watermarkDocuments: true,
+    solutionReportWatermarkEnabled: true,
+    solutionReportWatermarkText: "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT",
+    solutionReportWatermarkColor: "#dc2626",
+    solutionReportWatermarkOpacity: 0.25,
+    solutionReportWatermarkIncludeCandidate: true,
+    solutionReportWatermarkIncludeTimestamp: true,
     retentionPolicy: {
       autoPurgeEnabled: false,
       auditLogsRetentionDays: 30,
@@ -143,6 +156,12 @@ const AdminSecurityControls: React.FC = () => {
         setSettings({
           ...res.settings,
           screenshotProtectedModules: res.settings.screenshotProtectedModules || ["exam", "results", "documents", "classes"],
+          solutionReportWatermarkEnabled: res.settings.solutionReportWatermarkEnabled !== false,
+          solutionReportWatermarkText: res.settings.solutionReportWatermarkText || "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT",
+          solutionReportWatermarkColor: res.settings.solutionReportWatermarkColor || "#dc2626",
+          solutionReportWatermarkOpacity: typeof res.settings.solutionReportWatermarkOpacity === "number" ? res.settings.solutionReportWatermarkOpacity : 0.25,
+          solutionReportWatermarkIncludeCandidate: res.settings.solutionReportWatermarkIncludeCandidate !== false,
+          solutionReportWatermarkIncludeTimestamp: res.settings.solutionReportWatermarkIncludeTimestamp !== false,
           retentionPolicy: {
             autoPurgeEnabled: Boolean(res.settings.retentionPolicy?.autoPurgeEnabled),
             auditLogsRetentionDays: res.settings.retentionPolicy?.auditLogsRetentionDays ?? 30,
@@ -677,7 +696,176 @@ const AdminSecurityControls: React.FC = () => {
               </div>
             </div>
 
-            {/* Card 5: Module-Wise Data Wipeout & Retention Policy (Full Width / Spanning Grid) */}
+            {/* Card 5: Solution Report & Results Watermark (Bold Color & Custom Text) */}
+            <div className={`sec-card ${settings.solutionReportWatermarkEnabled ? "card-active" : "card-disabled"}`}>
+              <div className="sec-card-header">
+                <div className="sec-icon-box solution-water-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/>
+                  </svg>
+                </div>
+                <div className="sec-header-meta">
+                  <h3>Solution Report Watermark &amp; Bold Styling</h3>
+                  <p>Apply bold colored forensic anti-leak watermark to candidate solution reports &amp; scorecards.</p>
+                </div>
+                <label className="switch-toggle">
+                  <input
+                    type="checkbox"
+                    checked={settings.solutionReportWatermarkEnabled}
+                    onChange={(e) => setSettings({ ...settings, solutionReportWatermarkEnabled: e.target.checked })}
+                  />
+                  <span className="slider round" />
+                </label>
+              </div>
+
+              <div className="sec-card-body">
+                <div className="sec-status-row">
+                  <span className={`sec-status-pill ${settings.solutionReportWatermarkEnabled ? "enabled" : "disabled"}`}>
+                    {settings.solutionReportWatermarkEnabled ? "● Solution Watermark Active" : "○ Watermark Off"}
+                  </span>
+                  <span className="sec-status-detail">
+                    {settings.solutionReportWatermarkEnabled ? `Color: ${settings.solutionReportWatermarkColor} • Opacity: ${Math.round(settings.solutionReportWatermarkOpacity * 100)}%` : "Solution papers clean"}
+                  </span>
+                </div>
+
+                {settings.solutionReportWatermarkEnabled && (
+                  <div className="sec-config-section">
+                    {/* Watermark Headline Text */}
+                    <div className="sec-field-block">
+                      <label className="sec-field-label">Custom Watermark Stamp Text</label>
+                      <input
+                        type="text"
+                        className="sec-text-input"
+                        placeholder="e.g. SHINE EXAM • CONFIDENTIAL SOLUTION REPORT"
+                        value={settings.solutionReportWatermarkText}
+                        onChange={(e) => setSettings({ ...settings, solutionReportWatermarkText: e.target.value })}
+                      />
+                    </div>
+
+                    {/* Bold Color Palette */}
+                    <div className="sec-field-block">
+                      <label className="sec-field-label">Choose Bold Watermark Color</label>
+                      <div className="color-palette-row">
+                        {[
+                          { hex: "#dc2626", label: "Crimson Red" },
+                          { hex: "#4f46e5", label: "Electric Indigo" },
+                          { hex: "#2563eb", label: "Royal Blue" },
+                          { hex: "#059669", label: "Forest Emerald" },
+                          { hex: "#d97706", label: "Warm Amber" },
+                          { hex: "#0f172a", label: "Carbon Dark" },
+                        ].map((c) => (
+                          <button
+                            key={c.hex}
+                            type="button"
+                            className={`color-chip-btn ${settings.solutionReportWatermarkColor.toLowerCase() === c.hex.toLowerCase() ? "selected" : ""}`}
+                            onClick={() => setSettings({ ...settings, solutionReportWatermarkColor: c.hex })}
+                            title={c.label}
+                          >
+                            <span className="color-dot" style={{ backgroundColor: c.hex }} />
+                            <span className="color-name">{c.label}</span>
+                          </button>
+                        ))}
+
+                        {/* Custom Color Input */}
+                        <div className="custom-color-picker-wrap" title="Custom Hex Color">
+                          <input
+                            type="color"
+                            id="custom-watermark-color"
+                            value={settings.solutionReportWatermarkColor}
+                            onChange={(e) => setSettings({ ...settings, solutionReportWatermarkColor: e.target.value })}
+                            className="native-color-input"
+                          />
+                          <label htmlFor="custom-watermark-color" className="custom-color-label">
+                            <span className="color-dot" style={{ backgroundColor: settings.solutionReportWatermarkColor }} />
+                            <span>Custom: {settings.solutionReportWatermarkColor}</span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Boldness / Opacity Presets */}
+                    <div className="sec-field-block">
+                      <label className="sec-field-label">Watermark Opacity &amp; Intensity</label>
+                      <div className="preset-pills-row">
+                        {[
+                          { val: 0.15, label: "15% Subtle" },
+                          { val: 0.25, label: "25% Standard (Rec)" },
+                          { val: 0.40, label: "40% Bold & Vivid" },
+                          { val: 0.55, label: "55% Ultra Bold" },
+                        ].map((op) => (
+                          <button
+                            key={op.val}
+                            type="button"
+                            className={`preset-pill-btn ${settings.solutionReportWatermarkOpacity === op.val ? "selected" : ""}`}
+                            onClick={() => setSettings({ ...settings, solutionReportWatermarkOpacity: op.val })}
+                          >
+                            {op.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Metadata Inclusion Checkboxes */}
+                    <div className="watermark-options-grid">
+                      <label className="watermark-opt-label">
+                        <input
+                          type="checkbox"
+                          checked={settings.solutionReportWatermarkIncludeCandidate}
+                          onChange={(e) => setSettings({ ...settings, solutionReportWatermarkIncludeCandidate: e.target.checked })}
+                        />
+                        <span>Include Candidate Name &amp; User ID</span>
+                      </label>
+                      <label className="watermark-opt-label">
+                        <input
+                          type="checkbox"
+                          checked={settings.solutionReportWatermarkIncludeTimestamp}
+                          onChange={(e) => setSettings({ ...settings, solutionReportWatermarkIncludeTimestamp: e.target.checked })}
+                        />
+                        <span>Include Live Timestamp &amp; Date Stamp</span>
+                      </label>
+                    </div>
+
+                    {/* Live Preview Box */}
+                    <div className="solution-watermark-live-preview">
+                      <div className="preview-header-line">
+                        <span className="preview-label">Live Solution Report Watermark Preview:</span>
+                        <span className="preview-sample-badge" style={{ color: settings.solutionReportWatermarkColor, borderColor: settings.solutionReportWatermarkColor }}>
+                          {settings.solutionReportWatermarkColor.toUpperCase()} &bull; {Math.round(settings.solutionReportWatermarkOpacity * 100)}% Bold
+                        </span>
+                      </div>
+                      <div className="solution-preview-stage">
+                        {/* Sample solution paper question mockup */}
+                        <div className="mock-solution-card">
+                          <div className="mock-q-title">Q1. Evaluate the derivative of f(x) = 3x&sup2; + 5x - 8</div>
+                          <div className="mock-opt mock-correct">&#10003; 6x + 5 &bull; Correct Answer</div>
+                          <div className="mock-opt">6x - 8</div>
+                          <div className="mock-explanation"><strong>Solution:</strong> Apply the power rule d/dx(xⁿ) = n&middot;xⁿ⁻¹ &rarr; f&prime;(x) = 6x + 5.</div>
+                        </div>
+
+                        {/* Live Watermark Overlay inside the stage */}
+                        <div
+                          className="live-watermark-overlay"
+                          style={{
+                            color: settings.solutionReportWatermarkColor,
+                            opacity: settings.solutionReportWatermarkOpacity,
+                            fontWeight: 900,
+                          }}
+                        >
+                          <div className="watermark-tiled-preview">
+                            <p>{settings.solutionReportWatermarkText || "SHINE EXAM • SOLUTION REPORT"}</p>
+                            {settings.solutionReportWatermarkIncludeCandidate && <p>CANDIDATE: adithya (ID: STD-2026)</p>}
+                            {settings.solutionReportWatermarkIncludeTimestamp && <p>{new Date().toLocaleDateString("en-IN")} • {new Date().toLocaleTimeString("en-IN")}</p>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Card 6: Module-Wise Data Wipeout & Retention Policy (Full Width / Spanning Grid) */}
             <div className="sec-card card-active data-retention-card" style={{ gridColumn: "1 / -1" }}>
               <div className="sec-card-header">
                 <div className="sec-icon-box purge-icon">

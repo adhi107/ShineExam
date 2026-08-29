@@ -26,6 +26,10 @@ interface SensitiveContentProps {
   userId?: string;
   module?: ProtectedModuleType;
   showWatermark?: boolean;
+  watermarkColor?: string;
+  watermarkCustomText?: string;
+  watermarkOpacity?: number;
+  watermarkIsBold?: boolean;
   hideOnTabSwitch?: boolean;
   blurOnTabSwitch?: boolean;
   shieldOnScreenShare?: boolean;
@@ -53,6 +57,10 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
   userId: userIdProp,
   module = 'exam',
   showWatermark = true,
+  watermarkColor,
+  watermarkCustomText,
+  watermarkOpacity,
+  watermarkIsBold = true,
   hideOnTabSwitch = true,
   blurOnTabSwitch = false,
   shieldOnScreenShare = true,
@@ -333,8 +341,16 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
         </div>
       )}
 
-      {/* ── Dynamic watermark (always rendered) ── */}
-      {showWatermark && <DynamicWatermark />}
+      {/* ── Dynamic watermark (rendered if enabled) ── */}
+      {showWatermark && (
+        <DynamicWatermark
+          userId={userId}
+          color={watermarkColor}
+          customText={watermarkCustomText}
+          opacity={watermarkOpacity}
+          isBold={watermarkIsBold}
+        />
+      )}
     </div>
   );
 };

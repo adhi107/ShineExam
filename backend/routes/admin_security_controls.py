@@ -28,6 +28,13 @@ DEFAULT_SECURITY_SETTINGS = {
     "allowCandidateDocumentView": True,
     "allowCandidateDocumentDownload": False,
     "watermarkDocuments": True,
+    # Solution Report & Test Results Watermark Settings
+    "solutionReportWatermarkEnabled": True,
+    "solutionReportWatermarkText": "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT",
+    "solutionReportWatermarkColor": "#dc2626",   # Bold red default
+    "solutionReportWatermarkOpacity": 0.25,      # 0.10 to 0.70
+    "solutionReportWatermarkIncludeCandidate": True,
+    "solutionReportWatermarkIncludeTimestamp": True,
     "retentionPolicy": {
         "autoPurgeEnabled": False,
         "auditLogsRetentionDays": 30,       # -1 = Never, or 7, 15, 30, 60, 90, 180, 365, 730
@@ -69,6 +76,12 @@ def get_security_settings():
             "allowCandidateDocumentView": bool(settings.get("allowCandidateDocumentView", True)),
             "allowCandidateDocumentDownload": bool(settings.get("allowCandidateDocumentDownload", False)),
             "watermarkDocuments": bool(settings.get("watermarkDocuments", True)),
+            "solutionReportWatermarkEnabled": bool(settings.get("solutionReportWatermarkEnabled", True)),
+            "solutionReportWatermarkText": str(settings.get("solutionReportWatermarkText", "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT")),
+            "solutionReportWatermarkColor": str(settings.get("solutionReportWatermarkColor", "#dc2626")),
+            "solutionReportWatermarkOpacity": float(settings.get("solutionReportWatermarkOpacity", 0.25)),
+            "solutionReportWatermarkIncludeCandidate": bool(settings.get("solutionReportWatermarkIncludeCandidate", True)),
+            "solutionReportWatermarkIncludeTimestamp": bool(settings.get("solutionReportWatermarkIncludeTimestamp", True)),
             "retentionPolicy": {
                 "autoPurgeEnabled": bool(retention.get("autoPurgeEnabled", False)),
                 "auditLogsRetentionDays": int(retention.get("auditLogsRetentionDays", 30)),
@@ -116,6 +129,12 @@ def update_security_settings():
         "lastPurgeStats": curr_ret.get("lastPurgeStats"),
     }
 
+    raw_opacity = payload.get("solutionReportWatermarkOpacity", 0.25)
+    try:
+        clean_opacity = max(0.05, min(0.90, float(raw_opacity)))
+    except (TypeError, ValueError):
+        clean_opacity = 0.25
+
     updates = {
         "autoLogoutEnabled": bool(payload.get("autoLogoutEnabled", True)),
         "autoLogoutMinutes": max(1, min(240, int(payload.get("autoLogoutMinutes", 15)))),
@@ -127,6 +146,12 @@ def update_security_settings():
         "allowCandidateDocumentView": bool(payload.get("allowCandidateDocumentView", True)),
         "allowCandidateDocumentDownload": bool(payload.get("allowCandidateDocumentDownload", False)),
         "watermarkDocuments": bool(payload.get("watermarkDocuments", True)),
+        "solutionReportWatermarkEnabled": bool(payload.get("solutionReportWatermarkEnabled", True)),
+        "solutionReportWatermarkText": str(payload.get("solutionReportWatermarkText", "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT")).strip(),
+        "solutionReportWatermarkColor": str(payload.get("solutionReportWatermarkColor", "#dc2626")).strip(),
+        "solutionReportWatermarkOpacity": clean_opacity,
+        "solutionReportWatermarkIncludeCandidate": bool(payload.get("solutionReportWatermarkIncludeCandidate", True)),
+        "solutionReportWatermarkIncludeTimestamp": bool(payload.get("solutionReportWatermarkIncludeTimestamp", True)),
         "retentionPolicy": retention_updates,
         "updatedAt": datetime.utcnow().isoformat(),
         "updatedBy": request.headers.get("X-User-Id", "Admin"),
@@ -294,7 +319,7 @@ def execute_data_wipeout():
 @public_security_bp.get("/config")
 def get_public_security_config():
     """
-    Public lightweight endpoint for candidates & frontend to read active auto-logout settings.
+    Public lightweight endpoint for candidates & frontend to read active security & watermark settings.
     """
     db = get_db()
     settings = db.system_settings.find_one({"type": "security_config"}) or DEFAULT_SECURITY_SETTINGS
@@ -309,5 +334,11 @@ def get_public_security_config():
         "allowCandidateDocumentView": bool(settings.get("allowCandidateDocumentView", True)),
         "allowCandidateDocumentDownload": bool(settings.get("allowCandidateDocumentDownload", False)),
         "watermarkDocuments": bool(settings.get("watermarkDocuments", True)),
+        "solutionReportWatermarkEnabled": bool(settings.get("solutionReportWatermarkEnabled", True)),
+        "solutionReportWatermarkText": str(settings.get("solutionReportWatermarkText", "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT")),
+        "solutionReportWatermarkColor": str(settings.get("solutionReportWatermarkColor", "#dc2626")),
+        "solutionReportWatermarkOpacity": float(settings.get("solutionReportWatermarkOpacity", 0.25)),
+        "solutionReportWatermarkIncludeCandidate": bool(settings.get("solutionReportWatermarkIncludeCandidate", True)),
+        "solutionReportWatermarkIncludeTimestamp": bool(settings.get("solutionReportWatermarkIncludeTimestamp", True)),
     })
 
