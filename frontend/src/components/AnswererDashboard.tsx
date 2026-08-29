@@ -695,6 +695,14 @@ const SolutionReport = ({ testName, userName, review, onClose }: any) => {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    const origOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = origOverflow;
+    };
+  }, []);
+
   const sectionQuestions = (review || []).filter((item: any) => item.section === activeSection);
   const activeQuestions = sectionQuestions.length > 0 ? sectionQuestions : review;
   const safeIndex = Math.min(sectionIndex, Math.max(0, activeQuestions.length - 1));
@@ -731,113 +739,115 @@ const SolutionReport = ({ testName, userName, review, onClose }: any) => {
   if (!current) return <div className="solution-paper-empty"><button onClick={onClose}>← Back to score card</button><h3>Solution paper is not available for this attempt.</h3></div>;
 
   return (
-    <div className="solution-paper" style={{ position: "relative", overflow: "hidden" }}>
-      {/* ── Dynamic Bold Colored Solution Watermark ── */}
-      {watermarkConfig.enabled && (
-        <DynamicWatermark
-          userId={userName}
-          customText={watermarkConfig.text}
-          color={watermarkConfig.color}
-          opacity={watermarkConfig.opacity}
-          isBold={true}
-          includeCandidate={watermarkConfig.includeCandidate}
-          includeTimestamp={watermarkConfig.includeTimestamp}
-        />
-      )}
-
-      <header className="solution-paper-header">
-        <div><ShineLogo compact /><h2>{testName}</h2></div>
-        <div><span className="solution-avatar">{String(userName).charAt(0).toUpperCase()}</span><strong>{userName}</strong><button onClick={onClose}>Exit solution</button></div>
-      </header>
-
-      <div className="solution-section-bar">
-        {sections.map((section) => (
-          <button key={section} className={activeSection === section ? "active" : ""} onClick={() => handleSectionClick(section)}>
-            {section}
-          </button>
-        ))}
-      </div>
-
-      <div className="solution-question-meta">
-        <strong>Question No. {safeIndex + 1}</strong>
-        <div>
-          <span className="difficulty-pill">{activeSection || "General"}</span>
-          <span className={status(current)}>
-            {status(current) === "correct" ? "Correct" : status(current) === "wrong" ? "Incorrect" : "Unattempted"}
-          </span>
-        </div>
-      </div>
-
-      <main className="solution-paper-body">
-        <section className="solution-question-pane">
-          <ParsedQuestionPreview
-            question={current.question || `Question ${safeIndex + 1}`}
-            context={current.context}
-            contextType={current.contextType}
-            chartData={current.chartData}
-            tableData={current.tableData}
-            imageReference={current.imageReference}
-            visualReferences={current.visualReferences}
-            mappingStatus={current.mappingStatus}
-            mappingConfidence={current.mappingConfidence}
+    <div className="solution-paper-overlay">
+      <div className="solution-paper">
+        {/* ── Dynamic Bold Colored Solution Watermark ── */}
+        {watermarkConfig.enabled && (
+          <DynamicWatermark
+            userId={userName}
+            customText={watermarkConfig.text}
+            color={watermarkConfig.color}
+            opacity={watermarkConfig.opacity}
+            isBold={true}
+            includeCandidate={watermarkConfig.includeCandidate}
+            includeTimestamp={watermarkConfig.includeTimestamp}
           />
-          <div className="solution-options">
-            {(current.options || []).map((option: string, index: number) => {
-              const correct = matches(current.correctAnswer, option, index, current.options);
-              const chosen = matches(current.userAnswer, option, index, current.options);
-              return (
-                <div key={`${option}-${index}`} className={`solution-option ${correct ? "correct-option" : ""} ${chosen && !correct ? "wrong-option" : ""}`}>
-                  <span>{String.fromCharCode(65 + index)}</span>
-                  <p>{option}</p>
-                  {correct && <b>✓ Correct answer</b>}
-                  {chosen && correct && <em>Your answer</em>}
-                  {chosen && !correct && <em>✕ Your answer</em>}
-                </div>
-              );
-            })}
+        )}
+
+        <header className="solution-paper-header">
+          <div><ShineLogo compact /><h2>{testName}</h2></div>
+          <div><span className="solution-avatar">{String(userName).charAt(0).toUpperCase()}</span><strong>{userName}</strong><button onClick={onClose}>Exit solution</button></div>
+        </header>
+
+        <div className="solution-section-bar">
+          {sections.map((section) => (
+            <button key={section} className={activeSection === section ? "active" : ""} onClick={() => handleSectionClick(section)}>
+              {section}
+            </button>
+          ))}
+        </div>
+
+        <div className="solution-question-meta">
+          <strong>Question No. {safeIndex + 1}</strong>
+          <div>
+            <span className="difficulty-pill">{activeSection || "General"}</span>
+            <span className={status(current)}>
+              {status(current) === "correct" ? "Correct" : status(current) === "wrong" ? "Incorrect" : "Unattempted"}
+            </span>
           </div>
+        </div>
 
-          {(!current.options || current.options.length === 0) && <div className="solution-no-options">Answer review is unavailable for this question.</div>}
+        <main className="solution-paper-body">
+          <section className="solution-question-pane">
+            <ParsedQuestionPreview
+              question={current.question || `Question ${safeIndex + 1}`}
+              context={current.context}
+              contextType={current.contextType}
+              chartData={current.chartData}
+              tableData={current.tableData}
+              imageReference={current.imageReference}
+              visualReferences={current.visualReferences}
+              mappingStatus={current.mappingStatus}
+              mappingConfidence={current.mappingConfidence}
+            />
+            <div className="solution-options">
+              {(current.options || []).map((option: string, index: number) => {
+                const correct = matches(current.correctAnswer, option, index, current.options);
+                const chosen = matches(current.userAnswer, option, index, current.options);
+                return (
+                  <div key={`${option}-${index}`} className={`solution-option ${correct ? "correct-option" : ""} ${chosen && !correct ? "wrong-option" : ""}`}>
+                    <span>{String.fromCharCode(65 + index)}</span>
+                    <p>{option}</p>
+                    {correct && <b>✓ Correct answer</b>}
+                    {chosen && correct && <em>Your answer</em>}
+                    {chosen && !correct && <em>✕ Your answer</em>}
+                  </div>
+                );
+              })}
+            </div>
 
-          <div className="solution-explanation">
-            <strong>Solution & Explanation</strong>
-            <p>{current.isCorrect ? "You selected the correct answer." : answered(current.userAnswer) ? "Your selected answer is incorrect. The correct option is highlighted in green." : "This question was not attempted. The correct option is highlighted in green."}</p>
-          </div>
-        </section>
+            {(!current.options || current.options.length === 0) && <div className="solution-no-options">Answer review is unavailable for this question.</div>}
 
-        <aside className="solution-palette">
-          <div className="solution-palette-head">
-            <strong>{activeSection || "Questions"}</strong>
-            <span>{safeIndex + 1} / {activeQuestions.length}</span>
-          </div>
+            <div className="solution-explanation">
+              <strong>Solution & Explanation</strong>
+              <p>{current.isCorrect ? "You selected the correct answer." : answered(current.userAnswer) ? "Your selected answer is incorrect. The correct option is highlighted in green." : "This question was not attempted. The correct option is highlighted in green."}</p>
+            </div>
+          </section>
 
-          <div className="solution-palette-grid">
-            {activeQuestions.map((item: any, index: number) => (
-              <button key={item.questionId || index} className={`${status(item)} ${index === safeIndex ? "current" : ""}`} onClick={() => setSectionIndex(index)}>
-                {index + 1}
-              </button>
-            ))}
-          </div>
+          <aside className="solution-palette">
+            <div className="solution-palette-head">
+              <strong>{activeSection || "Questions"}</strong>
+              <span>{safeIndex + 1} / {activeQuestions.length}</span>
+            </div>
 
-          <div className="solution-legend">
-            <span><i className="correct" />Correct</span>
-            <span><i className="wrong" />Incorrect</span>
-            <span><i className="empty" />Unattempted</span>
-          </div>
-        </aside>
-      </main>
+            <div className="solution-palette-grid">
+              {activeQuestions.map((item: any, index: number) => (
+                <button key={item.questionId || index} className={`${status(item)} ${index === safeIndex ? "current" : ""}`} onClick={() => setSectionIndex(index)}>
+                  {index + 1}
+                </button>
+              ))}
+            </div>
 
-      <footer className="solution-paper-footer">
-        <button disabled={safeIndex === 0} onClick={() => setSectionIndex((idx) => Math.max(0, idx - 1))}>
-          ← Previous
-        </button>
-        <button className="solution-back-report" onClick={onClose}>
-          Back to report
-        </button>
-        <button disabled={safeIndex === activeQuestions.length - 1} onClick={() => setSectionIndex((idx) => Math.min(activeQuestions.length - 1, idx + 1))}>
-          Next →
-        </button>
-      </footer>
+            <div className="solution-legend">
+              <span><i className="correct" />Correct</span>
+              <span><i className="wrong" />Incorrect</span>
+              <span><i className="empty" />Unattempted</span>
+            </div>
+          </aside>
+        </main>
+
+        <footer className="solution-paper-footer">
+          <button disabled={safeIndex === 0} onClick={() => setSectionIndex((idx) => Math.max(0, idx - 1))}>
+            ← Previous
+          </button>
+          <button className="solution-back-report" onClick={onClose}>
+            Back to report
+          </button>
+          <button disabled={safeIndex === activeQuestions.length - 1} onClick={() => setSectionIndex((idx) => Math.min(activeQuestions.length - 1, idx + 1))}>
+            Next →
+          </button>
+        </footer>
+      </div>
     </div>
   );
 };
