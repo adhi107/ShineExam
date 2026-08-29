@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { apiGet, apiPost, apiPut, apiDelete, buildUrl, getMediaUrl, getAuthHeaders } from "../services/api";
+import ConfirmDialog, { DialogVariant } from "./ConfirmDialog";
 import "./AdminVideos.css";
 
 interface VideoItem {
@@ -49,6 +50,26 @@ const CATEGORY_OPTIONS = [
   "Computer Knowledge",
 ];
 
+function resolveVideoEmbedUrl(url?: string): string {
+  if (!url) return "";
+  const clean = url.trim();
+  const shortsMatch = clean.match(/(?:youtube\.com\/shorts\/|youtu\.be\/shorts\/)([A-Za-z0-9_-]+)/i);
+  if (shortsMatch) {
+    const vid = shortsMatch[1].split("?")[0].split("&")[0];
+    return `https://www.youtube.com/embed/${vid}?rel=0&modestbranding=1&enablejsapi=1&autoplay=1`;
+  }
+  const ytMatch = clean.match(/(?:(?:www\.|m\.)?youtube\.com\/(?:watch\?v=|embed\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]+)/i);
+  if (ytMatch) {
+    const vid = ytMatch[1].split("?")[0].split("&")[0];
+    return `https://www.youtube.com/embed/${vid}?rel=0&modestbranding=1&enablejsapi=1&autoplay=1`;
+  }
+  const vimeoMatch = clean.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
+  if (vimeoMatch) {
+    return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1`;
+  }
+  return getMediaUrl(clean);
+}
+
 const AdminVideos: React.FC = () => {
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [stats, setStats] = useState<VideoStats>({ total: 0, fileUploads: 0, links: 0, totalViews: 0 });
@@ -84,6 +105,17 @@ const AdminVideos: React.FC = () => {
 
   // Playback Preview Modal
   const [previewVideo, setPreviewVideo] = useState<VideoItem | null>(null);
+
+  // In-Screen Confirm Dialog
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string | React.ReactNode;
+    confirmText?: string;
+    variant?: DialogVariant;
+    icon?: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   // Toast
   const [toast, setToast] = useState<string>("");
@@ -292,17 +324,29 @@ const AdminVideos: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string, videoTitle: string) => {
-    if (!window.confirm(`Are you sure you want to delete "${videoTitle}"? This cannot be undone.`)) {
-      return;
-    }
-    try {
-      await apiDelete(`/admin/videos/${id}`);
-      showToast("Video deleted successfully.");
-      loadVideos();
-    } catch (err: any) {
-      alert(err.message || "Failed to delete video.");
-    }
+  const handleDelete = (id: string, videoTitle: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: "Delete Video Lecture?",
+      message: (
+        <span>
+          Are you sure you want to delete <strong>"{videoTitle}"</strong>? This action cannot be undone.
+        </span>
+      ),
+      confirmText: "Yes, Delete Video",
+      variant: "danger",
+      icon: "🗑️",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await apiDelete(`/admin/videos/${id}`);
+          showToast("Video deleted successfully.");
+          loadVideos();
+        } catch (err: any) {
+          showToast(err.message || "Failed to delete video.");
+        }
+      },
+    });
   };
 
   const formatFileSize = (bytes?: number) => {
@@ -508,9 +552,10 @@ const AdminVideos: React.FC = () => {
                       type="button"
                       className="btn-card-action assign"
                       onClick={() => openAssignModal(video)}
-                      title="Assign Students"
+                      title="Assign Candidates"
+                      aria-label="Assign Candidates"
                     >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
                       </svg>
                     </button>
@@ -518,9 +563,10 @@ const AdminVideos: React.FC = () => {
                       type="button"
                       className="btn-card-action edit"
                       onClick={() => openEditModal(video)}
-                      title="Edit Video"
+                      title="Edit Video Details"
+                      aria-label="Edit Video Details"
                     >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
                       </svg>
                     </button>
@@ -529,8 +575,9 @@ const AdminVideos: React.FC = () => {
                       className="btn-card-action delete"
                       onClick={() => handleDelete(video.id, video.title)}
                       title="Delete Video"
+                      aria-label="Delete Video"
                     >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                       </svg>
                     </button>
@@ -984,10 +1031,10 @@ const AdminVideos: React.FC = () => {
                 </video>
               ) : (
                 <iframe
-                  src={getMediaUrl(previewVideo.embedUrl || previewVideo.videoUrl)}
+                  src={resolveVideoEmbedUrl(previewVideo.embedUrl || previewVideo.videoUrl || previewVideo.originalUrl)}
                   title={previewVideo.title}
                   className="iframe-video-screen"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
                 />
               )}
@@ -1000,6 +1047,19 @@ const AdminVideos: React.FC = () => {
             )}
           </div>
         </div>
+      )}
+      {/* In-Screen Confirm Delete Modal */}
+      {confirmDialog && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmText={confirmDialog.confirmText}
+          variant={confirmDialog.variant}
+          icon={confirmDialog.icon}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+        />
       )}
     </div>
   );

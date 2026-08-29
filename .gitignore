@@ -17,3 +17,13 @@ build/
 
 # IDE
 .vscode/
+
+# Uploads & Media
+backend/uploads/
+uploads/
+*.mp4
+*.webm
+*.mov
+*.avi
+*.mkv
+*.zip

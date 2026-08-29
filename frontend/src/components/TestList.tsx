@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import "./TestList.css";
 import { apiDelete, apiGet, apiPost } from "../services/api";
+import ConfirmDialog, { DialogVariant } from "./ConfirmDialog";
 import ValueHelpField, { ValueHelpOption } from "./ValueHelpField";
 import {
   filterAdminTests,
@@ -226,21 +227,43 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
     });
   };
 
-  const deleteTest = async (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this test?")) return;
-    try {
-      await apiDelete(`/admin/exams/${id}`);
-      setTests((prev) => prev.filter((t) => t.id !== id));
-      if (selectedTest?.id === id) setSelectedTest(null);
-    } catch (e) {
-      console.error(e);
-      alert("Failed to delete test");
-    }
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string | React.ReactNode;
+    confirmText?: string;
+    variant?: DialogVariant;
+    icon?: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  const deleteTest = (id: string, testName?: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: "Delete Assessment?",
+      message: (
+        <span>
+          Are you sure you want to delete {testName ? <strong>"{testName}"</strong> : "this test"}? This action cannot be undone.
+        </span>
+      ),
+      confirmText: "Yes, Delete Test",
+      variant: "danger",
+      icon: "🗑️",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await apiDelete(`/admin/exams/${id}`);
+          setTests((prev) => prev.filter((t) => t.id !== id));
+          if (selectedTest?.id === id) setSelectedTest(null);
+        } catch (e) {
+          console.error(e);
+        }
+      },
+    });
   };
 
   const handleEdit = (testId: string) => {
     if (onEditTest) onEditTest(testId);
-    else alert("Edit functionality will be implemented soon");
   };
 
   const getStatusColor = (status: string) => {
@@ -439,6 +462,19 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
             </div>
           </div>
         </div>
+      )}
+      {/* In-Screen Confirm Dialog */}
+      {confirmDialog && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmText={confirmDialog.confirmText}
+          variant={confirmDialog.variant}
+          icon={confirmDialog.icon}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+        />
       )}
     </div>
   );

@@ -23,6 +23,26 @@ interface StudentClassesProps {
   userId: string;
 }
 
+function resolveVideoEmbedUrl(url?: string): string {
+  if (!url) return "";
+  const clean = url.trim();
+  const shortsMatch = clean.match(/(?:youtube\.com\/shorts\/|youtu\.be\/shorts\/)([A-Za-z0-9_-]+)/i);
+  if (shortsMatch) {
+    const vid = shortsMatch[1].split("?")[0].split("&")[0];
+    return `https://www.youtube.com/embed/${vid}?rel=0&modestbranding=1&enablejsapi=1&autoplay=1`;
+  }
+  const ytMatch = clean.match(/(?:(?:www\.|m\.)?youtube\.com\/(?:watch\?v=|embed\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]+)/i);
+  if (ytMatch) {
+    const vid = ytMatch[1].split("?")[0].split("&")[0];
+    return `https://www.youtube.com/embed/${vid}?rel=0&modestbranding=1&enablejsapi=1&autoplay=1`;
+  }
+  const vimeoMatch = clean.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
+  if (vimeoMatch) {
+    return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1`;
+  }
+  return getMediaUrl(clean);
+}
+
 const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
   const [classes, setClasses] = useState<StudentClassItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -253,10 +273,10 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
                   </video>
                 ) : (
                   <iframe
-                    src={getMediaUrl(activeClass.embedUrl || activeClass.videoUrl)}
+                    src={resolveVideoEmbedUrl(activeClass.embedUrl || activeClass.videoUrl || activeClass.originalUrl)}
                     title={activeClass.title}
                     className="student-iframe-element"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     allowFullScreen
                   />
                 )}

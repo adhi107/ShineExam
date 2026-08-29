@@ -64,33 +64,35 @@ def normalize_video_url(url: str) -> dict:
     """
     url = url.strip()
 
-    # ── YouTube Shorts  (https://youtube.com/shorts/<id>)
+    # ── YouTube Shorts (youtube.com/shorts/<id>, m.youtube.com/shorts/<id>)
     yt_shorts_match = re.search(
-        r"youtube\.com\/shorts\/([A-Za-z0-9_-]{11})",
+        r"(?:youtube\.com|youtu\.be)\/shorts\/([A-Za-z0-9_-]+)",
         url,
+        re.IGNORECASE
     )
     if yt_shorts_match:
-        video_id = yt_shorts_match.group(1)
+        video_id = yt_shorts_match.group(1).split("?")[0].split("&")[0]
         return {
             "type": "link",
             "provider": "youtube",
             "videoId": video_id,
-            "embedUrl": f"https://www.youtube-nocookie.com/embed/{video_id}?rel=0&modestbranding=1&enablejsapi=1",
+            "embedUrl": f"https://www.youtube.com/embed/{video_id}?rel=0&modestbranding=1&enablejsapi=1",
             "originalUrl": url,
         }
 
-    # ── YouTube standard / embed / youtu.be short links
+    # ── YouTube standard / embed / live / youtu.be short links
     yt_match = re.search(
-        r"(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|live)\/|.*[?&]v=)|youtu\.be\/)([A-Za-z0-9_-]{11})",
+        r"(?:(?:www\.|m\.)?youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|live)\/|.*[?&]v=)|youtu\.be\/)([A-Za-z0-9_-]+)",
         url,
+        re.IGNORECASE
     )
     if yt_match:
-        video_id = yt_match.group(1)
+        video_id = yt_match.group(1).split("?")[0].split("&")[0]
         return {
             "type": "link",
             "provider": "youtube",
             "videoId": video_id,
-            "embedUrl": f"https://www.youtube-nocookie.com/embed/{video_id}?rel=0&modestbranding=1&enablejsapi=1",
+            "embedUrl": f"https://www.youtube.com/embed/{video_id}?rel=0&modestbranding=1&enablejsapi=1",
             "originalUrl": url,
         }
 

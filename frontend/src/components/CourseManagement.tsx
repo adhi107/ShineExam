@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { apiDelete, apiGet, apiPost, apiPut } from "../services/api";
+import ConfirmDialog, { DialogVariant } from "./ConfirmDialog";
 import "./CourseManagement.css";
 import "./StudentCourses.css";
 import ValueHelpField, { ValueHelpOption } from "./ValueHelpField";
@@ -239,20 +240,43 @@ const CourseManagement: React.FC = () => {
     setCourseForm({ name: course.name, description: course.description || "" });
   };
 
-  const handleDeleteCourse = async (courseId: string) => {
-    if (!window.confirm("Delete this course?")) {
-      return;
-    }
-    try {
-      await apiDelete(`/admin/courses/${courseId}`);
-      if (selectedCourseId === courseId) {
-        setSelectedCourseId("");
-      }
-      await loadCourses();
-      resetCourseForm();
-    } catch (error: any) {
-      alert(error.message || "Failed to delete course");
-    }
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string | React.ReactNode;
+    confirmText?: string;
+    variant?: DialogVariant;
+    icon?: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  const handleDeleteCourse = (courseId: string) => {
+    const target = courses.find((c) => c.id === courseId);
+    setConfirmDialog({
+      isOpen: true,
+      title: "Delete Course Curriculum?",
+      message: (
+        <span>
+          Are you sure you want to delete {target ? <strong>"{target.name}"</strong> : "this course"}? This action cannot be undone.
+        </span>
+      ),
+      confirmText: "Yes, Delete Course",
+      variant: "danger",
+      icon: "🗑️",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await apiDelete(`/admin/courses/${courseId}`);
+          if (selectedCourseId === courseId) {
+            setSelectedCourseId("");
+          }
+          await loadCourses();
+          resetCourseForm();
+        } catch (error: any) {
+          console.error(error);
+        }
+      },
+    });
   };
 
   const handleSyncAssignments = async () => {
@@ -521,6 +545,20 @@ const CourseManagement: React.FC = () => {
           )}
         </section>
       </div>
+
+      {/* In-Screen Confirm Dialog */}
+      {confirmDialog && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmText={confirmDialog.confirmText}
+          variant={confirmDialog.variant}
+          icon={confirmDialog.icon}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+        />
+      )}
     </div>
   );
 };

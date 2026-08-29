@@ -80,8 +80,12 @@ function AccountSuspendedPage({ onLogout }: { onLogout: () => void }) {
 }
 
 function App() {
-  const [currentRole, setCurrentRole] = useState<UserRole | null>(null);
-  const [currentUser, setCurrentUser] = useState<string>('');
+  const [currentRole, setCurrentRole] = useState<UserRole | null>(() => {
+    return sessionStorage.getItem('role') as UserRole | null;
+  });
+  const [currentUser, setCurrentUser] = useState<string>(() => {
+    return sessionStorage.getItem('userId') || '';
+  });
   const [isSuspended, setIsSuspended] = useState<boolean>(() => {
     return sessionStorage.getItem('account_permanently_blocked') === 'true';
   });
@@ -107,18 +111,9 @@ function App() {
             if (res.status === 403) {
               sessionStorage.setItem('account_permanently_blocked', 'true');
               setIsSuspended(true);
-            } else {
-              setCurrentRole(savedRole);
-              setCurrentUser(savedUser);
             }
           })
-          .catch(() => {
-            setCurrentRole(savedRole);
-            setCurrentUser(savedUser);
-          });
-      } else {
-        setCurrentRole(savedRole);
-        setCurrentUser(savedUser);
+          .catch(() => {});
       }
     }
   }, []);
