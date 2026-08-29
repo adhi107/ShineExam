@@ -306,10 +306,12 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
   return (
     <SensitiveContent
       userId={userId}
-      hideOnTabSwitch={testStep === "exam"}
-      shieldOnScreenShare={testStep === "exam"}
-      hideOnWindowBlur={testStep === "exam"}
+      module="exam"
+      hideOnTabSwitch={testStep === "exam" && !submitting}
+      shieldOnScreenShare={testStep === "exam" && !submitting}
+      hideOnWindowBlur={testStep === "exam" && !submitting}
       showWatermark={testStep === "exam"}
+      exemptOnSubmit={submitting || testStep === "confirm" || testStep === "submitted"}
       shieldMessage="Exam content is hidden. Return to this tab to continue your exam."
       className="test-interface-root"
     >

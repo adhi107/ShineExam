@@ -270,8 +270,8 @@ def block_user_on_violation():
         "recordedAt": datetime.utcnow(),
     })
 
-    # If strict lock is disabled or if this is during an exam/results, just warn — never block the account
-    if not strict_lock or module_name in ["exam", "results"]:
+    # If strict lock is disabled, just warn — never block the account
+    if not strict_lock:
         audit_log(
             action=f"VIOLATION_WARNED_{reason.upper()}",
             user_id=canonical_user_id,

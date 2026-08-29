@@ -35,6 +35,8 @@ interface SensitiveContentProps {
   enableVideoOverlay?: boolean;
   className?: string;
   shieldMessage?: string;
+  /** Exempt violations during exam submission phase */
+  exemptOnSubmit?: boolean;
 }
 
 interface ViolationResult {
@@ -58,6 +60,7 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
   enableVideoOverlay = true,
   className = '',
   shieldMessage = 'Content protected for exam security.',
+  exemptOnSubmit = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { userId: ctxUserId, sessionId, clearSession } = useSecurityContext();
@@ -94,7 +97,7 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
       })
       .catch(() => {
         // Fallback: active for exam and results
-        setIsModuleProtected(['exam', 'results', 'documents'].includes(module));
+        setIsModuleProtected(['exam', 'results', 'documents', 'classes'].includes(module));
       });
   }, [module]);
 
@@ -134,12 +137,8 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
   }, [userId, sessionId, module]);
 
   const triggerViolation = useCallback(async (reason: 'screenshot' | 'recording') => {
-    // Exam and results modules should never permanently lock candidates out of their exams
-    if (module === 'exam' || module === 'results') {
-      // Just send non-blocking audit event to backend
-      callViolationBlock(reason).catch(() => {});
-      return;
-    }
+    // Exempt if user is submitting the exam
+    if (exemptOnSubmit) return;
 
     // If this module is not in the protected list, bypass
     if (!isModuleProtected) return;
@@ -168,7 +167,7 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
     } finally {
       setTimeout(() => { violationInFlightRef.current = false; }, 2000);
     }
-  }, [module, isModuleProtected, isPermanentlySuspended, callViolationBlock]);
+  }, [exemptOnSubmit, isModuleProtected, isPermanentlySuspended, callViolationBlock]);
 
   const {
     isPageHidden,
@@ -176,38 +175,38 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
     isPrintScreenAttempted,
     isWindowBlurred,
   } = useScreenProtection({
-    blockCopy: isModuleProtected,
-    blockContextMenu: isModuleProtected,
-    blockDrag: isModuleProtected,
-    flashOnPrintScreen: isModuleProtected,
+    blockCopy: isModuleProtected && !exemptOnSubmit,
+    blockContextMenu: isModuleProtected && !exemptOnSubmit,
+    blockDrag: isModuleProtected && !exemptOnSubmit,
+    flashOnPrintScreen: isModuleProtected && !exemptOnSubmit,
     onPrintScreenAttempt: () => {
-      if (module !== 'exam' && module !== 'results' && isModuleProtected) {
+      if (!exemptOnSubmit && isModuleProtected) {
         triggerViolation('screenshot');
       }
     },
     onScreenShareStart: () => {
-      if (module !== 'exam' && module !== 'results' && isModuleProtected) {
+      if (!exemptOnSubmit && isModuleProtected) {
         triggerViolation('recording');
       }
     },
   });
 
-  // Check if screen sharing started (for non-exam modules)
+  // Check if screen sharing started
   useEffect(() => {
-    if (module !== 'exam' && module !== 'results' && isModuleProtected && isScreenSharing && !isPermanentlySuspended) {
+    if (!exemptOnSubmit && isModuleProtected && isScreenSharing && !isPermanentlySuspended) {
       triggerViolation('recording');
     }
-  }, [module, isModuleProtected, isScreenSharing, isPermanentlySuspended, triggerViolation]);
+  }, [exemptOnSubmit, isModuleProtected, isScreenSharing, isPermanentlySuspended, triggerViolation]);
 
-  // Check if printscreen attempted (for non-exam modules)
+  // Check if printscreen attempted
   useEffect(() => {
-    if (module !== 'exam' && module !== 'results' && isModuleProtected && isPrintScreenAttempted && !isPermanentlySuspended) {
+    if (!exemptOnSubmit && isModuleProtected && isPrintScreenAttempted && !isPermanentlySuspended) {
       triggerViolation('screenshot');
     }
-  }, [module, isModuleProtected, isPrintScreenAttempted, isPermanentlySuspended, triggerViolation]);
+  }, [exemptOnSubmit, isModuleProtected, isPrintScreenAttempted, isPermanentlySuspended, triggerViolation]);
 
   // Hardware GPU video overlay
-  useVideoOverlayProtection(enableVideoOverlay && isModuleProtected);
+  useVideoOverlayProtection(enableVideoOverlay && isModuleProtected && !exemptOnSubmit);
 
   const shouldShieldShare = isModuleProtected && shieldOnScreenShare && isScreenSharing;
   const shouldHideTab     = isModuleProtected && hideOnTabSwitch && isPageHidden && !blurOnTabSwitch;
