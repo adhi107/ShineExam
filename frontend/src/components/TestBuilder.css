@@ -326,10 +326,67 @@
 .test-builder .section-edit-input { width: 9rem !important; min-height: 2rem !important; padding: .3rem .5rem !important; }
 
 .test-builder .add-section {
-  display: grid;
-  grid-template-columns: minmax(14rem, 24rem) auto;
+  display: flex;
   align-items: center;
   gap: .75rem;
+  flex: 1;
+  min-width: 260px;
+}
+
+.test-builder .add-section input {
+  max-width: 320px;
+}
+
+.test-builder .section-bottom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+.test-builder .save-test-btn-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.4rem;
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 0.6rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.28);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.test-builder .save-test-btn-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.38);
+  background: linear-gradient(135deg, #047857 0%, #059669 100%);
+}
+
+.test-builder .save-test-btn-action:active {
+  transform: translateY(0);
+}
+
+.test-builder .save-test-btn-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.test-builder .header-save-btn {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%) !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25) !important;
+}
+
+.test-builder .header-save-btn:hover {
+  background: linear-gradient(135deg, #047857 0%, #059669 100%) !important;
 }
 
 .test-builder .questions-section { margin-top: 1.25rem; }

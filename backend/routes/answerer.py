@@ -56,20 +56,14 @@ def enforce_candidate_active_status():
     })
     if user and not user.get("isActive", True):
         status_reason = user.get("statusReason", "")
-        # Auto-unblock if blocked solely due to screenshot violation
-        if status_reason in ("security_violation_screenshot", "security_violation_recording"):
-            db.users.update_one(
-                {"_id": user["_id"]},
-                {"$set": {"isActive": True, "statusReason": "active"}}
-            )
-            return None
-
         if status_reason == "security_violation_screenshot":
-            msg = "Your account is suspended due to unauthorized screenshot activity. Contact the admin for unblock."
+            msg = "Your account is suspended due to unauthorized screenshot activity. Contact the administrator to unblock your account."
         elif status_reason == "security_violation_recording":
-            msg = "Your account is suspended due to screen recording/sharing violations. Contact the admin for unblock."
+            msg = "Your account is suspended due to screen recording/sharing violations. Contact the administrator to unblock your account."
+        elif status_reason == "validity_expired":
+            msg = "Your account validity has expired. Contact the administrator for renewal."
         else:
-            msg = "Your account is suspended. Contact the admin for unblock."
+            msg = "Your account is suspended. Contact the administrator to unblock your account."
         return jsonify({"error": msg, "blocked": True, "statusReason": status_reason}), 403
 
 

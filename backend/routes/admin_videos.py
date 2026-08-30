@@ -204,10 +204,19 @@ def create_video():
             if file.filename == "" or not allowed_file(file.filename):
                 return jsonify({"error": "Invalid or missing video file. Allowed formats: MP4, WebM, OGG, MOV"}), 400
 
-            ext = file.filename.rsplit(".", 1)[1].lower()
+            ext = file.filename.rsplit(".", 1)[1].lower() if "." in file.filename else "mp4"
             unique_filename = f"video_{uuid.uuid4().hex[:12]}.{ext}"
-            file_path = os.path.join(get_videos_dir(), unique_filename)
-            file.save(file_path)
+            videos_dir = get_videos_dir()
+            os.makedirs(videos_dir, exist_ok=True)
+            file_path = os.path.join(videos_dir, unique_filename)
+
+            with open(file_path, "wb") as f_out:
+                while True:
+                    chunk = file.stream.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    f_out.write(chunk)
+
             file_size_bytes = os.path.getsize(file_path)
 
             video_record["filename"] = unique_filename

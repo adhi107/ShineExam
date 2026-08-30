@@ -626,9 +626,14 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
           <h2>Create New Test</h2>
           <p>Configure the paper, organise sections and add answer-ready questions.</p>
         </div>
-        <button className="secondary-btn" onClick={onBack}>
-          ← Back to Tests
-        </button>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <button className="secondary-btn" onClick={onBack}>
+            ← Back to Tests
+          </button>
+          <button className="primary-btn header-save-btn" onClick={handleSaveTest} disabled={isSaving}>
+            {isSaving ? "Saving..." : "💾 Save Test"}
+          </button>
+        </div>
       </div>
 
       <div className="builder-progress" aria-label="Test creation steps">
@@ -737,15 +742,26 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
               </div>
             ))}
           </div>
-          <div className="add-section">
-            <input
-              type="text"
-              value={newSection}
-              onChange={e => setNewSection(e.target.value)}
-              placeholder="New section name"
-              onKeyDown={e => { if (e.key === 'Enter') addSection(); }}
-            />
-            <button className="primary-btn" onClick={addSection}>Add Section</button>
+          <div className="section-bottom-row">
+            <div className="add-section">
+              <input
+                type="text"
+                value={newSection}
+                onChange={e => setNewSection(e.target.value)}
+                placeholder="New section name"
+                onKeyDown={e => { if (e.key === 'Enter') addSection(); }}
+              />
+              <button type="button" className="primary-btn" onClick={addSection}>Add Section</button>
+            </div>
+            <button
+              type="button"
+              className="save-test-btn-action"
+              onClick={handleSaveTest}
+              disabled={isSaving}
+              title="Save and publish this exam"
+            >
+              {isSaving ? "Saving Test..." : "💾 Save Test"}
+            </button>
           </div>
         </div>
       </div>

@@ -112,21 +112,14 @@ def create_app() -> Flask:
         })
         if user and not user.get("isActive", True):
             status_reason = user.get("statusReason", "")
-            # Auto-unblock if blocked solely due to screenshot violation during tests
-            if status_reason in ("security_violation_screenshot", "security_violation_recording"):
-                db.users.update_one(
-                    {"_id": user["_id"]},
-                    {"$set": {"isActive": True, "statusReason": "active"}}
-                )
-                return None
-
             return jsonify({
-                "error": "Your account is suspended. Contact the admin for unblock.",
+                "error": "Your account is suspended due to security policy violations. Contact the administrator to unblock your account.",
                 "blocked": True,
                 "statusReason": status_reason
             }), 403
 
-
+    # Support large video and asset uploads (up to 1 GB)
+    app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024 * 1024
 
     # Add security headers to every API response
     app.after_request(add_security_headers)

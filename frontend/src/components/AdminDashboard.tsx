@@ -221,6 +221,14 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
         </button>
         <span className="admin-mobile-title">Admin Console</span>
         <div className="admin-mobile-topbar-right">
+          <button
+            type="button"
+            className="admin-mobile-pw-btn"
+            onClick={() => setShowPassword(true)}
+            title="Change password"
+          >
+            Password
+          </button>
           <button className="admin-mobile-signout-btn" onClick={onLogout}>Sign out</button>
         </div>
       </div>
@@ -257,7 +265,7 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
           <Nav active={currentView === "results"} icon="results" label="Analytics" collapsed={isDesktopCollapsed} onClick={() => goMobile("results")} />
           <Nav active={currentView === "violations"} icon="violations" label="Violations" collapsed={isDesktopCollapsed} onClick={() => goMobile("violations")} />
           <Nav active={currentView === "audit-logs"} icon="audit" label="Audit Logs" collapsed={isDesktopCollapsed} onClick={() => goMobile("audit-logs")} />
-          <Nav active={currentView === "security-controls"} icon="controls" label="Security Controls" collapsed={isDesktopCollapsed} onClick={() => goMobile("security-controls")} />
+          <Nav active={currentView === "security-controls"} icon="controls" label="Access Controls" collapsed={isDesktopCollapsed} onClick={() => goMobile("security-controls")} />
         </nav>
 
         <div className="admin-sidebar-user">

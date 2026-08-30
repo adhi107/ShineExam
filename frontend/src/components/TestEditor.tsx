@@ -768,9 +768,14 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
           <h2>Edit Test: {testName}</h2>
           <p>Modify test details, timing, sections and questions.</p>
         </div>
-        <button className="secondary-btn" onClick={onBack}>
-          ← Back to Tests
-        </button>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <button className="secondary-btn" onClick={onBack}>
+            ← Back to Tests
+          </button>
+          <button className="primary-btn header-save-btn" onClick={handleUpdateTest}>
+            💾 Save Test
+          </button>
+        </div>
       </div>
 
       <div className="form-card">
@@ -932,15 +937,26 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
               </div>
             ))}
           </div>
-          <div className="add-section">
-            <input
-              type="text"
-              value={newSection}
-              onChange={(e) => setNewSection(e.target.value)}
-              placeholder="New section name"
-            />
-            <button className="primary-btn" onClick={addSection}>
-              Add Section
+          <div className="section-bottom-row">
+            <div className="add-section">
+              <input
+                type="text"
+                value={newSection}
+                onChange={(e) => setNewSection(e.target.value)}
+                placeholder="New section name"
+                onKeyDown={(e) => { if (e.key === 'Enter') addSection(); }}
+              />
+              <button type="button" className="primary-btn" onClick={addSection}>
+                + Add Section
+              </button>
+            </div>
+            <button
+              type="button"
+              className="save-test-btn-action"
+              onClick={handleUpdateTest}
+              title="Save all changes to this test"
+            >
+              💾 Save Test
             </button>
           </div>
         </div>

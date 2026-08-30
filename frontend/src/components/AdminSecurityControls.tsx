@@ -133,6 +133,7 @@ const AdminSecurityControls: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string>("");
+  const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
 
   // Wipeout Execution State
   const [showWipeoutModal, setShowWipeoutModal] = useState<boolean>(false);
@@ -187,9 +188,10 @@ const AdminSecurityControls: React.FC = () => {
     try {
       const res = await apiPut<{ message: string; settings: SecuritySettings }>("/admin/security-settings", settings);
       if (res.settings) setSettings(res.settings);
-      showToast("Security, Module & Data Retention policies deployed successfully.");
+      setShowSuccessModal(true);
+      showToast("Access controls & policies saved successfully.");
     } catch (err: any) {
-      alert(err?.message || "Failed to save security settings.");
+      alert(err?.message || "Failed to save access controls.");
     } finally {
       setSaving(false);
     }
@@ -221,17 +223,23 @@ const AdminSecurityControls: React.FC = () => {
     );
   };
 
-  const executeWipeout = async () => {
+  const handleExecuteWipeout = async () => {
     if (selectedWipeModules.length === 0) {
-      alert("Please select at least one data module to wipe.");
+      alert("Please select at least one module to wipe.");
       return;
     }
+
     setWiping(true);
     try {
-      const res = await apiPost<{ message: string; stats: Record<string, number>; totalPurged: number; timestamp: string }>(
-        "/admin/security-settings/wipeout",
-        { modules: selectedWipeModules }
-      );
+      const res = await apiPost<{
+        message: string;
+        stats: Record<string, number>;
+        totalPurged: number;
+        timestamp: string;
+      }>("/admin/security-settings/wipeout", {
+        modules: selectedWipeModules,
+      });
+
       setShowWipeoutModal(false);
       showToast(`Data wipeout complete: ${res.totalPurged} expired records purged.`);
       loadSettings();
@@ -259,8 +267,8 @@ const AdminSecurityControls: React.FC = () => {
       {/* Top Header */}
       <header className="controls-header">
         <div>
-          <span className="section-eyebrow">SYSTEM SECURITY &amp; PROCTORING</span>
-          <h1>Admin Security Controls</h1>
+          <span className="section-eyebrow">SYSTEM SECURITY &amp; ACCESS CONTROLS</span>
+          <h1>Access Controls &amp; Security Policies</h1>
           <p>Configure candidate session timeouts, anti-cheat proctoring policies, document access, and module-wise data wipeout timelines.</p>
         </div>
         <div className="controls-header-badge">
@@ -1135,15 +1143,14 @@ const AdminSecurityControls: React.FC = () => {
                   )}
                 </p>
               </div>
-            </div>
-
-            <div className="footer-actions">
-              <button type="button" className="btn-secondary-reload" onClick={loadSettings}>
-                Reset to Current
-              </button>
-              <button type="submit" className="btn-primary-deploy" disabled={saving}>
-                {saving ? "Deploying Policy Changes..." : "Deploy Security Policy"}
-              </button>
+              <div className="footer-actions">
+                <button type="button" className="btn-secondary-reload" onClick={loadSettings}>
+                  Reset to Current
+                </button>
+                <button type="submit" className="btn-primary-deploy" disabled={saving}>
+                  {saving ? "Saving Changes..." : "💾 Save"}
+                </button>
+              </div>
             </div>
           </div>
         </form>
@@ -1198,7 +1205,7 @@ const AdminSecurityControls: React.FC = () => {
                         <small>
                           {isNever
                             ? "Policy is set to Never — will not wipe unless configured"
-                            : `Purges records older than ${item.days} ${item.unit}`}
+                            : `Purging records older than ${item.days} ${item.unit}`}
                         </small>
                       </div>
                     </label>
@@ -1207,7 +1214,7 @@ const AdminSecurityControls: React.FC = () => {
               </div>
             </div>
 
-            <div className="wipeout-modal-foot">
+            <div className="wipeout-modal-footer">
               <button
                 type="button"
                 className="btn-wipeout-cancel"
@@ -1219,11 +1226,50 @@ const AdminSecurityControls: React.FC = () => {
                 type="button"
                 className="btn-wipeout-confirm"
                 disabled={wiping || selectedWipeModules.length === 0}
-                onClick={executeWipeout}
+                onClick={handleExecuteWipeout}
               >
                 {wiping ? "Purging Records..." : `Purge Selected (${selectedWipeModules.length})`}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* On-Screen Success Popup Dialog */}
+      {showSuccessModal && (
+        <div className="access-success-backdrop" onClick={() => setShowSuccessModal(false)}>
+          <div className="access-success-card" onClick={(e) => e.stopPropagation()}>
+            <div className="access-success-icon-wrap">
+              <div className="success-pulse-ring" />
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+            <h2>Access Controls Saved Successfully!</h2>
+            <p>
+              Your security rules, screenshot protection thresholds, module shields, and data retention policies have been saved and applied system-wide.
+            </p>
+            <div className="access-success-summary">
+              <div className="summary-item">
+                <span>Screenshot Lock:</span>
+                <strong>{settings.strictScreenshotLock ? `Enabled (${settings.screenshotAllowedAttempts} Attempt${settings.screenshotAllowedAttempts > 1 ? "s" : ""})` : "Disabled (Warnings Only)"}</strong>
+              </div>
+              <div className="summary-item">
+                <span>Protected Modules:</span>
+                <strong>{settings.screenshotProtectedModules?.length || 0} Modules Active</strong>
+              </div>
+              <div className="summary-item">
+                <span>Solution Watermark:</span>
+                <strong>{settings.solutionReportWatermarkEnabled ? "Active (Bold)" : "Disabled"}</strong>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-access-success-done"
+              onClick={() => setShowSuccessModal(false)}
+            >
+              Done &amp; Continue
+            </button>
           </div>
         </div>
       )}
