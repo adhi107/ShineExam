@@ -227,7 +227,7 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
             onClick={() => setShowPassword(true)}
             title="Change password"
           >
-            Password
+            Change password
           </button>
           <button className="admin-mobile-signout-btn" onClick={onLogout}>Sign out</button>
         </div>

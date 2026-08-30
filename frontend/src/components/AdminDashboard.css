@@ -1126,11 +1126,22 @@
     box-sizing: border-box !important;
   }
 
-  /* Reset sidebar on mobile */
   .shine-admin-sidebar,
   .shine-admin-sidebar.collapsed {
     width: 280px !important;
     max-width: 85vw !important;
+  }
+
+  /* Hide Change password and Sign out buttons on mobile drawer since they are in mobile topbar */
+  .shine-admin-sidebar .admin-sidebar-user button,
+  .shine-admin-sidebar.collapsed .admin-sidebar-user button {
+    display: none !important;
+  }
+
+  .shine-admin-sidebar .admin-sidebar-user,
+  .shine-admin-sidebar.collapsed .admin-sidebar-user {
+    padding: 12px 16px !important;
+    gap: 0 !important;
   }
 
   .shine-admin-sidebar .admin-brand,
