@@ -568,17 +568,47 @@ const UserManagement: React.FC = () => {
           <div className="student-modal" onMouseDown={event => event.stopPropagation()}>
             <header>
               <div>
-                <span>{editing ? "EDIT STUDENT" : "NEW STUDENT"}</span>
+                <span className="modal-badge">{editing ? "EDIT STUDENT" : "NEW STUDENT"}</span>
                 <h2>{editing ? editing.name : "Create student account"}</h2>
               </div>
-              <button onClick={closeModal}>×</button>
+              <button type="button" className="modal-close-btn" onClick={closeModal} aria-label="Close modal">×</button>
             </header>
             <div className="student-form">
-              <label>Full name<input value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label>
-              <label>Email address<input type="email" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /></label>
-              <label>Username<input disabled={!!editing} value={form.userId} onChange={event => setForm({ ...form, userId: event.target.value })} /></label>
-              <label>Enrolled Course / Batch
-                <select value={form.courseStream || "Banking PO/Clerk"} onChange={event => setForm({ ...form, courseStream: event.target.value })}>
+              <label>
+                Full name
+                <input
+                  type="text"
+                  placeholder="e.g. Adithya Kumar"
+                  value={form.name}
+                  onChange={event => setForm({ ...form, name: event.target.value })}
+                />
+              </label>
+              <label>
+                Email address
+                <input
+                  type="email"
+                  placeholder="e.g. adithya@victory.com"
+                  value={form.email}
+                  onChange={event => setForm({ ...form, email: event.target.value })}
+                />
+              </label>
+              <label>
+                Username
+                <input
+                  type="text"
+                  disabled={!!editing}
+                  placeholder="Unique login ID"
+                  value={form.userId}
+                  onChange={event => setForm({ ...form, userId: event.target.value })}
+                />
+              </label>
+              <label>
+                Enrolled Course / Batch
+                <select
+                  className="student-course-select"
+                  value={form.courseStream || "Banking PO/Clerk"}
+                  onChange={event => setForm({ ...form, courseStream: event.target.value })}
+                >
                   <option value="Banking PO/Clerk">Banking PO/Clerk (Prelims + Mains)</option>
                   <option value="SSC CGL/CHSL">SSC CGL/CHSL (Tier 1 & 2)</option>
                   <option value="Banking + SSC Combo">Banking + SSC Combo Comprehensive</option>
@@ -588,17 +618,31 @@ const UserManagement: React.FC = () => {
                 </select>
               </label>
               {!editing && (
-                <label>Temporary password
-                  <input type="password" value={form.password} onChange={event => setForm({ ...form, password: event.target.value })} placeholder="Minimum 4 characters" />
+                <label>
+                  Temporary password
+                  <input
+                    type="password"
+                    value={form.password}
+                    onChange={event => setForm({ ...form, password: event.target.value })}
+                    placeholder="Minimum 4 characters"
+                  />
                 </label>
               )}
-              <label>Account valid until
-                <input type="date" min={new Date().toISOString().slice(0,10)} value={form.validUntil} onChange={event => setForm({ ...form, validUntil: event.target.value })} />
+              <label>
+                Account valid until
+                <input
+                  type="date"
+                  min={new Date().toISOString().slice(0, 10)}
+                  value={form.validUntil}
+                  onChange={event => setForm({ ...form, validUntil: event.target.value })}
+                />
               </label>
             </div>
             <footer>
-              <button onClick={closeModal}>Cancel</button>
-              <button className="save" disabled={saving} onClick={save}>{saving ? "Saving…" : editing ? "Save changes" : "Create student"}</button>
+              <button type="button" className="btn-cancel" onClick={closeModal}>Cancel</button>
+              <button type="button" className="save" disabled={saving} onClick={save}>
+                {saving ? "Saving…" : editing ? "Save changes" : "Create student"}
+              </button>
             </footer>
           </div>
         </div>
