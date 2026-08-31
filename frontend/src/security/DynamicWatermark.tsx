@@ -141,6 +141,8 @@ const DynamicWatermark: React.FC<DynamicWatermarkProps> = ({
   intervalMs = 8_000,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { userId: ctxUserId, sessionId: ctxSessionId, orgName: ctxOrgName } = useSecurityContext();
+
   let resolvedOrgName = orgNameProp || '';
   if (!resolvedOrgName && typeof sessionStorage !== 'undefined') {
     try {
