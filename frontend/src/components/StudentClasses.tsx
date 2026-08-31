@@ -111,9 +111,9 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
       module="classes"
       userId={userId}
       showWatermark={false}
-      hideOnTabSwitch={false}
-      hideOnWindowBlur={false}
-      enableVideoOverlay={false}
+      hideOnTabSwitch={true}
+      hideOnWindowBlur={true}
+      enableVideoOverlay={true}
     >
       <div className="student-classes-shell">
         {/* Hero Banner */}

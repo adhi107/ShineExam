@@ -53,14 +53,18 @@ DEFAULT_SECURITY_SETTINGS = {
 @admin_security_controls_bp.get("/security-settings")
 def get_security_settings():
     """
-    Get active security settings from DB.
+    Get active security settings from DB for the active tenant.
     """
+    from utils.tenant import get_request_tenant_id, build_tenant_filter, DEFAULT_TENANT_ID
     db = get_db()
-    settings = db.system_settings.find_one({"type": "security_config"})
+    tenant_id = get_request_tenant_id()
+    tenant_filter = build_tenant_filter(tenant_id)
+
+    settings = db.system_settings.find_one({**tenant_filter, "type": "security_config"})
     if not settings:
-        settings = dict(DEFAULT_SECURITY_SETTINGS)
+        settings = db.system_settings.find_one({"type": "security_config"}) or dict(DEFAULT_SECURITY_SETTINGS)
         settings["type"] = "security_config"
-        db.system_settings.insert_one(settings)
+        settings["tenantId"] = tenant_id
 
     retention = settings.get("retentionPolicy") or DEFAULT_SECURITY_SETTINGS["retentionPolicy"]
 
@@ -157,8 +161,13 @@ def update_security_settings():
         "updatedBy": request.headers.get("X-User-Id", "Admin"),
     }
 
+    from utils.tenant import get_request_tenant_id, build_tenant_filter, DEFAULT_TENANT_ID
+    tenant_id = get_request_tenant_id()
+    tenant_filter = build_tenant_filter(tenant_id)
+    updates["tenantId"] = tenant_id
+
     db.system_settings.update_one(
-        {"type": "security_config"},
+        {"tenantId": tenant_id, "type": "security_config"},
         {"$set": updates},
         upsert=True
     )
@@ -321,8 +330,15 @@ def get_public_security_config():
     """
     Public lightweight endpoint for candidates & frontend to read active security & watermark settings.
     """
+    from utils.tenant import get_request_tenant_id, build_tenant_filter, DEFAULT_TENANT_ID
     db = get_db()
-    settings = db.system_settings.find_one({"type": "security_config"}) or DEFAULT_SECURITY_SETTINGS
+    tenant_id = get_request_tenant_id()
+    tenant_filter = build_tenant_filter(tenant_id)
+    settings = (
+        db.system_settings.find_one({**tenant_filter, "type": "security_config"})
+        or db.system_settings.find_one({"type": "security_config"})
+        or DEFAULT_SECURITY_SETTINGS
+    )
     return jsonify({
         "autoLogoutEnabled": bool(settings.get("autoLogoutEnabled", True)),
         "autoLogoutMinutes": int(settings.get("autoLogoutMinutes", 15)),
