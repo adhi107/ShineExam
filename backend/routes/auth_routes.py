@@ -21,7 +21,11 @@ auth_bp = Blueprint("auth", __name__)
 @auth_bp.get("/tenant-branding")
 def get_branding():
     """Retrieve branding for a given tenant ID or the default organization."""
-    tenant_id = request.args.get("tenantId", "").strip() or DEFAULT_TENANT_ID
+    tenant_id = (
+        request.args.get("tenantId", "").strip()
+        or request.headers.get("X-Tenant-Id", "").strip()
+        or DEFAULT_TENANT_ID
+    )
     branding = get_tenant_branding(tenant_id)
     return jsonify({"branding": branding})
 

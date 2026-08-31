@@ -41,6 +41,7 @@ def create_app() -> Flask:
         return jsonify({"status": "ok", "service": "exam-portal-backend"})
 
     @app.get("/uploads/<path:filename>")
+    @app.get("/api/uploads/<path:filename>")
     def serve_uploads(filename):
         uploads_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
         return send_from_directory(uploads_dir, filename)

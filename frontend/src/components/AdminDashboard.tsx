@@ -118,6 +118,15 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
+  const { loadTenantBranding } = useTenant();
+
+  useEffect(() => {
+    const tid = sessionStorage.getItem("activeTenantId") || sessionStorage.getItem("tenantId");
+    if (tid) {
+      loadTenantBranding(tid);
+    }
+  }, []);
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem("shine_admin_sidebar_collapsed") === "true"
   );

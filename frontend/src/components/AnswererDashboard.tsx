@@ -9,6 +9,7 @@ import { CandidateAnnouncements, CandidateBookmarks, CandidateDocuments, Candida
 import ValueHelpField from "./ValueHelpField";
 import { ParsedQuestionPreview } from "./ParsedQuestionPreview";
 import DynamicWatermark from "../security/DynamicWatermark";
+import { useTenant } from "../context/TenantContext";
 import "./AnswererDashboard.css";
 import "./CandidateValidity.css";
 
@@ -150,6 +151,14 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
   const [newPassword, setNewPassword] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
+  const { loadTenantBranding } = useTenant();
+
+  useEffect(() => {
+    const tid = sessionStorage.getItem("activeTenantId") || sessionStorage.getItem("tenantId");
+    if (tid) {
+      loadTenantBranding(tid);
+    }
+  }, []);
 
   const view: PortalView = location.pathname.includes("classes") || location.pathname.includes("videos")
     ? "classes" : location.pathname.includes("history") || location.pathname.includes("report")

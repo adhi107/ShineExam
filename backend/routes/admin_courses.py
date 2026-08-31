@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, request
 from config.db import get_db
 from utils.json import to_jsonable
 from utils.validators import require_fields
+from utils.tenant import get_request_tenant_id, build_tenant_filter, DEFAULT_TENANT_ID
 
 
 admin_courses_bp = Blueprint("admin_courses", __name__)
@@ -114,7 +115,9 @@ def _ensure_default_course_materials(db, course_id, now=None):
 @admin_courses_bp.route("/", methods=["GET"])
 def list_courses():
     db = get_db()
-    courses = list(db.courses.find({}).sort("createdAt", -1))
+    tenant_id = get_request_tenant_id()
+    filter_q = build_tenant_filter(tenant_id)
+    courses = list(db.courses.find(filter_q).sort("createdAt", -1))
     out = []
     for course in courses:
         assignment_count = db.course_assignments.count_documents({"courseId": course["_id"]})
@@ -154,12 +157,16 @@ def create_course():
         return jsonify({"error": "Course name is required"}), 400
 
     db = get_db()
-    existing = db.courses.find_one({"nameLower": name.lower()})
+    tenant_id = get_request_tenant_id()
+    filter_q = build_tenant_filter(tenant_id)
+
+    existing = db.courses.find_one({"nameLower": name.lower(), **filter_q})
     if existing:
         return jsonify({"error": "Course name already exists"}), 409
 
     now = datetime.utcnow()
     doc = {
+        "tenantId": tenant_id,
         "name": name,
         "nameLower": name.lower(),
         "description": str(payload.get("description") or "").strip(),
