@@ -1689,7 +1689,26 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onE
                     <div className="org-card-header">
                       <div className="org-logo-preview">
                         {org.logoUrl ? (
-                          <img src={getMediaUrl(org.logoUrl)} alt={org.name} />
+                          <img
+                            src={getMediaUrl(org.logoUrl)}
+                            alt={org.name}
+                            onError={(e) => {
+                              const img = e.target as HTMLImageElement;
+                              if (!img.src.includes('/api/uploads/') && img.src.includes('/uploads/')) {
+                                img.src = img.src.replace('/uploads/', '/api/uploads/');
+                                return;
+                              }
+                              img.style.display = 'none';
+                              const parent = img.parentElement;
+                              if (parent && !parent.querySelector('.org-logo-fallback')) {
+                                const fallback = document.createElement('div');
+                                fallback.className = 'org-logo-fallback';
+                                fallback.style.backgroundColor = org.primaryColor || '#2563eb';
+                                fallback.textContent = (org.name || 'OG').slice(0, 2).toUpperCase();
+                                parent.appendChild(fallback);
+                              }
+                            }}
+                          />
                         ) : (
                           <div className="org-logo-fallback" style={{ backgroundColor: org.primaryColor || "#2563eb" }}>
                             {org.name.slice(0, 2).toUpperCase()}
@@ -4204,7 +4223,18 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onE
                   <div className="logo-uploader-row">
                     <div className="logo-preview-box" style={{ borderColor: orgForm.primaryColor }}>
                       {logoPreview ? (
-                        <img src={logoPreview} alt="Logo Preview" />
+                        <img
+                          src={logoPreview}
+                          alt="Logo Preview"
+                          onError={(e) => {
+                            const img = e.target as HTMLImageElement;
+                            if (!img.src.includes('/api/uploads/') && img.src.includes('/uploads/')) {
+                              img.src = img.src.replace('/uploads/', '/api/uploads/');
+                              return;
+                            }
+                            img.src = "/assets/shine-logo.png";
+                          }}
+                        />
                       ) : (
                         <div className="logo-empty-box">No Logo</div>
                       )}
@@ -4214,7 +4244,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onE
                         <input
                           type="file"
                           id="org-logo-file"
-                          accept="image/*"
+                          accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml, image/gif, image/avif, image/bmp, image/*"
                           style={{ display: "none" }}
                           onChange={handleLogoFileUpload}
                         />

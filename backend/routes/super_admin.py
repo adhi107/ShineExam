@@ -362,7 +362,14 @@ def delete_organization(org_id):
 # ─────────────────────────────────────────────────────────────
 @super_admin_bp.post("/organizations/upload-logo")
 def upload_organization_logo():
-    """Upload custom organization logo image file."""
+    """Upload custom organization logo image file or base64 data with multi-format support."""
+    # Check for direct base64 image payload
+    if request.is_json:
+        payload = request.get_json(silent=True) or {}
+        base64_str = payload.get("data") or payload.get("base64") or payload.get("logoUrl")
+        if base64_str and str(base64_str).startswith("data:image/"):
+            return jsonify({"success": True, "logoUrl": base64_str, "filename": "logo_data_uri"})
+
     if "logo" not in request.files and "file" not in request.files:
         return jsonify({"error": "No logo file provided"}), 400
 
@@ -370,12 +377,14 @@ def upload_organization_logo():
     if not file or file.filename == "":
         return jsonify({"error": "Empty filename"}), 400
 
-    allowed_exts = {".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif"}
-    ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in allowed_exts:
-        return jsonify({"error": f"Invalid file type. Allowed: {', '.join(allowed_exts)}"}), 400
+    allowed_exts = {".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif", ".bmp", ".ico", ".tiff", ".jfif", ".avif", ".svgz"}
+    ext = os.path.splitext(file.filename)[1].lower().strip()
+    if not ext or ext not in allowed_exts:
+        # Fallback to .png if missing or standard image
+        ext = ".png"
 
-    uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads", "logos")
+    backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    uploads_dir = os.path.join(backend_root, "uploads", "logos")
     os.makedirs(uploads_dir, exist_ok=True)
 
     filename = f"logo_{uuid.uuid4().hex[:10]}{ext}"
