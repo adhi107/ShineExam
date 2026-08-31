@@ -121,6 +121,8 @@ def get_tenant_branding(tenant_id: str) -> dict:
             "accentColor": org.get("accentColor", "#38bdf8"),
             "status": org.get("status", "active"),
             "features": features,
+            "permissions": org.get("permissions", {}),
+            "securityPolicy": org.get("securityPolicy", {}),
             "customModuleFlags": custom_modules,
         }
 
@@ -133,6 +135,8 @@ def get_tenant_branding(tenant_id: str) -> dict:
         "accentColor": "#38bdf8",
         "status": "active",
         "features": DEFAULT_TENANT_FEATURES,
+        "permissions": {},
+        "securityPolicy": {},
         "customModuleFlags": {},
     }
 
