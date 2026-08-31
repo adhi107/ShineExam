@@ -180,6 +180,8 @@ export function useScreenProtection(
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, [onPageHide, onPageShow]);
 
+  const lastMetaShiftTimeRef = useRef<number>(0);
+
   // ── Window blur/focus ──────────────────────────────────────────────────
   useEffect(() => {
     const onBlur = () => {
@@ -190,18 +192,24 @@ export function useScreenProtection(
           return;
         }
         setIsWindowBlurred(true);
-      }, 50);
+
+        // If user pressed Win / Shift / S within 1500ms before focus loss, trigger instant screenshot violation!
+        const timeSinceMetaShift = Date.now() - lastMetaShiftTimeRef.current;
+        if (timeSinceMetaShift < 1500) {
+          handlePrintScreenDetected();
+        }
+      }, 40);
     };
     const onFocus = () => {
       setIsWindowBlurred(false);
     };
-    window.addEventListener('blur', onBlur);
-    window.addEventListener('focus', onFocus);
+    window.addEventListener('blur', onBlur, { capture: true });
+    window.addEventListener('focus', onFocus, { capture: true });
     return () => {
-      window.removeEventListener('blur', onBlur);
-      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('blur', onBlur, { capture: true });
+      window.removeEventListener('focus', onFocus, { capture: true });
     };
-  }, [enableBlurDetection]);
+  }, [enableBlurDetection, handlePrintScreenDetected]);
 
   // ── Print event protection ──────────────────────────────────────────────
   useEffect(() => {
@@ -237,37 +245,53 @@ export function useScreenProtection(
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key || '';
       const code = e.code || '';
+      const keyCode = e.keyCode || e.which || 0;
 
-      // 1. PrintScreen (all variants, Snapshot)
-      if (key === 'PrintScreen' || code === 'PrintScreen' || key === 'Snapshot') {
+      // Track whenever Win (Meta), Shift or Alt are engaged
+      if (e.metaKey || e.shiftKey || key === 'Meta' || key === 'OS' || code === 'OSLeft' || code === 'OSRight') {
+        lastMetaShiftTimeRef.current = Date.now();
+      }
+
+      // 1. PrintScreen (all variants, Snapshot, Print)
+      if (key === 'PrintScreen' || code === 'PrintScreen' || key === 'Snapshot' || key === 'Print' || keyCode === 44) {
         e.preventDefault();
         e.stopPropagation();
         handlePrintScreenDetected();
         return;
       }
       // 2. Alt + PrintScreen
-      if (e.altKey && (key === 'PrintScreen' || code === 'PrintScreen' || key === 'Snapshot')) {
+      if (e.altKey && (key === 'PrintScreen' || code === 'PrintScreen' || key === 'Snapshot' || keyCode === 44)) {
         e.preventDefault();
         e.stopPropagation();
         handlePrintScreenDetected();
         return;
       }
-      // 3. Win+Shift+S / Meta+Shift+S (Windows Snipping Tool)
-      if (e.shiftKey && (e.metaKey || e.ctrlKey) && (key.toLowerCase() === 's' || code === 'KeyS')) {
+      // 3. Win+Shift+S / Meta+Shift+S / Ctrl+Shift+S / Alt+Shift+S (Windows Snipping Tool & Screen Snip)
+      const isSKey = key.toLowerCase() === 's' || code === 'KeyS' || keyCode === 83;
+      if (e.shiftKey && (e.metaKey || e.ctrlKey || e.altKey || key === 'Meta' || key === 'OS') && isSKey) {
         e.preventDefault();
         e.stopPropagation();
         handlePrintScreenDetected();
         return;
+      }
+      if ((e.metaKey || code === 'OSLeft' || code === 'OSRight') && (e.shiftKey || isSKey)) {
+        lastMetaShiftTimeRef.current = Date.now();
+        if (isSKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          handlePrintScreenDetected();
+          return;
+        }
       }
       // 4. macOS Cmd+Shift+3 / Cmd+Shift+4 / Cmd+Shift+5 / Cmd+Shift+6
-      if (e.metaKey && e.shiftKey && ['3', '4', '5', '6'].includes(key)) {
+      if (e.metaKey && e.shiftKey && ['3', '4', '5', '6', '#', '$', '%', '^'].includes(key)) {
         e.preventDefault();
         e.stopPropagation();
         handlePrintScreenDetected();
         return;
       }
-      // 5. Ctrl+P (Print)
-      if ((e.ctrlKey || e.metaKey) && (key.toLowerCase() === 'p' || code === 'KeyP')) {
+      // 5. Ctrl+P / Cmd+P (Print)
+      if ((e.ctrlKey || e.metaKey) && (key.toLowerCase() === 'p' || code === 'KeyP' || keyCode === 80)) {
         e.preventDefault();
         e.stopPropagation();
         handlePrintScreenDetected();
@@ -286,7 +310,7 @@ export function useScreenProtection(
         return;
       }
       // 8. F12 & DevTools Shortcuts
-      if (key === 'F12' || code === 'F12') {
+      if (key === 'F12' || code === 'F12' || keyCode === 123) {
         e.preventDefault();
         e.stopPropagation();
         return;
@@ -301,15 +325,19 @@ export function useScreenProtection(
     const handleKeyUp = (e: KeyboardEvent) => {
       const key = e.key || '';
       const code = e.code || '';
-      if (key === 'PrintScreen' || code === 'PrintScreen' || key === 'Snapshot') {
+      const keyCode = e.keyCode || e.which || 0;
+      if (key === 'PrintScreen' || code === 'PrintScreen' || key === 'Snapshot' || key === 'Print' || keyCode === 44) {
+        handlePrintScreenDetected();
+      }
+      if (e.shiftKey && (e.metaKey || key === 'Meta' || key === 'OS') && (key.toLowerCase() === 's' || code === 'KeyS' || keyCode === 83)) {
         handlePrintScreenDetected();
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown, { capture: true });
-    window.addEventListener('keyup', handleKeyUp, { capture: true });
-    document.addEventListener('keydown', handleKeyDown, { capture: true });
-    document.addEventListener('keyup', handleKeyUp, { capture: true });
+    window.addEventListener('keydown', handleKeyDown, { capture: true, passive: false });
+    window.addEventListener('keyup', handleKeyUp, { capture: true, passive: false });
+    document.addEventListener('keydown', handleKeyDown, { capture: true, passive: false });
+    document.addEventListener('keyup', handleKeyUp, { capture: true, passive: false });
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown, { capture: true });

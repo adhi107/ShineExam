@@ -113,11 +113,14 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
     const activeUserId = userId || sessionStorage.getItem('userId') || '';
     if (!activeUserId) return null;
 
+    const activeTenantId = (typeof sessionStorage !== 'undefined' ? (sessionStorage.getItem('activeTenantId') || sessionStorage.getItem('tenantId')) : null) || 'default';
+
     const payload = JSON.stringify({
       userId: activeUserId,
       reason,
-      sessionId: sessionId || sessionStorage.getItem('securitySessionId') || '',
+      sessionId: sessionId || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('securitySessionId') || '' : ''),
       module,
+      tenantId: activeTenantId,
     });
 
     // Best-effort beacon
@@ -132,7 +135,11 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
     try {
       const res = await fetch(buildUrl('/security/violation/block'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Tenant-Id': activeTenantId,
+          'X-User-Id': activeUserId,
+        },
         body: payload,
       });
       if (res.ok) {
