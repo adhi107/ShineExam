@@ -238,27 +238,33 @@ def block_user_on_violation():
         ]
     })
 
+    from utils.tenant import get_request_tenant_id, build_tenant_filter, DEFAULT_TENANT_ID
+    user_tenant_id = (user_doc.get("tenantId") if user_doc else None) or get_request_tenant_id(user_doc) or DEFAULT_TENANT_ID
+    tenant_filter = build_tenant_filter(user_tenant_id)
+
     canonical_user_id = user_doc.get("userId", user_id) if user_doc else user_id
     user_name = user_doc.get("name", canonical_user_id) if user_doc else canonical_user_id
     user_email = user_doc.get("email", "") if user_doc else ""
 
     # Read configured threshold
-    settings = db.system_settings.find_one({"type": "security_config"}) or {}
+    settings = db.system_settings.find_one({**tenant_filter, "type": "security_config"}) or db.system_settings.find_one({"type": "security_config"}) or {}
     allowed_attempts = max(1, int(settings.get("screenshotAllowedAttempts", 1)))
     strict_lock = bool(settings.get("strictScreenshotLock", True))
 
     status_reason = "security_violation_screenshot" if reason == "screenshot" else "security_violation_recording"
 
-    # Count previous violations of this type for this user
+    # Count previous violations of this type for this user within tenant
     previous_violations = db.security_violations.count_documents({
+        **tenant_filter,
         "userId": {"$regex": f"^{re.escape(canonical_user_id)}$", "$options": "i"},
         "type": {"$in": ["screenshot", "recording"]},
     })
 
     current_attempt = previous_violations + 1
 
-    # Record this violation event with detailed metadata
+    # Record this violation event with detailed metadata and tenantId
     db.security_violations.insert_one({
+        "tenantId": user_tenant_id,
         "userId": canonical_user_id,
         "userName": user_name,
         "userEmail": user_email,

@@ -177,10 +177,12 @@ def audit_log(
     Usage:
         audit_log("EXAM_SUBMIT", user_id="john.doe", details={"examId": "abc123"})
         audit_log("LOGIN_FAILED", user_id="john.doe", severity="warning")
-    """
     try:
+        from utils.tenant import get_request_tenant_id, DEFAULT_TENANT_ID
+        tenant_id = get_request_tenant_id() if request else DEFAULT_TENANT_ID
         db = get_db()
         log_entry = {
+            "tenantId": tenant_id,
             "action": action,
             "userId": user_id,
             "severity": severity,
