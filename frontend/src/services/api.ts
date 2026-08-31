@@ -3,11 +3,15 @@ export function getApiBase(): string {
     return process.env.REACT_APP_API_BASE_URL.replace(/\/+$/, "");
   }
   if (typeof window !== "undefined" && window.location) {
-    const { hostname, origin } = window.location;
+    const { hostname, protocol, port } = window.location;
     if (hostname === "localhost" || hostname === "127.0.0.1") {
       return "http://127.0.0.1:5000";
     }
-    return origin;
+    // If frontend is on a dedicated client port (e.g. 3000, 5173, 8080), route backend API calls to port 5000 on that same host
+    if (port && port !== "80" && port !== "443" && port !== "5000") {
+      return `${protocol}//${hostname}:5000`;
+    }
+    return window.location.origin;
   }
   return "http://127.0.0.1:5000";
 }

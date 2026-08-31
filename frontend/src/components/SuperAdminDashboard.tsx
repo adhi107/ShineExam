@@ -917,6 +917,12 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onE
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Instant local preview
+    try {
+      const localUrl = URL.createObjectURL(file);
+      setLogoPreview(localUrl);
+    } catch {}
+
     setUploadingLogo(true);
     const formData = new FormData();
     formData.append("logo", file);

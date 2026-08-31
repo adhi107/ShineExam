@@ -13,8 +13,20 @@ interface ShineLogoProps {
 
 const ShineLogo: React.FC<ShineLogoProps> = ({ compact = false, inverse = false, className = "", customLogoUrl, brandName, forceDefault = false }) => {
   const { tenant } = useTenant();
-  const activeLogo = forceDefault ? null : (customLogoUrl || (tenant && tenant.logoUrl ? getMediaUrl(tenant.logoUrl) : null));
-  const activeTitle = forceDefault ? "Shine" : (brandName || (tenant && tenant.name ? tenant.name : "Shine"));
+
+  // Flexible resolution of logo from props, context, or session storage
+  const storedTenant = typeof sessionStorage !== "undefined" ? (() => {
+    try {
+      const str = sessionStorage.getItem("tenant_info");
+      return str ? JSON.parse(str) : null;
+    } catch {
+      return null;
+    }
+  })() : null;
+
+  const rawLogo = forceDefault ? null : (customLogoUrl || tenant?.logoUrl || storedTenant?.logoUrl || null);
+  const activeLogo = rawLogo ? getMediaUrl(rawLogo) : null;
+  const activeTitle = forceDefault ? "Shine" : (brandName || tenant?.name || storedTenant?.name || "Shine");
 
   return (
     <div className={`shine-logo ${compact ? "compact" : ""} ${inverse ? "inverse" : ""} ${className}`} aria-label={activeTitle}>
@@ -24,8 +36,13 @@ const ShineLogo: React.FC<ShineLogoProps> = ({ compact = false, inverse = false,
           src={activeLogo}
           alt={activeTitle}
           onError={(e) => {
-            // Fallback to default if custom image fails to load
-            (e.target as HTMLImageElement).src = "/assets/shine-logo.png";
+            const img = e.target as HTMLImageElement;
+            // If direct /uploads/ fails on proxied servers, try with /api/uploads/
+            if (activeLogo && !img.src.includes('/api/uploads/') && img.src.includes('/uploads/')) {
+              img.src = img.src.replace('/uploads/', '/api/uploads/');
+              return;
+            }
+            img.src = "/assets/shine-logo.png";
           }}
         />
       ) : (
