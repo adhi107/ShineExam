@@ -419,9 +419,9 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
 
       alert("Test saved successfully");
       onBack();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Failed to save test");
+      alert(err?.message || "Failed to save test. Please ensure all required fields are filled.");
     } finally {
       setIsSaving(false);
     }

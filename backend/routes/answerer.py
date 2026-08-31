@@ -48,23 +48,44 @@ def enforce_candidate_active_status():
     if not user_id:
         return None
 
-    user_id = str(user_id).strip()
+    user_key = str(user_id).strip()
+    from utils.cache import get_cached_user_status, set_cached_user_status
+    cached = get_cached_user_status(user_key)
+    if cached is not None:
+        if not cached.get("isActive", True):
+            status_reason = cached.get("statusReason", "")
+            if status_reason == "security_violation_screenshot":
+                msg = "Your account is suspended due to unauthorized screenshot activity. Contact the administrator to unblock your account."
+            elif status_reason == "security_violation_recording":
+                msg = "Your account is suspended due to screen recording/sharing violations. Contact the administrator to unblock your account."
+            elif status_reason == "validity_expired":
+                msg = "Your account validity has expired. Contact the administrator for renewal."
+            else:
+                msg = "Your account is suspended. Contact the administrator to unblock your account."
+            return jsonify({"error": msg, "blocked": True, "statusReason": status_reason}), 403
+        return None
+
     db = get_db()
     user = db.users.find_one({
-        "$or": [{"userId": user_id}, {"naxUnid": user_id}],
+        "$or": [{"userId": user_key}, {"naxUnid": user_key}],
         "role": "answerer"
-    })
-    if user and not user.get("isActive", True):
-        status_reason = user.get("statusReason", "")
-        if status_reason == "security_violation_screenshot":
-            msg = "Your account is suspended due to unauthorized screenshot activity. Contact the administrator to unblock your account."
-        elif status_reason == "security_violation_recording":
-            msg = "Your account is suspended due to screen recording/sharing violations. Contact the administrator to unblock your account."
-        elif status_reason == "validity_expired":
-            msg = "Your account validity has expired. Contact the administrator for renewal."
-        else:
-            msg = "Your account is suspended. Contact the administrator to unblock your account."
-        return jsonify({"error": msg, "blocked": True, "statusReason": status_reason}), 403
+    }, {"isActive": 1, "statusReason": 1})
+    if user:
+        is_active = bool(user.get("isActive", True))
+        status_reason = str(user.get("statusReason", ""))
+        set_cached_user_status(user_key, {"isActive": is_active, "statusReason": status_reason}, ttl_seconds=15)
+        if not is_active:
+            if status_reason == "security_violation_screenshot":
+                msg = "Your account is suspended due to unauthorized screenshot activity. Contact the administrator to unblock your account."
+            elif status_reason == "security_violation_recording":
+                msg = "Your account is suspended due to screen recording/sharing violations. Contact the administrator to unblock your account."
+            elif status_reason == "validity_expired":
+                msg = "Your account validity has expired. Contact the administrator for renewal."
+            else:
+                msg = "Your account is suspended. Contact the administrator to unblock your account."
+            return jsonify({"error": msg, "blocked": True, "statusReason": status_reason}), 403
+    else:
+        set_cached_user_status(user_key, {"isActive": True, "statusReason": ""}, ttl_seconds=15)
 
 
 

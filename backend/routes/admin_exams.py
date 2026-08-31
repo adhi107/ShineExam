@@ -106,24 +106,54 @@ def create_exam():
     }
     """
     payload = request.get_json(silent=True) or {}
+    if "name" in payload and "testName" not in payload:
+        payload["testName"] = payload["name"]
+
     ok, msg = require_fields(payload, ["testName", "duration", "sections", "questions"])
     if not ok:
         return jsonify({"error": msg}), 400
 
     db = get_db()
+    tenant_id = str(payload.get("tenantId") or get_request_tenant_id() or DEFAULT_TENANT_ID).strip()
+    tenant_filter = build_tenant_filter(tenant_id)
+
+    test_name = str(payload.get("testName") or payload.get("name") or "Untitled Test").strip()
+    duration = int(payload.get("duration", 60))
 
     category_id = str(payload.get("categoryId") or "").strip()
     subcategory_id = str(payload.get("subcategoryId") or "").strip()
     stage = str(payload.get("stage") or "").strip()
-    if not category_id or not subcategory_id or not stage:
-        return jsonify({"error": "Category, subcategory and stage are required"}), 400
-    try:
-        category = db.exam_categories.find_one({"_id": ObjectId(category_id), "isActive": {"$ne": False}})
-    except Exception:
-        category = None
-    subcategory = next((item for item in (category or {}).get("subcategories", []) if item.get("id") == subcategory_id and item.get("isActive", True)), None)
-    if not category or not subcategory or stage not in subcategory.get("stages", []):
-        return jsonify({"error": "Select a valid category, subcategory and stage"}), 400
+    
+    category = None
+    if category_id:
+        try:
+            category = db.exam_categories.find_one({"_id": ObjectId(category_id), "isActive": {"$ne": False}})
+        except Exception:
+            category = None
+
+    if not category:
+        category = db.exam_categories.find_one({**tenant_filter, "isActive": {"$ne": False}}) or db.exam_categories.find_one({"isActive": {"$ne": False}})
+        if category:
+            category_id = str(category["_id"])
+
+    subcategory = None
+    if category:
+        subs = category.get("subcategories", [])
+        if subcategory_id:
+            subcategory = next((item for item in subs if item.get("id") == subcategory_id and item.get("isActive", True)), None)
+        if not subcategory and subs:
+            subcategory = subs[0]
+            subcategory_id = subcategory.get("id", "")
+
+    if subcategory and not stage:
+        stages = subcategory.get("stages", [])
+        if stages:
+            stage = stages[0]
+
+    category_name = category.get("name") if category else "General Assessment"
+    subcategory_name = subcategory.get("name") if subcategory else "General"
+    stage_name = stage if stage else "Prelims"
+
     passing_percentage = int(payload.get("passingPercentage", 40))
     if not (1 <= passing_percentage <= 100):
         return jsonify({"error": "passingPercentage must be between 1 and 100"}), 400
@@ -140,7 +170,7 @@ def create_exam():
     sections = [s for s in sections if s]
 
     if not isinstance(sections, list) or len(sections) == 0:
-        return jsonify({"error": "sections must be a non-empty list"}), 400
+        sections = ["General"]
     if not isinstance(questions, list) or len(questions) == 0:
         return jsonify({"error": "questions must be a non-empty list"}), 400
 
@@ -153,10 +183,8 @@ def create_exam():
     if valid_until and valid_until < available_from:
         return jsonify({"error": "Valid until date must be on or after the start date"}), 400
 
-    tenant_id = str(payload.get("tenantId") or get_request_tenant_id() or DEFAULT_TENANT_ID).strip()
-
     exam_doc = {
-        "name": testName,
+        "name": test_name,
         "duration": duration,
         "passingPercentage": passing_percentage,
         "sections": sections,
@@ -168,10 +196,10 @@ def create_exam():
         "availableFrom": available_from,
         "validUntil": valid_until,
         "categoryId": category_id,
-        "categoryName": category.get("name"),
+        "categoryName": category_name,
         "subcategoryId": subcategory_id,
-        "subcategoryName": subcategory.get("name"),
-        "stage": stage,
+        "subcategoryName": subcategory_name,
+        "stage": stage_name,
     }
 
     exam_res = db.exams.insert_one(exam_doc)
@@ -379,6 +407,9 @@ def get_exam(exam_id: str):
 @admin_exams_bp.route("/<exam_id>/", methods=["PUT"])
 def update_exam(exam_id: str):
     payload = request.get_json(silent=True) or {}
+    if "name" in payload and "testName" not in payload:
+        payload["testName"] = payload["name"]
+
     ok, msg = require_fields(payload, ["testName", "duration", "sections", "questions"])
     if not ok:
         return jsonify({"error": msg}), 400
@@ -393,18 +424,39 @@ def update_exam(exam_id: str):
     if not exam:
         return jsonify({"error": "Exam not found"}), 404
 
-    category_id = str(payload.get("categoryId") or "").strip()
-    subcategory_id = str(payload.get("subcategoryId") or "").strip()
-    stage = str(payload.get("stage") or "").strip()
-    if not category_id or not subcategory_id or not stage:
-        return jsonify({"error": "Category, subcategory and stage are required"}), 400
-    try:
-        category = db.exam_categories.find_one({"_id": ObjectId(category_id), "isActive": {"$ne": False}})
-    except Exception:
-        category = None
-    subcategory = next((item for item in (category or {}).get("subcategories", []) if item.get("id") == subcategory_id and item.get("isActive", True)), None)
-    if not category or not subcategory or stage not in subcategory.get("stages", []):
-        return jsonify({"error": "Select a valid category, subcategory and stage"}), 400
+    category_id = str(payload.get("categoryId") or exam.get("categoryId") or "").strip()
+    subcategory_id = str(payload.get("subcategoryId") or exam.get("subcategoryId") or "").strip()
+    stage = str(payload.get("stage") or exam.get("stage") or "").strip()
+
+    category = None
+    if category_id:
+        try:
+            category = db.exam_categories.find_one({"_id": ObjectId(category_id), "isActive": {"$ne": False}})
+        except Exception:
+            category = None
+
+    if not category:
+        category = db.exam_categories.find_one({"isActive": {"$ne": False}})
+        if category:
+            category_id = str(category["_id"])
+
+    subcategory = None
+    if category:
+        subs = category.get("subcategories", [])
+        if subcategory_id:
+            subcategory = next((item for item in subs if item.get("id") == subcategory_id and item.get("isActive", True)), None)
+        if not subcategory and subs:
+            subcategory = subs[0]
+            subcategory_id = subcategory.get("id", "")
+
+    if subcategory and not stage:
+        stages = subcategory.get("stages", [])
+        if stages:
+            stage = stages[0]
+
+    category_name = category.get("name") if category else (exam.get("categoryName") or "General Assessment")
+    subcategory_name = subcategory.get("name") if subcategory else (exam.get("subcategoryName") or "General")
+    stage_name = stage if stage else (exam.get("stage") or "Prelims")
 
     passing_percentage = int(payload.get("passingPercentage", 40))
     if not (1 <= passing_percentage <= 100):
@@ -439,10 +491,10 @@ def update_exam(exam_id: str):
         "availableFrom": available_from,
         "validUntil": valid_until,
         "categoryId": category_id,
-        "categoryName": category.get("name"),
+        "categoryName": category_name,
         "subcategoryId": subcategory_id,
-        "subcategoryName": subcategory.get("name"),
-        "stage": stage,
+        "subcategoryName": subcategory_name,
+        "stage": stage_name,
     }
 
     db.exams.update_one({"_id": oid}, {"$set": update})
