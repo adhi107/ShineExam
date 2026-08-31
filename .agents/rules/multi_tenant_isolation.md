@@ -6,7 +6,8 @@ alwaysApply: true
 # Multi-Tenant Isolation Architecture Rules
 
 ## 1. Database Scoping
-* **Every read query** across exams, questions, users/students, video classes, learning documents, announcements, test attempts, results, and audit logs MUST be scoped through `build_tenant_filter(tenant_id)`.
+* **Every read query** across exams, questions, exam categories (`exam_categories`), subcategories, users/students, video classes, learning documents, announcements, test attempts, results, and audit logs MUST be scoped through `build_tenant_filter(tenant_id)`.
+* **Zero Cross-Tenant Leakage**: A student or administrator in Tenant A must NEVER see any category, exam, video, or data created in Tenant B or default organization.
 * **Every write/insert** MUST stamp `"tenantId": tenant_id`.
 * For student endpoints (`/answerer/*`), resolve the student's `tenantId` from their user record (`db.users.find_one({"userId": user_id})`) or `get_request_tenant_id(user_doc)`.
 

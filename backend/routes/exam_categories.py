@@ -135,7 +135,17 @@ def subcategory_item(category_id, subcategory_id):
 @answerer_exam_categories_bp.get("")
 @answerer_exam_categories_bp.get("/")
 def candidate_categories():
-    rows = list(get_db().exam_categories.find({"isActive": {"$ne": False}}).sort([("order", 1), ("name", 1)]))
+    db = get_db()
+    user_id = str(request.args.get("userId") or "").strip()
+    user_doc = None
+    if user_id:
+        user_doc = db.users.find_one({
+            "$or": [{"userId": user_id}, {"naxUnid": user_id}]
+        })
+    tenant_id = get_request_tenant_id(user_doc)
+    tenant_filter = build_tenant_filter(tenant_id)
+
+    rows = list(db.exam_categories.find({**tenant_filter, "isActive": {"$ne": False}}).sort([("order", 1), ("name", 1)]))
     serialized = []
     for row in rows:
         item = _serialize(row)

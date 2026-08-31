@@ -169,7 +169,7 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
       ]);
       setTests(testRes.tests || []);
       setHistory(historyRes.history || []);
-      apiGet<{categories:CategoryData[]}>("/answerer/exam-categories").then(res=>setCategoryData(res.categories||[])).catch(()=>setCategoryData([]));
+      apiGet<{categories:CategoryData[]}>(`/answerer/exam-categories?userId=${encodeURIComponent(userName)}`).then(res=>setCategoryData(res.categories||[])).catch(()=>setCategoryData([]));
       apiGet<{ notifications: PortalNotification[] }>(`/answerer/notifications?userId=${encodeURIComponent(userName)}`)
         .then(res => setNotifications(res.notifications || [])).catch(() => setNotifications([]));
       apiGet<{ bookmarks: CandidateBookmark[] }>(`/answerer/bookmarks?userId=${encodeURIComponent(userName)}`)
