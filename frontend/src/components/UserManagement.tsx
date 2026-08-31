@@ -602,7 +602,18 @@ const UserManagement: React.FC = () => {
                   onChange={event => setForm({ ...form, userId: event.target.value })}
                 />
               </label>
-              <label>
+              {!editing && (
+                <label>
+                  Temporary password
+                  <input
+                    type="password"
+                    value={form.password}
+                    onChange={event => setForm({ ...form, password: event.target.value })}
+                    placeholder="Minimum 4 characters"
+                  />
+                </label>
+              )}
+              <label className="full-width-field">
                 Enrolled Course / Batch
                 <select
                   className="student-course-select"
@@ -617,18 +628,7 @@ const UserManagement: React.FC = () => {
                   <option value="General Aptitude">General Aptitude & Placement Training</option>
                 </select>
               </label>
-              {!editing && (
-                <label>
-                  Temporary password
-                  <input
-                    type="password"
-                    value={form.password}
-                    onChange={event => setForm({ ...form, password: event.target.value })}
-                    placeholder="Minimum 4 characters"
-                  />
-                </label>
-              )}
-              <label>
+              <label className={editing ? "" : "full-width-field"}>
                 Account valid until
                 <input
                   type="date"

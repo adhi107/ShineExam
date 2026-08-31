@@ -252,7 +252,7 @@
 }
 
 .student-modal {
-  width: min(560px, 95vw);
+  width: min(580px, 95vw);
   overflow: hidden;
   border-radius: 20px;
   background: #ffffff;
@@ -331,6 +331,10 @@
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.1px;
+}
+
+.student-form label.full-width-field {
+  grid-column: 1 / -1;
 }
 
 .student-form input,
