@@ -8,6 +8,7 @@ from werkzeug.utils import secure_filename
 
 from config.db import get_db
 from utils.json import to_jsonable
+from utils.tenant import get_request_tenant_id, build_tenant_filter
 
 admin_documents_bp = Blueprint("admin_documents", __name__)
 admin_announcements_bp = Blueprint("admin_announcements", __name__)
@@ -27,8 +28,10 @@ def _document_json(doc, assigned_count=0, assigned_user_ids=None):
 @admin_documents_bp.route("/", methods=["GET", "POST"])
 def documents_collection():
     db = get_db()
+    tenant_id = get_request_tenant_id()
+    tenant_filter = build_tenant_filter(tenant_id)
     if request.method == "GET":
-        rows = list(db.documents.find({}).sort("createdAt", -1))
+        rows = list(db.documents.find(tenant_filter).sort("createdAt", -1))
         result = []
         for row in rows:
             user_ids = db.document_assignments.distinct("userId", {"documentId": row["_id"]})
@@ -45,7 +48,7 @@ def documents_collection():
     stored_name = f"{uuid.uuid4().hex}.{extension}"
     path = UPLOAD_DIR / stored_name
     upload.save(path)
-    doc = {"title": title, "description": str(request.form.get("description") or "").strip(), "filename": stored_name, "originalName": original, "mimeType": upload.mimetype, "size": path.stat().st_size, "createdAt": datetime.utcnow()}
+    doc = {"tenantId": tenant_id, "title": title, "description": str(request.form.get("description") or "").strip(), "filename": stored_name, "originalName": original, "mimeType": upload.mimetype, "size": path.stat().st_size, "createdAt": datetime.utcnow()}
     doc["_id"] = db.documents.insert_one(doc).inserted_id
     return jsonify({"document": to_jsonable(_document_json(doc))}), 201
 
@@ -185,9 +188,11 @@ def _candidate_test_update_json(exam):
 @admin_announcements_bp.route("/", methods=["GET", "POST"])
 def announcement_collection():
     db=get_db()
+    tenant_id = get_request_tenant_id()
+    tenant_filter = build_tenant_filter(tenant_id)
     if request.method=="GET":
         result=[]
-        for row in db.announcements.find({}).sort("createdAt",-1):
+        for row in db.announcements.find(tenant_filter).sort("createdAt",-1):
             users=db.announcement_assignments.distinct("userId",{"announcementId":row["_id"]})
             result.append(_announcement_json(row,users))
         return jsonify({"announcements":to_jsonable(result)})
@@ -202,7 +207,7 @@ def announcement_collection():
     publish_at=_parse_announcement_datetime(request.form.get("publishAt")) or now
     expires_at=_parse_announcement_datetime(request.form.get("expiresAt"))
     if expires_at and expires_at < publish_at:return jsonify({"error":"Expire date must be after the publish date"}),400
-    doc={"title":title,"message":message,"linkUrl":str(request.form.get("linkUrl") or "").strip(),"imageName":image_name,"publishAt":publish_at,"expiresAt":expires_at,"createdAt":now}
+    doc={"tenantId": tenant_id, "title":title,"message":message,"linkUrl":str(request.form.get("linkUrl") or "").strip(),"imageName":image_name,"publishAt":publish_at,"expiresAt":expires_at,"createdAt":now}
     doc["_id"]=db.announcements.insert_one(doc).inserted_id
     return jsonify({"announcement":to_jsonable(_announcement_json(doc))}),201
 

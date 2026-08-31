@@ -21,6 +21,7 @@ from routes.admin_videos import admin_videos_bp, answerer_videos_bp
 from routes.security_routes import security_bp
 from routes.admin_violations import admin_violations_bp
 from routes.admin_audit import admin_audit_bp
+from routes.super_admin import super_admin_bp
 from routes.admin_security_controls import admin_security_controls_bp, public_security_bp
 from utils.security import add_security_headers
 
@@ -46,6 +47,7 @@ def create_app() -> Flask:
 
     # Register active Shine Exam API route groups.
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
+    app.register_blueprint(super_admin_bp, url_prefix="/api/super-admin")
     app.register_blueprint(admin_users_bp, url_prefix="/api/admin/users")
     app.register_blueprint(admin_exams_bp, url_prefix="/api/admin/exams")
     app.register_blueprint(admin_dashboard_bp, url_prefix="/api/admin")
@@ -80,6 +82,7 @@ def create_app() -> Flask:
         # Always allow these paths without account checks
         if (
             path.startswith("/api/admin")
+            or path.startswith("/api/super-admin")
             or path.startswith("/api/public")
             or path.startswith("/uploads")
             or path == "/"
@@ -104,19 +107,37 @@ def create_app() -> Flask:
         if not user_id:
             return None
 
+        from utils.cache import get_cached_user_status, set_cached_user_status
+        user_key = str(user_id).strip()
+        cached_info = get_cached_user_status(user_key)
+
+        if cached_info is not None:
+            if not cached_info.get("isActive", True):
+                return jsonify({
+                    "error": "Your account is suspended due to security policy violations. Contact the administrator to unblock your account.",
+                    "blocked": True,
+                    "statusReason": cached_info.get("statusReason", "")
+                }), 403
+            return None
+
         from config.db import get_db
         db = get_db()
-        user = db.users.find_one({
-            "$or": [{"userId": str(user_id).strip()}, {"naxUnid": str(user_id).strip()}],
-            "role": "answerer"
-        })
-        if user and not user.get("isActive", True):
-            status_reason = user.get("statusReason", "")
-            return jsonify({
-                "error": "Your account is suspended due to security policy violations. Contact the administrator to unblock your account.",
-                "blocked": True,
-                "statusReason": status_reason
-            }), 403
+        user = db.users.find_one(
+            {"$or": [{"userId": user_key}, {"naxUnid": user_key}], "role": "answerer"},
+            {"isActive": 1, "statusReason": 1}
+        )
+        if user:
+            is_active = bool(user.get("isActive", True))
+            status_reason = str(user.get("statusReason", ""))
+            set_cached_user_status(user_key, {"isActive": is_active, "statusReason": status_reason}, ttl_seconds=15)
+            if not is_active:
+                return jsonify({
+                    "error": "Your account is suspended due to security policy violations. Contact the administrator to unblock your account.",
+                    "blocked": True,
+                    "statusReason": status_reason
+                }), 403
+        else:
+            set_cached_user_status(user_key, {"isActive": True, "statusReason": ""}, ttl_seconds=15)
 
     # Support large video and asset uploads (up to 1 GB)
     app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024 * 1024

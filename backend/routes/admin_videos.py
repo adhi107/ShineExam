@@ -5,6 +5,7 @@ from datetime import datetime
 from flask import Blueprint, request, jsonify, send_from_directory, current_app, Response
 from werkzeug.utils import secure_filename
 from config.db import get_db
+from utils.tenant import get_request_tenant_id, build_tenant_filter, DEFAULT_TENANT_ID
 
 admin_videos_bp = Blueprint("admin_videos", __name__)
 answerer_videos_bp = Blueprint("answerer_videos", __name__)
@@ -128,15 +129,22 @@ def normalize_video_url(url: str) -> dict:
 def list_videos():
     try:
         db = get_db()
+        tenant_id = get_request_tenant_id()
+        tenant_filter = build_tenant_filter(tenant_id)
+
         search = request.args.get("search", "").strip()
         category = request.args.get("category", "").strip()
 
-        query = {}
+        query = {**tenant_filter}
         if search:
-            query["$or"] = [
-                {"title": {"$regex": search, "$options": "i"}},
-                {"description": {"$regex": search, "$options": "i"}},
-                {"category": {"$regex": search, "$options": "i"}},
+            query["$and"] = query.get("$and", []) + [
+                {
+                    "$or": [
+                        {"title": {"$regex": search, "$options": "i"}},
+                        {"description": {"$regex": search, "$options": "i"}},
+                        {"category": {"$regex": search, "$options": "i"}},
+                    ]
+                }
             ]
         if category and category.lower() != "all":
             query["category"] = category
@@ -148,11 +156,11 @@ def list_videos():
             del doc["_id"]
             videos.append(doc)
 
-        # Overall statistics
-        total_videos = db.videos.count_documents({})
-        file_uploads = db.videos.count_documents({"sourceType": "file"})
-        link_videos = db.videos.count_documents({"sourceType": "link"})
-        total_views = sum(v.get("viewCount", 0) for v in db.videos.find({}, {"viewCount": 1}))
+        # Overall statistics for this tenant only
+        total_videos = db.videos.count_documents(tenant_filter)
+        file_uploads = db.videos.count_documents({**tenant_filter, "sourceType": "file"})
+        link_videos = db.videos.count_documents({**tenant_filter, "sourceType": "link"})
+        total_views = sum(v.get("viewCount", 0) for v in db.videos.find(tenant_filter, {"viewCount": 1}))
 
         return jsonify({
             "videos": videos,
@@ -171,6 +179,8 @@ def list_videos():
 def create_video():
     try:
         db = get_db()
+        tenant_id = get_request_tenant_id()
+
         source_type = request.form.get("sourceType") or (request.json.get("sourceType") if request.is_json else "link")
         title = request.form.get("title") or (request.json.get("title") if request.is_json else "")
         description = request.form.get("description") or (request.json.get("description") if request.is_json else "")
@@ -185,6 +195,7 @@ def create_video():
         tags = [t.strip() for t in tags_raw.split(",") if t.strip()] if isinstance(tags_raw, str) else (tags_raw or [])
 
         video_record = {
+            "tenantId": tenant_id,
             "title": title.strip(),
             "description": description.strip(),
             "category": category.strip(),

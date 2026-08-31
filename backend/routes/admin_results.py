@@ -3,13 +3,18 @@ from bson import ObjectId
 from typing import Optional
 from config.db import get_db
 from utils.json import to_jsonable
+from utils.tenant import get_request_tenant_id, build_tenant_filter
 
 admin_results_bp = Blueprint("admin_results", __name__)
 
 
 @admin_results_bp.get("/overview")
 def analytics_overview():
-    db=get_db();results=list(db.results.find({}));exams={str(row["_id"]):row.get("name","Untitled Test") for row in db.exams.find({}, {"name":1})}
+    db=get_db()
+    tenant_id = get_request_tenant_id()
+    tenant_filter = build_tenant_filter(tenant_id)
+    results=list(db.results.find(tenant_filter))
+    exams={str(row["_id"]):row.get("name","Untitled Test") for row in db.exams.find(tenant_filter, {"name":1})}
     bands=[{"label":"0–20%","min":0,"max":20,"count":0},{"label":"21–40%","min":20,"max":40,"count":0},{"label":"41–60%","min":40,"max":60,"count":0},{"label":"61–80%","min":60,"max":80,"count":0},{"label":"81–100%","min":80,"max":101,"count":0}]
     trend={}
     for row in results:
@@ -22,11 +27,6 @@ def analytics_overview():
     for row in sorted(results,key=lambda item:float(item.get("percentage",0)),reverse=True)[:10]:
         user=_find_user_with_profile(db,row.get("userId"));exam_id=str(row.get("examId"));toppers.append({"resultId":str(row["_id"]),"examId":exam_id,"testName":exams.get(exam_id,"Untitled Test"),"userId":row.get("userId"),"userName":user.get("name",row.get("userId")) if user else row.get("userId"),"percentage":float(row.get("percentage",0)),"marks":float(row.get("scoredMarks",0)),"timeSpentSec":int(row.get("timeSpentSec",0))})
     return jsonify({"scoreBands":bands,"trend":trend_rows,"toppers":toppers})
-
-
-def _merge_registration_fields(user: dict, registration: Optional[dict]) -> dict:
-    if not registration:
-        return user
 
     merged = dict(user)
     field_map = {
@@ -110,10 +110,12 @@ def _question_time_benchmarks(db, exam_id, review):
 
 @admin_results_bp.route("/tests", methods=["GET"])
 def get_tests_with_results():
-    """Get all tests with their result statistics."""
+    """Get all tests with their result statistics for the active tenant."""
     db = get_db()
+    tenant_id = get_request_tenant_id()
+    tenant_filter = build_tenant_filter(tenant_id)
     
-    exams = list(db.exams.find({}, {"questions": 0}))
+    exams = list(db.exams.find(tenant_filter, {"questions": 0}))
     tests_data = []
     
     for exam in exams:

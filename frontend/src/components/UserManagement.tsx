@@ -1,14 +1,25 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { API_BASE, apiGet, apiPost, apiPut, apiPostForm } from "../services/api";
+import { API_BASE, apiGet, apiPost, apiPut, apiDelete, apiPostForm } from "../services/api";
 import { normalizeSearchText } from "../utils/filterUtils";
 import ConfirmDialog, { DialogVariant } from "./ConfirmDialog";
 import "./UserManagement.css";
 import "./UserManagementFilters.css";
 
 interface Student {
-  id: string; name: string; email: string; userId: string; isActive: boolean;
-  createdAt?: string; lastLoginAt?: string; attempts?: number; validUntil?: string; isExpired?: boolean;
-  statusReason?: string; blockedDueTo?: string; statusUpdatedAt?: string;
+  id: string;
+  name: string;
+  email: string;
+  userId: string;
+  isActive: boolean;
+  courseStream?: string;
+  createdAt?: string;
+  lastLoginAt?: string;
+  attempts?: number;
+  validUntil?: string;
+  isExpired?: boolean;
+  statusReason?: string;
+  blockedDueTo?: string;
+  statusUpdatedAt?: string;
 }
 
 
@@ -20,7 +31,14 @@ interface BulkResult {
   errors: Array<{ row: number; name: string; userId: string; email: string; reason: string }>;
 }
 
-const emptyForm = { name: "", email: "", userId: "", password: "", validUntil: defaultStudentValidity() };
+const emptyForm = {
+  name: "",
+  email: "",
+  userId: "",
+  password: "",
+  courseStream: "Banking PO/Clerk",
+  validUntil: defaultStudentValidity(),
+};
 
 function defaultStudentValidity() {
   const date = new Date();
@@ -32,6 +50,7 @@ const UserManagement: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"all" | "active" | "blocked">("all");
+  const [streamFilter, setStreamFilter] = useState<string>("all");
   const [attemptFilter, setAttemptFilter] = useState<"all" | "none" | "attempted" | "multiple">("all");
   const [activityFilter, setActivityFilter] = useState<"all" | "recent" | "inactive" | "never">("all");
   const [joinedFilter, setJoinedFilter] = useState<"all" | "week" | "month" | "older">("all");
@@ -93,12 +112,13 @@ const UserManagement: React.FC = () => {
       const joined = student.createdAt ? new Date(student.createdAt).getTime() : 0;
       
       const statusMatch = status === "all" || (status === "active" ? student.isActive : !student.isActive);
+      const streamMatch = streamFilter === "all" || (student.courseStream || "Banking PO/Clerk").toLowerCase().includes(streamFilter.toLowerCase());
       const attemptMatch = attemptFilter === "all" || (attemptFilter === "none" ? attempts === 0 : attemptFilter === "attempted" ? attempts > 0 : attempts > 1);
       const activityMatch = activityFilter === "all" || (activityFilter === "never" ? !lastLogin : activityFilter === "recent" ? lastLogin >= now - 7 * day : !!lastLogin && lastLogin < now - 30 * day);
       const joinedMatch = joinedFilter === "all" || (joinedFilter === "week" ? joined >= now - 7 * day : joinedFilter === "month" ? joined >= now - 30 * day : !!joined && joined < now - 30 * day);
       const dateRangeMatch = (!startDate || joined >= fromTime) && (!endDate || joined <= toTime);
 
-      return text.includes(normalizeSearchText(search)) && statusMatch && attemptMatch && activityMatch && joinedMatch && dateRangeMatch;
+      return text.includes(normalizeSearchText(search)) && statusMatch && streamMatch && attemptMatch && activityMatch && joinedMatch && dateRangeMatch;
     }).sort((a, b) => {
       return sortBy === "name" 
         ? (a.name || a.userId).localeCompare(b.name || b.userId) 
@@ -106,7 +126,7 @@ const UserManagement: React.FC = () => {
         ? (b.attempts || 0) - (a.attempts || 0) 
         : new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
     });
-  }, [students, search, status, attemptFilter, activityFilter, joinedFilter, startDate, endDate, sortBy]);
+  }, [students, search, status, streamFilter, attemptFilter, activityFilter, joinedFilter, startDate, endDate, sortBy]);
 
   const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
   const paginatedStudents = useMemo(() => {
@@ -117,12 +137,13 @@ const UserManagement: React.FC = () => {
   const active = students.filter(student => student.isActive).length;
 
   const hasActiveFilters = Boolean(
-    search || status !== "all" || attemptFilter !== "all" || activityFilter !== "all" || joinedFilter !== "all" || startDate || endDate || sortBy !== "newest"
+    search || status !== "all" || streamFilter !== "all" || attemptFilter !== "all" || activityFilter !== "all" || joinedFilter !== "all" || startDate || endDate || sortBy !== "newest"
   );
 
   const resetAllFilters = () => {
     setSearch("");
     setStatus("all");
+    setStreamFilter("all");
     setAttemptFilter("all");
     setActivityFilter("all");
     setJoinedFilter("all");
@@ -138,11 +159,12 @@ const UserManagement: React.FC = () => {
       alert("No student records available to export.");
       return;
     }
-    const headers = ["Student Name", "Username", "Email", "Attempts", "Joined Date", "Valid Until", "Last Login", "Status"];
+    const headers = ["Student Name", "Username", "Email", "Batch / Stream", "Attempts", "Joined Date", "Valid Until", "Last Login", "Status"];
     const rows = visible.map(s => [
       `"${(s.name || s.userId).replace(/"/g, '""')}"`,
       `"${s.userId.replace(/"/g, '""')}"`,
       `"${(s.email || "").replace(/"/g, '""')}"`,
+      `"${(s.courseStream || "Banking PO/Clerk").replace(/"/g, '""')}"`,
       s.attempts || 0,
       s.createdAt ? s.createdAt.slice(0, 10) : "",
       s.validUntil ? s.validUntil.slice(0, 10) : "",
@@ -166,6 +188,7 @@ const UserManagement: React.FC = () => {
       email: student.email || "", 
       userId: student.userId, 
       password: "", 
+      courseStream: student.courseStream || "Banking PO/Clerk",
       validUntil: student.validUntil ? student.validUntil.slice(0, 10) : defaultStudentValidity() 
     }); 
     setEditing(student); 
@@ -178,7 +201,7 @@ const UserManagement: React.FC = () => {
     if (!form.name.trim() || !form.email.trim() || (!editing && (!form.userId.trim() || form.password.length < 4))) return;
     setSaving(true);
     try {
-      if (editing) await apiPut(`/admin/users/${editing.id}`, { name: form.name.trim(), email: form.email.trim(), validUntil: form.validUntil });
+      if (editing) await apiPut(`/admin/users/${editing.id}`, { name: form.name.trim(), email: form.email.trim(), courseStream: form.courseStream, validUntil: form.validUntil });
       else await apiPost("/admin/users", { ...form, role: "answerer" });
       closeModal(); 
       await loadStudents();
@@ -187,6 +210,33 @@ const UserManagement: React.FC = () => {
     } finally { 
       setSaving(false); 
     }
+  };
+
+  const handleDeleteStudent = (student: Student) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: `Delete Student: ${student.name || student.userId}`,
+      message: (
+        <>
+          Are you sure you want to permanently delete candidate <strong>{student.name || student.userId}</strong> (<code>{student.userId}</code>)?
+          <br />
+          <span style={{ color: "#ef4444", fontSize: "12px", marginTop: "6px", display: "inline-block" }}>
+            ⚠️ All attempts, scorecards, and violation logs for this student will be deleted.
+          </span>
+        </>
+      ),
+      confirmText: "Yes, Delete Student",
+      variant: "danger",
+      icon: "🗑️",
+      action: async () => {
+        try {
+          await apiDelete(`/admin/users/${student.id || student.userId}`);
+          await loadStudents();
+        } catch (error: any) {
+          alert(error?.message || "Could not delete student.");
+        }
+      },
+    });
   };
 
   const toggleBlock = (student: Student) => {
@@ -295,6 +345,19 @@ const UserManagement: React.FC = () => {
           </div>
 
           <div className="filter-group">
+            <label>Batch / Stream</label>
+            <select value={streamFilter} onChange={e => setStreamFilter(e.target.value)}>
+              <option value="all">All Streams / Batches</option>
+              <option value="Banking">Banking PO/Clerk</option>
+              <option value="SSC">SSC CGL/CHSL</option>
+              <option value="Combo">Banking + SSC Combo</option>
+              <option value="Railway">RRB Railway</option>
+              <option value="Civil">UPSC / Civil Services</option>
+              <option value="General">General / Other</option>
+            </select>
+          </div>
+
+          <div className="filter-group">
             <label>Exam Attempts</label>
             <select value={attemptFilter} onChange={e => setAttemptFilter(e.target.value as any)}>
               <option value="all">All attempts</option>
@@ -386,6 +449,7 @@ const UserManagement: React.FC = () => {
                   <th>Student</th>
                   <th>Username</th>
                   <th>Email</th>
+                  <th>Batch / Stream</th>
                   <th>Attempts</th>
                   <th>Joined</th>
                   <th>Valid until</th>
@@ -405,6 +469,17 @@ const UserManagement: React.FC = () => {
                     </td>
                     <td><code>{student.userId}</code></td>
                     <td>{student.email || "—"}</td>
+                    <td>
+                      <span className={`stream-tag stream-${
+                        (student.courseStream || "").toLowerCase().includes("combo") ? "combo" :
+                        (student.courseStream || "").toLowerCase().includes("ssc") ? "ssc" :
+                        (student.courseStream || "").toLowerCase().includes("railway") || (student.courseStream || "").toLowerCase().includes("rrb") ? "railway" :
+                        (student.courseStream || "").toLowerCase().includes("civil") || (student.courseStream || "").toLowerCase().includes("upsc") ? "upsc" :
+                        "banking"
+                      }`}>
+                        {student.courseStream || "Banking PO/Clerk"}
+                      </span>
+                    </td>
                     <td>{student.attempts || 0}</td>
                     <td>{date(student.createdAt)}</td>
                     <td>{date(student.validUntil)}</td>
@@ -428,6 +503,9 @@ const UserManagement: React.FC = () => {
                         <button className={student.isActive ? "block" : "unblock"} onClick={() => toggleBlock(student)}>
                           {student.isActive ? "Block" : "Unblock"}
                         </button>
+                        <button className="delete-student-btn" onClick={() => handleDeleteStudent(student)}>
+                          Delete
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -448,18 +526,12 @@ const UserManagement: React.FC = () => {
 
             <div className="pagination-controls">
               <label className="page-size-picker">
-                Per page:
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                >
-                  <option value={5}>5</option>
+                <span>Rows:</span>
+                <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}>
                   <option value={10}>10</option>
                   <option value={25}>25</option>
                   <option value={50}>50</option>
+                  <option value={100}>100</option>
                 </select>
               </label>
 
@@ -505,6 +577,16 @@ const UserManagement: React.FC = () => {
               <label>Full name<input value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label>
               <label>Email address<input type="email" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /></label>
               <label>Username<input disabled={!!editing} value={form.userId} onChange={event => setForm({ ...form, userId: event.target.value })} /></label>
+              <label>Enrolled Course / Batch
+                <select value={form.courseStream || "Banking PO/Clerk"} onChange={event => setForm({ ...form, courseStream: event.target.value })}>
+                  <option value="Banking PO/Clerk">Banking PO/Clerk (Prelims + Mains)</option>
+                  <option value="SSC CGL/CHSL">SSC CGL/CHSL (Tier 1 & 2)</option>
+                  <option value="Banking + SSC Combo">Banking + SSC Combo Comprehensive</option>
+                  <option value="RRB Railway NTPC/Group D">RRB Railway NTPC/Group D</option>
+                  <option value="UPSC & State PSC">UPSC & State PSC Civil Services</option>
+                  <option value="General Aptitude">General Aptitude & Placement Training</option>
+                </select>
+              </label>
               {!editing && (
                 <label>Temporary password
                   <input type="password" value={form.password} onChange={event => setForm({ ...form, password: event.target.value })} placeholder="Minimum 4 characters" />

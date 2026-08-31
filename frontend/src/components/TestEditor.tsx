@@ -49,6 +49,7 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
   const [passingPercentage, setPassingPercentage] = useState(40);
   const [availableFrom, setAvailableFrom] = useState('');
   const [validUntil, setValidUntil] = useState('');
+  const [targetBatch, setTargetBatch] = useState('All Batches');
   const [categories, setCategories] = useState<ExamCategory[]>([]);
   const [categoryId, setCategoryId] = useState('');
   const [subcategoryId, setSubcategoryId] = useState('');
@@ -735,6 +736,7 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
         passingPercentage,
         availableFrom,
         validUntil,
+        targetBatch,
         categoryId,
         subcategoryId,
         stage,
@@ -823,6 +825,17 @@ const TestEditor: React.FC<TestEditorProps> = ({ testId, onBack }) => {
               min="1"
               max="100"
             />
+          </div>
+          <div className="form-group">
+            <label>Target Batch / Stream</label>
+            <select value={targetBatch} onChange={e => setTargetBatch(e.target.value)}>
+              <option value="All Batches">All Batches & Streams</option>
+              <option value="Banking PO/Clerk">Banking PO/Clerk Batch</option>
+              <option value="SSC CGL/CHSL">SSC CGL/CHSL Batch</option>
+              <option value="Banking + SSC Combo">Banking + SSC Combo Batch</option>
+              <option value="RRB Railway NTPC/Group D">RRB Railway Batch</option>
+              <option value="UPSC & State PSC">UPSC & State PSC Batch</option>
+            </select>
           </div>
         </div>
 

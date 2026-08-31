@@ -171,7 +171,6 @@ export function useScreenProtection(
       const hidden = document.hidden;
       setIsPageHidden(hidden);
       if (hidden) {
-        handlePrintScreenDetected();
         onPageHide?.();
       } else {
         onPageShow?.();
@@ -179,19 +178,18 @@ export function useScreenProtection(
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
-  }, [handlePrintScreenDetected, onPageHide, onPageShow]);
+  }, [onPageHide, onPageShow]);
 
-  // ── Window blur/focus (Snipping Tool trigger, Alt+Tab, focus loss) ───────
+  // ── Window blur/focus ──────────────────────────────────────────────────
   useEffect(() => {
     const onBlur = () => {
       if (!enableBlurDetection) return;
-      // Do not trigger screenshot violation if focus shifted to an embedded video iframe (YouTube/Vimeo)
+      // Do not treat focus shift to embedded video iframe as blurred
       setTimeout(() => {
         if (document.activeElement && document.activeElement.tagName === 'IFRAME') {
           return;
         }
         setIsWindowBlurred(true);
-        handlePrintScreenDetected();
       }, 50);
     };
     const onFocus = () => {
@@ -203,7 +201,7 @@ export function useScreenProtection(
       window.removeEventListener('blur', onBlur);
       window.removeEventListener('focus', onFocus);
     };
-  }, [enableBlurDetection, handlePrintScreenDetected]);
+  }, [enableBlurDetection]);
 
   // ── Print event protection ──────────────────────────────────────────────
   useEffect(() => {

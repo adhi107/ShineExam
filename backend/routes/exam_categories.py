@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, request
 
 from config.db import get_db
 from utils.json import to_jsonable
+from utils.tenant import get_request_tenant_id, build_tenant_filter
 
 admin_exam_categories_bp = Blueprint("admin_exam_categories", __name__)
 answerer_exam_categories_bp = Blueprint("answerer_exam_categories", __name__)
@@ -32,8 +33,10 @@ def _serialize(category):
 @admin_exam_categories_bp.route("/", methods=["GET", "POST"])
 def category_collection():
     db = get_db()
+    tenant_id = get_request_tenant_id()
+    tenant_filter = build_tenant_filter(tenant_id)
     if request.method == "GET":
-        rows = list(db.exam_categories.find({}).sort([("order", 1), ("name", 1)]))
+        rows = list(db.exam_categories.find(tenant_filter).sort([("order", 1), ("name", 1)]))
         return jsonify({"categories": to_jsonable([_serialize(row) for row in rows])})
 
     payload = request.get_json(silent=True) or {}
@@ -41,10 +44,10 @@ def category_collection():
     if not name:
         return jsonify({"error": "Category name is required"}), 400
     slug = _slug(name)
-    if db.exam_categories.find_one({"slug": slug}):
+    if db.exam_categories.find_one({"slug": slug, **tenant_filter}):
         return jsonify({"error": "Category already exists"}), 409
     now = datetime.utcnow()
-    doc = {"name": name, "slug": slug, "order": int(payload.get("order", 0)), "isActive": True, "subcategories": [], "createdAt": now, "updatedAt": now}
+    doc = {"tenantId": tenant_id, "name": name, "slug": slug, "order": int(payload.get("order", 0)), "isActive": True, "subcategories": [], "createdAt": now, "updatedAt": now}
     doc["_id"] = db.exam_categories.insert_one(doc).inserted_id
     return jsonify({"category": to_jsonable(_serialize(doc))}), 201
 

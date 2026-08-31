@@ -38,9 +38,11 @@ export function getMediaUrl(url?: string): string {
 export function getAuthHeaders(): Record<string, string> {
   const userId = sessionStorage.getItem("userId") || "";
   const role = sessionStorage.getItem("role") || "";
+  const tenantId = sessionStorage.getItem("activeTenantId") || sessionStorage.getItem("tenantId") || "";
   const headers: Record<string, string> = {};
   if (userId) headers["X-User-Id"] = userId;
   if (role) headers["X-User-Role"] = role;
+  if (tenantId) headers["X-Tenant-Id"] = tenantId;
   return headers;
 }
 

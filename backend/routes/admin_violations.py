@@ -14,6 +14,7 @@ from flask import Blueprint, jsonify, request
 from config.db import get_db
 from utils.json import to_jsonable
 from utils.security import audit_log
+from utils.tenant import get_request_tenant_id, build_tenant_filter
 
 admin_violations_bp = Blueprint("admin_violations", __name__)
 
@@ -53,16 +54,17 @@ RECORDING_ACTIONS = {
 def get_violations():
     """
     Fetch all candidates who have recorded security violations or are suspended.
-    Accurately calculates Times Violated from:
-    1. security_violations collection (direct violation events written by /security/violation/block)
-    2. audit_logs for frontend-reported events (screenshot key blocks, screen-share detection)
+    Accurately calculates Times Violated for the current tenant.
     """
     db = get_db()
+    tenant_id = get_request_tenant_id()
+    tenant_filter = build_tenant_filter(tenant_id)
 
-    # --- Collect all user IDs with any security involvement ---
+    # --- Collect all user IDs for THIS tenant with any security involvement ---
 
     # 1. Users marked suspended with a security reason
     suspended_users = list(db.users.find({
+        **tenant_filter,
         "$or": [
             {"statusReason": {"$regex": "security_violation"}},
             {"blockedDueTo": {"$exists": True, "$ne": None}},
@@ -70,11 +72,11 @@ def get_violations():
         "role": "answerer"
     }, {"password": 0}))
 
-    # 2. Users who appear in security_violations collection (the authoritative source)
-    violation_user_ids = db.security_violations.distinct("userId")
+    # 2. Users who appear in security_violations collection for this tenant
+    violation_user_ids = db.security_violations.distinct("userId", tenant_filter)
 
-    # 3. Users who appear in audit_logs with security actions
-    log_user_ids = db.audit_logs.distinct("userId", {"action": {"$in": SECURITY_ACTIONS}})
+    # 3. Users who appear in audit_logs with security actions for this tenant
+    log_user_ids = db.audit_logs.distinct("userId", {"action": {"$in": SECURITY_ACTIONS}, **tenant_filter})
 
     # Merge all unique user IDs
     all_user_ids = set(violation_user_ids) | set(log_user_ids)
@@ -83,7 +85,7 @@ def get_violations():
         if uid:
             all_user_ids.add(uid)
 
-    # Build a lookup map: userId -> user document
+    # Build a lookup map: userId -> user document (strictly within tenant)
     user_map: dict = {}
     for u in suspended_users:
         uid = u.get("userId")
@@ -92,7 +94,7 @@ def get_violations():
 
     for uid in all_user_ids:
         if uid and uid not in user_map:
-            user = db.users.find_one({"userId": uid, "role": "answerer"}, {"password": 0})
+            user = db.users.find_one({"userId": uid, "role": "answerer", **tenant_filter}, {"password": 0})
             if user:
                 user_map[uid] = user
 

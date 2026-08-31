@@ -180,7 +180,6 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
   const {
     isPageHidden,
     isScreenSharing,
-    isPrintScreenAttempted,
     isWindowBlurred,
   } = useScreenProtection({
     blockCopy: isModuleProtected && !exemptOnSubmit,
@@ -199,20 +198,6 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
     },
   });
 
-  // Check if screen sharing started
-  useEffect(() => {
-    if (!exemptOnSubmit && isModuleProtected && isScreenSharing && !isPermanentlySuspended) {
-      triggerViolation('recording');
-    }
-  }, [exemptOnSubmit, isModuleProtected, isScreenSharing, isPermanentlySuspended, triggerViolation]);
-
-  // Check if printscreen attempted
-  useEffect(() => {
-    if (!exemptOnSubmit && isModuleProtected && isPrintScreenAttempted && !isPermanentlySuspended) {
-      triggerViolation('screenshot');
-    }
-  }, [exemptOnSubmit, isModuleProtected, isPrintScreenAttempted, isPermanentlySuspended, triggerViolation]);
-
   // Hardware GPU video overlay
   useVideoOverlayProtection(enableVideoOverlay && isModuleProtected && !exemptOnSubmit);
 
@@ -221,9 +206,10 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
   const shouldBlurTab     = isModuleProtected && blurOnTabSwitch && isPageHidden;
   const shouldHideBlur    = isModuleProtected && hideOnWindowBlur && isWindowBlurred;
 
-  // Full blackout only if actually permanently suspended
-  const isShielded = isPermanentlySuspended || shouldShieldShare || shouldHideTab || shouldHideBlur;
-  const isBlurred  = shouldBlurTab && !isShielded;
+  // Distinguish permanent suspension from temporary window blur / tab hidden pause
+  const isTemporarilyShielded = !isPermanentlySuspended && (shouldShieldShare || shouldHideTab || shouldHideBlur);
+  const isBlurred             = !isPermanentlySuspended && shouldBlurTab && !isTemporarilyShielded;
+  const isShielded            = isPermanentlySuspended || isTemporarilyShielded;
 
   const handleExitToLogin = () => {
     clearSession();
@@ -268,7 +254,7 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
         e.preventDefault();
       }}
     >
-      {/* ── Protected content (COMPLETELY unmounted when permanently suspended) ── */}
+      {/* ── Protected content (unmounted only when shielded or suspended) ── */}
       {!isShielded && children}
 
       {/* ── Anti-capture GPU compositing overlay ── */}
@@ -306,8 +292,8 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
         </div>
       )}
 
-      {/* ── Full-Screen Suspended / Shield Overlay Modal ── */}
-      {isShielded && (
+      {/* ── PERMANENT SUSPENSION MODAL (Strict backend block only) ── */}
+      {isPermanentlySuspended && (
         <div className="shine-screen-shield shine-screen-suspended-backdrop" role="alert" aria-live="assertive">
           <div className="shine-screen-shield__inner shine-suspended-modal-card">
             <div className="shine-screen-shield__icon" aria-hidden="true">
@@ -336,6 +322,32 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
               >
                 Exit to Login
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TEMPORARY TAB-AWAY / WINDOW-BLUR PAUSE SHIELD (Non-blocking) ── */}
+      {!isPermanentlySuspended && isTemporarilyShielded && (
+        <div className="shine-screen-shield shine-temporary-pause-backdrop" role="alert">
+          <div className="shine-screen-shield__inner shine-temporary-shield-card">
+            <div className="shine-temporary-shield-icon" aria-hidden="true">
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
+            
+            <h3 className="shine-temporary-title">
+              Content Paused
+            </h3>
+
+            <p className="shine-temporary-msg">
+              {shieldMessage || "Content is protected while this window or tab is inactive. Return to this window to resume."}
+            </p>
+
+            <div className="shine-temporary-hint">
+              <span className="shine-pulse-dot" />
+              <span>Exam security protection active</span>
             </div>
           </div>
         </div>

@@ -65,16 +65,21 @@ def _merge_registration_fields(user: dict, registration: Optional[dict]) -> dict
 def list_users():
     db = get_db()
     now = datetime.utcnow()
+    tenant_id = get_request_tenant_id()
+    filter_q = build_tenant_filter(tenant_id)
+
     db.users.update_many(
-        {"role": "answerer", "validUntil": {"$lt": now}, "isActive": {"$ne": False}},
+        {**filter_q, "role": "answerer", "validUntil": {"$lt": now}, "isActive": {"$ne": False}},
         {"$set": {"isActive": False, "statusReason": "validity_expired", "statusUpdatedAt": now}},
     )
-    users = list(db.users.find({"role": "answerer"}, {"password": 0}))
+    users = list(db.users.find({**filter_q, "role": "answerer"}, {"password": 0}))
     out = []
     for u in users:
         out.append({
             "id": str(u["_id"]), "name": u.get("name") or u.get("userId"),
             "email": u.get("email", ""), "userId": u.get("userId"),
+            "tenantId": u.get("tenantId", DEFAULT_TENANT_ID),
+            "courseStream": u.get("courseStream") or u.get("stream") or u.get("batch") or "Banking PO/Clerk",
             "createdAt": u.get("createdAt"), "lastLoginAt": u.get("lastLoginAt"),
             "isActive": u.get("isActive", True),
             "statusReason": u.get("statusReason", ""),
@@ -102,6 +107,8 @@ def create_user():
     if db.users.find_one({"userId": userId}):
         return jsonify({"error": "userId already exists"}), 409
     
+    tenant_id = str(payload.get("tenantId") or get_request_tenant_id() or DEFAULT_TENANT_ID).strip()
+
     try:
         valid_until = _parse_valid_until(payload.get("validUntil"))
     except ValueError as exc:
@@ -112,6 +119,8 @@ def create_user():
         "userId": userId,
         "password": str(payload["password"]).strip(),  # Stored to match the current Shine Exam login model.
         "role": "answerer",
+        "tenantId": tenant_id,
+        "courseStream": payload.get("courseStream", "Banking PO/Clerk").strip(),
         "createdAt": datetime.utcnow(),
         "lastLoginAt": None,
         "isActive": True,
@@ -125,6 +134,8 @@ def create_user():
             "email": doc["email"],
             "userId": doc["userId"],
             "role": doc["role"],
+            "tenantId": doc["tenantId"],
+            "courseStream": doc["courseStream"],
             "createdAt": doc["createdAt"],
             "isActive": doc["isActive"], 
             "validUntil": doc["validUntil"],
@@ -226,6 +237,11 @@ def update_user_status(user_id: str):
         }
     )
 
+    from utils.cache import invalidate_user_cache
+    invalidate_user_cache(user.get("userId"))
+    if user.get("naxUnid"):
+        invalidate_user_cache(user.get("naxUnid"))
+
     return jsonify({
         "message": "User status updated",
         "userId": user.get("userId"),
@@ -268,7 +284,7 @@ def update_user(user_id: str):
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    allowed = ["name", "email"]
+    allowed = ["name", "email", "courseStream"]
     updates = {k: payload[k] for k in allowed if k in payload}
     if "validUntil" in payload:
         try:
@@ -282,8 +298,44 @@ def update_user(user_id: str):
     updated = db.users.find_one({"_id": user["_id"]}, {"password": 0})
     return jsonify({"user": to_jsonable({
         "id": str(updated["_id"]),
-        **{k: updated.get(k) for k in ["name", "email", "userId", "createdAt", "lastLoginAt", "isActive", "validUntil"]}
+        **{k: updated.get(k) for k in ["name", "email", "userId", "courseStream", "createdAt", "lastLoginAt", "isActive", "validUntil"]}
     })})
+
+
+@admin_users_bp.route("/bulk-delete", methods=["POST"])
+def bulk_delete_users():
+    """Bulk delete selected candidate accounts."""
+    payload = request.get_json(silent=True) or {}
+    user_ids = payload.get("userIds", [])
+    if not user_ids:
+        return jsonify({"error": "No user IDs provided"}), 400
+
+    db = get_db()
+    tenant_id = get_request_tenant_id()
+    filter_q = build_tenant_filter(tenant_id)
+
+    obj_ids = [ObjectId(uid) for uid in user_ids if ObjectId.is_valid(uid)]
+    raw_ids = [uid for uid in user_ids if not ObjectId.is_valid(uid)]
+
+    del_query = {
+        **filter_q,
+        "role": "answerer",
+        "$or": [
+            {"_id": {"$in": obj_ids}},
+            {"userId": {"$in": raw_ids}}
+        ]
+    }
+
+    matching_users = list(db.users.find(del_query, {"userId": 1}))
+    deleted_uids = [u.get("userId") for u in matching_users if u.get("userId")]
+
+    res = db.users.delete_many(del_query)
+    if deleted_uids:
+        db.results.delete_many({"userId": {"$in": deleted_uids}})
+        db.attempts.delete_many({"userId": {"$in": deleted_uids}})
+        db.security_violations.delete_many({"userId": {"$in": deleted_uids}})
+
+    return jsonify({"success": True, "deletedCount": res.deleted_count})
 
 
 # Download Excel/CSV template for student creation.

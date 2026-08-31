@@ -6,6 +6,11 @@ from config.db import get_db
 from utils.json import to_jsonable
 from utils.validators import require_fields
 from services.document_parser import parse_document_file, validate_parsed_test_data
+from utils.tenant import (
+    get_request_tenant_id,
+    build_tenant_filter,
+    DEFAULT_TENANT_ID,
+)
 
 admin_exams_bp = Blueprint("admin_exams", __name__)
 
@@ -22,13 +27,17 @@ def _parse_validity_date(value, end_of_day=False):
     except (TypeError, ValueError):
         raise ValueError("Validity dates must use YYYY-MM-DD format")
 
+
 @admin_exams_bp.route("", methods=["GET"])
 @admin_exams_bp.route("/", methods=["GET"])
 def list_exams():
     db = get_db()
-    exams = list(db.exams.find({}, {"questions": 0}))
+    tenant_id = get_request_tenant_id()
+    filter_q = build_tenant_filter(tenant_id)
+
+    exams = list(db.exams.find(filter_q, {"questions": 0}))
     assignments = list(db.exam_assignments.find({}, {"examId": 1, "userId": 1}))
-    users = list(db.users.find({}, {"userId": 1, "collegeName": 1}))
+    users = list(db.users.find({**filter_q}, {"userId": 1, "collegeName": 1}))
 
     user_college_by_id = {
         str(user.get("userId") or ""): str(user.get("collegeName") or "").strip()
@@ -51,6 +60,7 @@ def list_exams():
     now = datetime.utcnow()
     for e in exams:
         exam_key = str(e["_id"])
+        exam_key = str(e["_id"])
         summary = assignment_summary.get(exam_key, {"userIds": set(), "colleges": set()})
         available_from = e.get("availableFrom") or e.get("createdAt")
         valid_until = e.get("validUntil")
@@ -63,6 +73,7 @@ def list_exams():
             "questions": int(e.get("questionCount", 0)),
             "sections": e.get("sections", []),
             "passingPercentage": int(e.get("passingPercentage", 40)),
+            "targetBatch": e.get("targetBatch") or e.get("courseStream") or "All Batches",
             "createdAt": e.get("createdAt").isoformat() if e.get("createdAt") else None,
             "updatedAt": e.get("updatedAt").isoformat() if e.get("updatedAt") else None,
             "status": effective_status,
@@ -113,9 +124,6 @@ def create_exam():
     subcategory = next((item for item in (category or {}).get("subcategories", []) if item.get("id") == subcategory_id and item.get("isActive", True)), None)
     if not category or not subcategory or stage not in subcategory.get("stages", []):
         return jsonify({"error": "Select a valid category, subcategory and stage"}), 400
-
-    testName = str(payload["testName"]).strip()
-    duration = int(payload["duration"])
     passing_percentage = int(payload.get("passingPercentage", 40))
     if not (1 <= passing_percentage <= 100):
         return jsonify({"error": "passingPercentage must be between 1 and 100"}), 400
@@ -145,6 +153,8 @@ def create_exam():
     if valid_until and valid_until < available_from:
         return jsonify({"error": "Valid until date must be on or after the start date"}), 400
 
+    tenant_id = str(payload.get("tenantId") or get_request_tenant_id() or DEFAULT_TENANT_ID).strip()
+
     exam_doc = {
         "name": testName,
         "duration": duration,
@@ -152,6 +162,7 @@ def create_exam():
         "sections": sections,
         "status": "active",
         "questionCount": len(questions),
+        "tenantId": tenant_id,
         "createdAt": now,
         "updatedAt": now,
         "availableFrom": available_from,
@@ -172,6 +183,7 @@ def create_exam():
             continue
         q_docs.append({
             "examId": exam_id,
+            "tenantId": tenant_id,
             "qid": str(q.get("id") or q.get("question_id") or ""),
             "question_id": str(q.get("question_id") or q.get("id") or ""),
             "type": q.get("type"),
@@ -421,6 +433,7 @@ def update_exam(exam_id: str):
         "duration": int(payload["duration"]),
         "passingPercentage": passing_percentage,
         "sections": sections,
+        "targetBatch": str(payload.get("targetBatch") or payload.get("courseStream") or exam.get("targetBatch") or "All Batches").strip(),
         "questionCount": len(payload.get("questions") or []),
         "updatedAt": now,
         "availableFrom": available_from,

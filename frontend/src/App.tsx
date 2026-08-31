@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import Login from './components/Login';
+import Login, { UserRole } from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
 import AnswererDashboard from './components/AnswererDashboard';
+import SuperAdminDashboard from './components/SuperAdminDashboard';
 import { useSecurityContext } from './security';
 import { useInactivityLogout } from './hooks/useInactivityLogout';
+import { TenantProvider, useTenant } from './context/TenantContext';
 import { buildUrl } from './services/api';
 import './App.css';
-
 import './CardMotion.css';
-
-type UserRole = 'admin' | 'answerer';
 
 function AccountSuspendedPage({ onLogout }: { onLogout: () => void }) {
   return (
@@ -79,7 +78,7 @@ function AccountSuspendedPage({ onLogout }: { onLogout: () => void }) {
   );
 }
 
-function App() {
+function MainAppRoutes() {
   const [currentRole, setCurrentRole] = useState<UserRole | null>(() => {
     return sessionStorage.getItem('role') as UserRole | null;
   });
@@ -91,6 +90,7 @@ function App() {
   });
   const navigate = useNavigate();
   const { initSession, clearSession } = useSecurityContext();
+  const { loadTenantBranding } = useTenant();
 
   // Restore session and verify candidate account status on load/refresh.
   useEffect(() => {
@@ -102,6 +102,11 @@ function App() {
 
     const savedRole = sessionStorage.getItem('role') as UserRole | null;
     const savedUser = sessionStorage.getItem('userId');
+    const savedTenant = sessionStorage.getItem('activeTenantId') || sessionStorage.getItem('tenantId');
+    if (savedTenant) {
+      loadTenantBranding(savedTenant);
+    }
+
     if (savedRole && savedUser) {
       if (savedRole === 'answerer') {
         fetch(buildUrl(`/answerer/dashboard?userId=${encodeURIComponent(savedUser)}`), {
@@ -116,7 +121,7 @@ function App() {
           .catch(() => {});
       }
     }
-  }, []);
+  }, [loadTenantBranding]);
 
   const handleLogin = async (role: UserRole, userId: string, sessionId?: string) => {
     sessionStorage.removeItem('account_permanently_blocked');
@@ -129,7 +134,14 @@ function App() {
     setCurrentRole(role);
     setCurrentUser(userId);
     await initSession(userId);
-    navigate(role === 'admin' ? '/admin' : '/dashboard');
+
+    if (role === 'super_admin') {
+      navigate('/super-admin');
+    } else if (role === 'admin') {
+      navigate('/admin');
+    } else {
+      navigate('/dashboard');
+    }
   };
 
   const handleLogout = () => {
@@ -141,6 +153,11 @@ function App() {
     navigate('/login');
   };
 
+  const handleEnterTenantAdmin = (tenantId: string) => {
+    sessionStorage.setItem("activeTenantId", tenantId);
+    navigate('/admin');
+  };
+
   const isLoggedIn = !!currentRole && !!currentUser;
 
   // Global inactivity auto-logout tracker
@@ -150,21 +167,35 @@ function App() {
     return <AccountSuspendedPage onLogout={handleLogout} />;
   }
 
-  return (
+  const getDefaultRoute = () => {
+    if (!isLoggedIn) return '/login';
+    if (currentRole === 'super_admin') return '/super-admin';
+    if (currentRole === 'admin') return '/admin';
+    return '/dashboard';
+  };
 
+  return (
     <Routes>
       <Route
         path="/login"
         element={
           isLoggedIn
-            ? <Navigate to={currentRole === 'admin' ? '/admin' : '/dashboard'} replace />
+            ? <Navigate to={getDefaultRoute()} replace />
             : <Login onLogin={handleLogin} />
+        }
+      />
+      <Route
+        path="/super-admin/*"
+        element={
+          isLoggedIn && currentRole === 'super_admin'
+            ? <SuperAdminDashboard onLogout={handleLogout} onEnterTenantAdmin={handleEnterTenantAdmin} />
+            : <Navigate to="/login" replace />
         }
       />
       <Route
         path="/admin/*"
         element={
-          isLoggedIn && currentRole === 'admin'
+          isLoggedIn && (currentRole === 'admin' || currentRole === 'super_admin')
             ? <AdminDashboard adminName={currentUser} onLogout={handleLogout} />
             : <Navigate to="/login" replace />
         }
@@ -180,10 +211,18 @@ function App() {
       <Route
         path="*"
         element={
-          <Navigate to={isLoggedIn ? (currentRole === 'admin' ? '/admin' : '/dashboard') : '/login'} replace />
+          <Navigate to={getDefaultRoute()} replace />
         }
       />
     </Routes>
+  );
+}
+
+function App() {
+  return (
+    <TenantProvider>
+      <MainAppRoutes />
+    </TenantProvider>
   );
 }
 

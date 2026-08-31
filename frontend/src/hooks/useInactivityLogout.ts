@@ -56,6 +56,8 @@ export function useInactivityLogout({ onLogout, isLoggedIn }: InactivityOptions)
 
   }, [isLoggedIn, onLogout]);
 
+  const lastActivityRef = useRef<number>(0);
+
   useEffect(() => {
     if (!isLoggedIn) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -63,7 +65,15 @@ export function useInactivityLogout({ onLogout, isLoggedIn }: InactivityOptions)
     }
 
     const activityEvents = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
-    const handleActivity = () => resetTimer();
+    const handleActivity = () => {
+      const now = Date.now();
+      // Throttle rapid events (like continuous mousemove or scrolling) to once per 2 seconds
+      if (now - lastActivityRef.current < 2000) {
+        return;
+      }
+      lastActivityRef.current = now;
+      resetTimer();
+    };
 
     activityEvents.forEach((ev) => {
       window.addEventListener(ev, handleActivity, { passive: true });

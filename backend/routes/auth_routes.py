@@ -8,7 +8,23 @@ from utils.json import to_jsonable
 from utils.validators import require_fields
 from utils.security import rate_limit, audit_log
 
+from utils.tenant import (
+    get_tenant_branding,
+    ensure_default_organization,
+    ensure_super_admin,
+    DEFAULT_TENANT_ID,
+)
+
 auth_bp = Blueprint("auth", __name__)
+
+
+@auth_bp.get("/tenant-branding")
+def get_branding():
+    """Retrieve branding for a given tenant ID or the default organization."""
+    tenant_id = request.args.get("tenantId", "").strip() or DEFAULT_TENANT_ID
+    branding = get_tenant_branding(tenant_id)
+    return jsonify({"branding": branding})
+
 
 @auth_bp.post("/login")
 @rate_limit(max_calls=settings.RATE_LIMIT_LOGIN_MAX, period_seconds=settings.RATE_LIMIT_LOGIN_PERIOD)
@@ -24,15 +40,46 @@ def login():
     role     = str(payload["role"]).strip()
 
     db = get_db()
+    ensure_default_organization(db)
+    ensure_super_admin(db)
 
-    # Case-insensitive lookup for userId / naxUnid matching the selected role
+    # Normalize user input for flexible matching (e.g. "super admin" -> "superadmin")
+    normalized_id = re.sub(r"[\s_-]+", "", userId)
+
+    # Build search conditions for userId, naxUnid, email, or normalized form
+    user_match_conditions = [
+        {"userId": {"$regex": f"^{re.escape(userId)}$", "$options": "i"}},
+        {"naxUnid": {"$regex": f"^{re.escape(userId)}$", "$options": "i"}},
+        {"email": {"$regex": f"^{re.escape(userId)}$", "$options": "i"}},
+    ]
+    if normalized_id and normalized_id != userId:
+        user_match_conditions.extend([
+            {"userId": {"$regex": f"^{re.escape(normalized_id)}$", "$options": "i"}},
+            {"name": {"$regex": f"^{re.escape(userId)}$", "$options": "i"}},
+        ])
+
+    # Flexible role mapping
+    if role in ("super_admin", "admin"):
+        valid_roles = ["super_admin", "admin"]
+    else:
+        valid_roles = ["answerer"]
+
+    # Lookup user
     user = db.users.find_one({
-        "$or": [
-            {"userId": {"$regex": f"^{re.escape(userId)}$", "$options": "i"}},
-            {"naxUnid": {"$regex": f"^{re.escape(userId)}$", "$options": "i"}},
-        ],
-        "role": role,
+        "$or": user_match_conditions,
+        "role": {"$in": valid_roles},
     })
+
+    # If not found with role filter, check without role filter to give clearer error
+    if not user:
+        any_user = db.users.find_one({"$or": user_match_conditions})
+        if any_user:
+            actual_role = any_user.get("role", "user")
+            role_label = "Super Admin" if actual_role == "super_admin" else "Administrator" if actual_role == "admin" else "Candidate"
+            audit_log("LOGIN_FAILED", user_id=userId, details={"reason": "role_mismatch", "selectedRole": role, "actualRole": actual_role}, severity="warning")
+            return jsonify({
+                "error": f"Role mismatch: This account is registered as '{role_label}'. Please switch to the {role_label} tab."
+            }), 401
 
     if not user:
         audit_log("LOGIN_FAILED", user_id=userId,
@@ -63,7 +110,6 @@ def login():
         except Exception:
             pass
 
-
     if role == "answerer" and not user.get("isActive", True):
         status_reason = user.get("statusReason", "")
         if status_reason == "validity_expired":
@@ -76,8 +122,20 @@ def login():
         audit_log("LOGIN_FAILED", user_id=userId, details={"reason": "account_blocked", "statusReason": status_reason}, severity="warning")
         return jsonify({"error": error_msg, "blocked": True, "statusReason": status_reason}), 403
 
+    # Check Organization Status for non-superadmin
+    tenant_id = user.get("tenantId") or DEFAULT_TENANT_ID
+    if role != "super_admin" and tenant_id != "global":
+        org = db.organizations.find_one({"tenantId": tenant_id})
+        if org and org.get("status") in ("inactive", "suspended"):
+            return jsonify({
+                "error": f"Your organization '{org.get('name', tenant_id)}' is currently inactive. Please contact the Super Administrator.",
+                "blocked": True,
+            }), 403
 
     db.users.update_one({"_id": user["_id"]}, {"$set": {"lastLoginAt": datetime.utcnow()}})
+
+    # Fetch tenant branding object
+    tenant_info = get_tenant_branding(tenant_id)
 
     # Issue a short-lived security session token for the watermark system
     session_id = str(uuid.uuid4())
@@ -86,6 +144,7 @@ def login():
         db.security_sessions.insert_one({
             "sessionId": session_id,
             "userId": userId,
+            "tenantId": tenant_id,
             "createdAt": datetime.utcnow(),
             "expiresAt": session_expires,
             "active": True,
@@ -93,7 +152,7 @@ def login():
     except Exception:
         pass  # Non-critical — watermark will fall back to local UUID
 
-    audit_log("LOGIN_SUCCESS", user_id=userId, details={"role": role, "sessionId": session_id})
+    audit_log("LOGIN_SUCCESS", user_id=userId, details={"role": role, "tenantId": tenant_id, "sessionId": session_id})
 
     res_user = {
         "id":        str(user["_id"]),
@@ -101,6 +160,8 @@ def login():
         "name":      user.get("name"),
         "email":     user.get("email"),
         "role":      user.get("role"),
+        "tenantId":  tenant_id,
+        "tenant":    tenant_info,
         "sessionId": session_id,
     }
     return jsonify({"user": to_jsonable(res_user)})

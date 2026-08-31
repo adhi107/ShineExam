@@ -402,3 +402,73 @@
   user-select: none;
   -webkit-touch-callout: none;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   7. TEMPORARY TAB-AWAY / WINDOW-BLUR PAUSE SHIELD
+   ═══════════════════════════════════════════════════════════ */
+
+.shine-temporary-pause-backdrop {
+  background: rgba(10, 16, 30, 0.88) !important;
+  backdrop-filter: blur(16px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.shine-temporary-shield-card {
+  text-align: center;
+  color: #ffffff;
+  padding: 2.5rem 2rem;
+  max-width: 440px;
+  width: 90%;
+  margin: auto !important;
+  background: linear-gradient(180deg, #111e38 0%, #0b1325 100%) !important;
+  border: 1.5px solid rgba(56, 189, 248, 0.35) !important;
+  border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 30px rgba(56, 189, 248, 0.15) !important;
+  animation: shine-modal-pop 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.shine-temporary-shield-icon {
+  margin-bottom: 0.75rem;
+  display: inline-block;
+  animation: shine-shield-bounce 2s ease-in-out infinite;
+}
+
+.shine-temporary-title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #ffffff !important;
+  margin: 0 0 0.5rem 0;
+}
+
+.shine-temporary-msg {
+  font-size: 0.92rem;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin: 0 0 1.25rem 0;
+}
+
+.shine-temporary-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #7dd3fc;
+}
+
+.shine-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+  animation: pulseDot 1.5s infinite;
+}
+

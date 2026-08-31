@@ -15,6 +15,7 @@ import ShineLogo from "./ShineLogo";
 import AdminVideos from "./AdminVideos";
 import AppIcon from "./AppIcons";
 import { apiGet, apiPost } from "../services/api";
+import { useTenant } from "../context/TenantContext";
 import "./AdminDashboard.css";
 import "./AdminPolish.css";
 
@@ -242,7 +243,16 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
       <aside className={`shine-admin-sidebar ${isDesktopCollapsed ? "collapsed" : ""} ${mobileOpen ? "mobile-open" : ""}`}>
         <div className="admin-brand" onClick={toggleSidebar} style={{ cursor: "pointer" }} title={isDesktopCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
           <ShineLogo compact={isDesktopCollapsed} inverse={true} />
-          {!isDesktopCollapsed && <span>ADMIN CONSOLE</span>}
+          {!isDesktopCollapsed && (
+            <div className="admin-brand-text">
+              <span className="admin-brand-main">ADMIN CONSOLE</span>
+              {sessionStorage.getItem("activeTenantId") && sessionStorage.getItem("activeTenantId") !== "default" && (
+                <span className="admin-brand-sub" style={{ fontSize: "10px", opacity: 0.75, display: "block" }}>
+                  [{sessionStorage.getItem("activeTenantId")}]
+                </span>
+              )}
+            </div>
+          )}
           {mobileOpen && (
             <button
               type="button"
@@ -254,6 +264,34 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
             </button>
           )}
         </div>
+
+        {/* If Super Admin is inspecting this tenant, show quick return button */}
+        {sessionStorage.getItem("role") === "super_admin" && (
+          <div style={{ padding: "6px 12px 10px" }}>
+            <button
+              type="button"
+              onClick={() => navigate("/super-admin")}
+              style={{
+                width: "100%",
+                background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                border: "none",
+                color: "#ffffff",
+                padding: "7px 10px",
+                borderRadius: "8px",
+                fontSize: "11px",
+                fontWeight: 800,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+              }}
+            >
+              <span>← Super Admin Portal</span>
+            </button>
+          </div>
+        )}
+
         <nav>
           <Nav active={currentView === "dashboard"} icon="dashboard" label="Dashboard" collapsed={isDesktopCollapsed} onClick={() => goMobile("dashboard")} />
           <Nav active={currentView === "users"} icon="users" label="Students" collapsed={isDesktopCollapsed} onClick={() => goMobile("users")} />
@@ -272,7 +310,10 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
           <div>
             <span>{(adminName || "A").charAt(0).toUpperCase()}</span>
             {!isDesktopCollapsed && (
-              <p><strong>{adminName || "Admin"}</strong><small>Administrator</small></p>
+              <p>
+                <strong>{adminName || "Admin"}</strong>
+                <small>{sessionStorage.getItem("role") === "super_admin" ? "Super Admin" : "Administrator"}</small>
+              </p>
             )}
           </div>
           {!isDesktopCollapsed ? (
@@ -316,6 +357,7 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
 
 const Nav=({active,icon,label,collapsed,onClick}:any)=><button className={active?"active":""} onClick={onClick} title={collapsed ? label : ""}><AppIcon name={icon}/>{!collapsed && <span>{label}</span>}</button>;
 const AdminHome=({adminName="Admin",stats,go}:{adminName:string;stats:DashboardStats;go:(view:AdminView)=>void})=>{
+  const { tenant } = useTenant();
   const totalUsers = Number(stats?.totalUsers || 0);
   const activeUsers = Number(stats?.activeUsers || 0);
   const blockedUsers = Number(stats?.blockedUsers || 0);
@@ -327,6 +369,7 @@ const AdminHome=({adminName="Admin",stats,go}:{adminName:string;stats:DashboardS
   const passRate = Number(stats?.passRate || 0);
   const recentAttempts = Array.isArray(stats?.recentAttempts) ? stats.recentAttempts : [];
   const safeAdminName = adminName || "Admin";
+  const tenantKicker = tenant?.name ? `${tenant.name.toUpperCase()} OPERATIONS` : "EXAM OPERATIONS";
 
   const cards=[
     ["Students",totalUsers,"Registered candidate accounts","users","users","theme-blue"],
@@ -344,7 +387,7 @@ const AdminHome=({adminName="Admin",stats,go}:{adminName:string;stats:DashboardS
         <div>
           <span className="admin-kicker">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-            SHINE EXAM OPERATIONS
+            {tenantKicker}
           </span>
           <h1>Good day, {safeAdminName}</h1>
           <p>Manage students, publish papers, and monitor examination performance with real-time insights.</p>

@@ -338,6 +338,11 @@ def block_user_on_violation():
         {"$set": {"active": False, "invalidatedAt": datetime.utcnow()}}
     )
 
+    from utils.cache import invalidate_user_cache
+    invalidate_user_cache(canonical_user_id)
+    if user_doc and user_doc.get("naxUnid"):
+        invalidate_user_cache(user_doc.get("naxUnid"))
+
     # Immediately terminate any in-progress exam attempts
     db.attempts.update_many(
         {"userId": {"$regex": f"^{re.escape(canonical_user_id)}$", "$options": "i"}, "status": {"$ne": "submitted"}},

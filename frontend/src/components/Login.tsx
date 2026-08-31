@@ -4,11 +4,12 @@ import { apiPost } from "../services/api";
 import AppIcon from './AppIcons';
 import ShineLogo from './ShineLogo';
 import AlertDialog, { AlertVariant } from './AlertDialog';
+import { useTenant } from '../context/TenantContext';
 
-type UserRole = 'admin' | 'answerer';
+export type UserRole = 'admin' | 'answerer' | 'super_admin';
 
 interface LoginProps {
-  onLogin: (role: UserRole, userId: string, sessionId?: string) => void;
+  onLogin: (role: UserRole, userId: string, sessionId?: string, tenant?: any) => void;
 }
 
 interface AlertState {
@@ -21,6 +22,7 @@ interface AlertState {
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
+  const { tenant, setTenant } = useTenant();
   const [selectedRole, setSelectedRole] = useState<UserRole>('answerer');
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
@@ -64,7 +66,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
-
     e.preventDefault();
     if (!userId || !password) return;
     setIsLoading(true);
@@ -74,7 +75,16 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         password,
         role: selectedRole,
       });
-      onLogin(res.user.role, res.user.userId, res.user.sessionId);
+
+      if (res.user.tenant) {
+        setTenant(res.user.tenant);
+      }
+      if (res.user.tenantId) {
+        sessionStorage.setItem("tenantId", res.user.tenantId);
+        sessionStorage.setItem("activeTenantId", res.user.tenantId);
+      }
+
+      onLogin(res.user.role, res.user.userId, res.user.sessionId, res.user.tenant);
     } catch (err: any) {
       const msg: string = err?.message || err?.error || "";
       if (msg.toLowerCase().includes("expired")) {
@@ -101,12 +111,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       ) {
         setAlertState({
           isOpen: true,
-          title: "Account Suspended",
+          title: "Account Inactive or Suspended",
           message: (
             <>
-              Your account has been suspended due to an exam security policy violation.
-              <br />
-              Please contact your system administrator to request an account review and unblock.
+              {msg || "Your account or organization is currently inactive. Please contact the administrator."}
             </>
           ),
           variant: "suspended",
@@ -117,7 +125,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         setAlertState({
           isOpen: true,
           title: "Invalid Credentials",
-          message: "Please check your User ID and password and try again. Ensure the correct role (Test Taker vs Administrator) is selected.",
+          message: "Please check your User ID and password and try again. Ensure the correct role (Candidate, Admin, or Super Admin) is selected.",
           variant: "warning",
           icon: "⚠️",
           buttonText: "Try Again",
@@ -134,7 +142,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       title: "Password Recovery",
       message: (
         <>
-          For candidate security and identity verification, password resets are handled directly by the Exam Administration.
+          For candidate security and identity verification, password resets are handled directly by your Organization Administration.
           <br /><br />
           Please contact your administrator with your <strong>User ID</strong> to receive a temporary login password.
         </>
@@ -149,44 +157,63 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     <div className="login-container">
       <section className="login-brand-panel">
         <div className="login-brand-content">
-          <ShineLogo inverse />
+          <ShineLogo inverse forceDefault />
           <div className="login-brand-message">
-            <span className="login-eyebrow">YOUR LEARNING JOURNEY</span>
+            <span className="login-eyebrow">
+              YOUR LEARNING JOURNEY
+            </span>
             <h2>Prepare with purpose.<br />Perform with confidence.</h2>
-            <p>One focused platform for practice tests, timed assessments and meaningful performance insights.</p>
+            <p>
+              One focused platform for practice tests, timed assessments and meaningful performance insights.
+            </p>
           </div>
           <div className="login-brand-stats">
-            <span><strong>10K+</strong> learners</span>
-            <span><strong>500+</strong> assessments</span>
-            <span><strong>24/7</strong> access</span>
+            <span><strong>Multi-Tenant</strong> Platform</span>
+            <span><strong>Enterprise</strong> Security</span>
+            <span><strong>24/7</strong> Access</span>
           </div>
         </div>
       </section>
       <div className="login-card">
         <div className="login-logo-container">
-          <ShineLogo />
+          <ShineLogo forceDefault />
         </div>
 
         <div className="login-header">
-          <span className="login-eyebrow dark">WELCOME BACK</span>
-          <h1 className="login-title">Candidate Login</h1>
-          <p className="login-subtitle">Sign in to continue to your Shine learning space</p>
+          <span className="login-eyebrow dark">
+            WELCOME BACK
+          </span>
+          <h1 className="login-title">
+            {selectedRole === 'super_admin' ? 'Super Admin Portal' : selectedRole === 'admin' ? 'Admin Portal' : 'Candidate Login'}
+          </h1>
+          <p className="login-subtitle">
+            {selectedRole === 'super_admin'
+              ? 'Global multi-tenant governance and oversight'
+              : 'Sign in to access your examination workspace'}
+          </p>
         </div>
 
-        <div className="role-selector compact-role-selector">
+        <div className="role-selector compact-role-selector" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
           <button
             className={`role-btn ${selectedRole === 'answerer' ? 'active' : ''}`}
             onClick={() => setSelectedRole('answerer')}
             type="button"
           >
-            <span className="role-label">Test Taker</span>
+            <span className="role-label">Candidate</span>
           </button>
           <button
             className={`role-btn ${selectedRole === 'admin' ? 'active' : ''}`}
             onClick={() => setSelectedRole('admin')}
             type="button"
           >
-            <span className="role-label">Administrator</span>
+            <span className="role-label">Admin</span>
+          </button>
+          <button
+            className={`role-btn ${selectedRole === 'super_admin' ? 'active' : ''}`}
+            onClick={() => setSelectedRole('super_admin')}
+            type="button"
+          >
+            <span className="role-label">Super Admin</span>
           </button>
         </div>
 

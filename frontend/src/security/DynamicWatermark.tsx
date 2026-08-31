@@ -169,9 +169,16 @@ const DynamicWatermark: React.FC<DynamicWatermarkProps> = ({
   useEffect(() => {
     redraw();
 
-    const onResize = () => redraw();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    let resizeRaf: number | null = null;
+    const onResize = () => {
+      if (resizeRaf) cancelAnimationFrame(resizeRaf);
+      resizeRaf = requestAnimationFrame(() => redraw());
+    };
+    window.addEventListener('resize', onResize, { passive: true });
+    return () => {
+      window.removeEventListener('resize', onResize);
+      if (resizeRaf) cancelAnimationFrame(resizeRaf);
+    };
   }, [redraw]);
 
   // Periodic redraw (updates timestamp + jitter)
