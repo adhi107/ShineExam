@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { apiGet, apiPost, getMediaUrl } from "../services/api";
 import SensitiveContent from "../security/SensitiveContent";
+import DynamicWatermark from "../security/DynamicWatermark";
 import "./StudentClasses.css";
 
 export interface StudentClassItem {
@@ -109,7 +110,7 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
     <SensitiveContent
       module="classes"
       userId={userId}
-      showWatermark={true}
+      showWatermark={false}
       hideOnTabSwitch={false}
       hideOnWindowBlur={false}
       enableVideoOverlay={false}
@@ -306,7 +307,8 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
               </div>
 
               {/* In-Screen Video Screen */}
-              <div className="student-player-screen">
+              <div className="student-player-screen" style={{ position: "relative" }}>
+                <DynamicWatermark userId={userId} opacity={0.16} isBold={true} />
                 {activeClass.sourceType === "file" || activeClass.provider === "direct" || activeClass.provider === "local" ? (
                   <video
                     src={getMediaUrl(activeClass.videoUrl || activeClass.embedUrl)}

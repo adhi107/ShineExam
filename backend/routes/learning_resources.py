@@ -238,28 +238,41 @@ def assign_announcement(announcement_id):
 
 @answerer_resources_bp.get("/announcements")
 def candidate_announcements():
-    user_id=str(request.args.get("userId") or "").strip()
-    db=get_db()
-    now=datetime.utcnow()
-    assigned_ids=[row["announcementId"] for row in db.announcement_assignments.find({"userId":user_id})]
-    all_assigned=[row for row in db.announcement_assignments.distinct("announcementId")]
-    query={"$or":[{"_id":{"$in":assigned_ids}},{"_id":{"$nin":all_assigned}}]} if all_assigned else {}
-    rows=list(db.announcements.find(query).sort("createdAt",-1))
-    announcements=[]
+    user_id = str(request.args.get("userId") or "").strip()
+    db = get_db()
+    now = datetime.utcnow()
+
+    user_doc = None
+    if user_id:
+        user_doc = db.users.find_one({
+            "$or": [{"userId": user_id}, {"naxUnid": user_id}]
+        })
+
+    tenant_id = get_request_tenant_id(user_doc)
+    tenant_filter = build_tenant_filter(tenant_id)
+
+    assigned_ids = [row["announcementId"] for row in db.announcement_assignments.find({"userId": user_id})]
+    all_assigned = [row for row in db.announcement_assignments.distinct("announcementId")]
+    query = {"$or": [{"_id": {"$in": assigned_ids}}, {"_id": {"$nin": all_assigned}}]} if all_assigned else {}
+    
+    rows = list(db.announcements.find({**tenant_filter, **query}).sort("createdAt", -1))
+    announcements = []
     for row in rows:
-        publish_at=_parse_announcement_datetime(row.get("publishAt")) or row.get("createdAt") or now
-        expires_at=_parse_announcement_datetime(row.get("expiresAt"))
+        publish_at = _parse_announcement_datetime(row.get("publishAt")) or row.get("createdAt") or now
+        expires_at = _parse_announcement_datetime(row.get("expiresAt"))
         if publish_at <= now and (not expires_at or expires_at >= now):
             announcements.append(_announcement_json(row))
-    exam_ids=[row["examId"] for row in db.exam_assignments.find({"userId":user_id}) if row.get("examId")]
-    exams=list(db.exams.find({"_id":{"$in":exam_ids},"status":"active"})) if exam_ids else []
+
+    exam_ids = [row["examId"] for row in db.exam_assignments.find({"userId": user_id}) if row.get("examId")]
+    exams = list(db.exams.find({**tenant_filter, "_id": {"$in": exam_ids}, "status": "active"})) if exam_ids else []
     for exam in exams:
-        available_from=exam.get("availableFrom") or exam.get("createdAt")
-        valid_until=exam.get("validUntil")
+        available_from = exam.get("availableFrom") or exam.get("createdAt")
+        valid_until = exam.get("validUntil")
         if (not available_from or available_from <= now) and (not valid_until or valid_until >= now):
             announcements.append(_candidate_test_update_json(exam))
-    announcements.sort(key=lambda item:_parse_announcement_datetime(item.get("publishAt")) or _parse_announcement_datetime(item.get("createdAt")) or now, reverse=True)
-    return jsonify({"announcements":to_jsonable(announcements)})
+
+    announcements.sort(key=lambda item: _parse_announcement_datetime(item.get("publishAt")) or _parse_announcement_datetime(item.get("createdAt")) or now, reverse=True)
+    return jsonify({"announcements": to_jsonable(announcements)})
 
 
 @answerer_resources_bp.get("/announcements/<announcement_id>/image")

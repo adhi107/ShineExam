@@ -322,8 +322,18 @@ def list_candidate_classes():
         category = request.args.get("category", "").strip()
         search = request.args.get("search", "").strip()
 
-        # Videos assigned to 'all' or specifically including this user_id
+        user_doc = None
+        if user_id:
+            user_doc = db.users.find_one({
+                "$or": [{"userId": user_id}, {"naxUnid": user_id}]
+            })
+
+        tenant_id = get_request_tenant_id(user_doc)
+        tenant_filter = build_tenant_filter(tenant_id)
+
+        # Videos assigned to 'all' or specifically including this user_id within the student's tenant
         query = {
+            **tenant_filter,
             "$or": [
                 {"assignedTo": "all"},
                 {"assignedTo": user_id},
@@ -353,8 +363,8 @@ def list_candidate_classes():
             del doc["_id"]
             classes.append(doc)
 
-        # Extract available distinct categories
-        categories = db.videos.distinct("category")
+        # Extract available distinct categories within this tenant only
+        categories = db.videos.distinct("category", tenant_filter)
 
         return jsonify({
             "classes": classes,

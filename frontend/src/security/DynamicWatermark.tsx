@@ -141,11 +141,28 @@ const DynamicWatermark: React.FC<DynamicWatermarkProps> = ({
   intervalMs = 8_000,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { userId: ctxUserId, sessionId: ctxSessionId, orgName: ctxOrgName } = useSecurityContext();
+  let resolvedOrgName = orgNameProp || '';
+  if (!resolvedOrgName && typeof sessionStorage !== 'undefined') {
+    try {
+      const storedTenant = sessionStorage.getItem('tenant_info');
+      if (storedTenant) {
+        const parsed = JSON.parse(storedTenant);
+        if (parsed.brandTitle || parsed.name) {
+          resolvedOrgName = parsed.brandTitle || parsed.name;
+        }
+      }
+      if (!resolvedOrgName) {
+        resolvedOrgName = sessionStorage.getItem('tenantName') || sessionStorage.getItem('orgName') || '';
+      }
+    } catch {}
+  }
+  if (!resolvedOrgName) {
+    resolvedOrgName = ctxOrgName || 'Shine Exam';
+  }
 
   const userId = userIdProp || ctxUserId || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('userId') || '' : '') || 'Candidate';
   const sessionId = ctxSessionId || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('securitySessionId') || '' : '');
-  const orgName = orgNameProp || ctxOrgName || 'Shine Exam';
+  const orgName = resolvedOrgName;
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
