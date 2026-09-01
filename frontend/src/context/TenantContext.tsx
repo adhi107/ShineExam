@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { apiGet, getMediaUrl } from "../services/api";
 
 export interface TenantInfo {
@@ -49,7 +49,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   });
 
-  const setTenant = (info: Partial<TenantInfo>) => {
+  const setTenant = useCallback((info: Partial<TenantInfo>) => {
     setTenantState((prev) => {
       const updated = { ...prev, ...info };
       try {
@@ -61,10 +61,11 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } catch {}
       return updated;
     });
-  };
+  }, []);
 
-  const loadTenantBranding = async (tenantId?: string) => {
-    const targetId = tenantId || tenant.tenantId || sessionStorage.getItem("activeTenantId") || "default";
+  const loadTenantBranding = useCallback(async (tenantId?: string) => {
+    const activeTid = sessionStorage.getItem("activeTenantId") || sessionStorage.getItem("tenantId") || "default";
+    const targetId = tenantId || activeTid;
     try {
       const res = await apiGet<{ branding: TenantInfo }>(`/auth/tenant-branding?tenantId=${encodeURIComponent(targetId)}`);
       if (res && res.branding) {
@@ -73,42 +74,72 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (err) {
       console.warn("Failed to load tenant branding:", err);
     }
-  };
+  }, [setTenant]);
 
-  const getTenantLogo = (): string | null => {
+  const getTenantLogo = useCallback((): string | null => {
     if (tenant.logoUrl) {
       return getMediaUrl(tenant.logoUrl);
     }
     return null;
-  };
+  }, [tenant.logoUrl]);
 
   useEffect(() => {
-    // Initial fetch of active branding
+    // Initial fetch of active branding once on mount
     const storedTid = sessionStorage.getItem("activeTenantId") || sessionStorage.getItem("tenantId");
     if (storedTid) {
       loadTenantBranding(storedTid);
     }
-    // eslint-disable-next-line
-  }, []);
+  }, [loadTenantBranding]);
 
   useEffect(() => {
     if (tenant && tenant.name && tenant.name !== "Shine Examination Portal" && tenant.name !== "Shine Exam") {
-      document.title = `${tenant.name} | Examination Portal`;
+      document.title = `${tenant.brandTitle || tenant.name} | Examination Portal`;
     } else {
       document.title = "Shine Exam Prep";
     }
 
-    // Dynamically update browser tab favicon if tenant has custom logo
-    let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
-    if (!link) {
-      link = document.createElement("link");
-      link.rel = "icon";
-      document.getElementsByTagName("head")[0].appendChild(link);
-    }
-    if (tenant && tenant.logoUrl) {
-      link.href = getMediaUrl(tenant.logoUrl);
-    } else {
-      link.href = "/favicon.ico";
+    // Dynamically and accurately update browser tab favicon if tenant has custom logo
+    try {
+      const head = document.head || document.getElementsByTagName("head")[0];
+      if (head) {
+        // Remove existing favicon links to avoid browser MIME type conflicts and force immediate visual refresh
+        const existingLinks = document.querySelectorAll("link[rel*='icon']");
+        existingLinks.forEach((el) => el.parentNode?.removeChild(el));
+
+        const rawLogo = tenant?.logoUrl?.trim();
+        const resolvedUrl = rawLogo ? getMediaUrl(rawLogo) : "/shine-favicon.svg";
+
+        let mimeType = "image/x-icon";
+        const lowerUrl = resolvedUrl.toLowerCase();
+        if (lowerUrl.includes(".svg")) {
+          mimeType = "image/svg+xml";
+        } else if (lowerUrl.includes(".png")) {
+          mimeType = "image/png";
+        } else if (lowerUrl.includes(".jpg") || lowerUrl.includes(".jpeg")) {
+          mimeType = "image/jpeg";
+        } else if (lowerUrl.includes(".webp")) {
+          mimeType = "image/webp";
+        }
+
+        const iconLink = document.createElement("link");
+        iconLink.rel = "icon";
+        iconLink.type = mimeType;
+        iconLink.href = resolvedUrl;
+        head.appendChild(iconLink);
+
+        const shortcutLink = document.createElement("link");
+        shortcutLink.rel = "shortcut icon";
+        shortcutLink.type = mimeType;
+        shortcutLink.href = resolvedUrl;
+        head.appendChild(shortcutLink);
+
+        const appleLink = document.createElement("link");
+        appleLink.rel = "apple-touch-icon";
+        appleLink.href = resolvedUrl;
+        head.appendChild(appleLink);
+      }
+    } catch (err) {
+      console.warn("Failed to update dynamic favicon:", err);
     }
   }, [tenant]);
 

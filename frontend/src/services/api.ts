@@ -81,16 +81,77 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return res.json();
 }
 
-export async function apiGet<T>(url: string): Promise<T> {
-  const res = await fetch(buildUrl(url), {
-    headers: {
-      ...getAuthHeaders(),
-    },
-  });
-  return handleResponse<T>(res);
+// In-flight GET promise deduplication map to prevent simultaneous duplicate network requests
+const inFlightRequests = new Map<string, Promise<any>>();
+
+// Short TTL response cache (in milliseconds) for GET requests to eliminate duplicate cascading calls
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+}
+const responseCache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 1200; // 1.2 seconds window for debouncing identical React renders/mounts
+
+export function clearApiCache(pathPrefix?: string) {
+  if (!pathPrefix) {
+    responseCache.clear();
+    return;
+  }
+  for (const key of responseCache.keys()) {
+    if (key.includes(pathPrefix)) {
+      responseCache.delete(key);
+    }
+  }
+}
+
+export interface ApiGetOptions {
+  bypassCache?: boolean;
+  cacheTtlMs?: number;
+}
+
+export async function apiGet<T>(url: string, options?: ApiGetOptions): Promise<T> {
+  const fullUrl = buildUrl(url);
+  const authHeaders = getAuthHeaders();
+  const cacheKey = `${fullUrl}::${JSON.stringify(authHeaders)}`;
+  const bypassCache = options?.bypassCache ?? false;
+  const ttl = options?.cacheTtlMs ?? CACHE_TTL_MS;
+
+  // 1. Return from short-term cache if fresh and not bypassed
+  if (!bypassCache && responseCache.has(cacheKey)) {
+    const entry = responseCache.get(cacheKey)!;
+    if (Date.now() - entry.timestamp < ttl) {
+      return Promise.resolve(entry.data as T);
+    }
+    responseCache.delete(cacheKey);
+  }
+
+  // 2. Return in-flight promise if identical request is already active
+  if (!bypassCache && inFlightRequests.has(cacheKey)) {
+    return inFlightRequests.get(cacheKey) as Promise<T>;
+  }
+
+  // 3. Initiate new fetch request
+  const fetchPromise = (async () => {
+    try {
+      const res = await fetch(fullUrl, {
+        headers: {
+          ...authHeaders,
+        },
+      });
+      const data = await handleResponse<T>(res);
+      responseCache.set(cacheKey, { data, timestamp: Date.now() });
+      return data;
+    } finally {
+      inFlightRequests.delete(cacheKey);
+    }
+  })();
+
+  inFlightRequests.set(cacheKey, fetchPromise);
+  return fetchPromise;
 }
 
 export async function apiPost<T>(url: string, body: any): Promise<T> {
+  clearApiCache();
   const res = await fetch(buildUrl(url), {
     method: "POST",
     headers: {
@@ -103,6 +164,7 @@ export async function apiPost<T>(url: string, body: any): Promise<T> {
 }
 
 export async function apiPut<T>(url: string, body: any): Promise<T> {
+  clearApiCache();
   const res = await fetch(buildUrl(url), {
     method: "PUT",
     headers: {
@@ -115,6 +177,7 @@ export async function apiPut<T>(url: string, body: any): Promise<T> {
 }
 
 export async function apiPatch<T>(url: string, body: any): Promise<T> {
+  clearApiCache();
   const res = await fetch(buildUrl(url), {
     method: "PATCH",
     headers: {
@@ -127,6 +190,7 @@ export async function apiPatch<T>(url: string, body: any): Promise<T> {
 }
 
 export async function apiPostForm<T>(url: string, body: FormData): Promise<T> {
+  clearApiCache();
   const res = await fetch(buildUrl(url), {
     method: "POST",
     headers: {
@@ -138,6 +202,7 @@ export async function apiPostForm<T>(url: string, body: FormData): Promise<T> {
 }
 
 export async function apiPutForm<T>(url: string, body: FormData): Promise<T> {
+  clearApiCache();
   const res = await fetch(buildUrl(url), {
     method: "PUT",
     headers: {
@@ -149,6 +214,7 @@ export async function apiPutForm<T>(url: string, body: FormData): Promise<T> {
 }
 
 export async function apiDelete<T>(url: string): Promise<T> {
+  clearApiCache();
   const res = await fetch(buildUrl(url), {
     method: "DELETE",
     headers: {
@@ -157,3 +223,4 @@ export async function apiDelete<T>(url: string): Promise<T> {
   });
   return handleResponse<T>(res);
 }
+

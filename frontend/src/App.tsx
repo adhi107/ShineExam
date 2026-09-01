@@ -7,7 +7,7 @@ import SuperAdminDashboard from './components/SuperAdminDashboard';
 import { useSecurityContext } from './security';
 import { useInactivityLogout } from './hooks/useInactivityLogout';
 import { TenantProvider, useTenant } from './context/TenantContext';
-import { buildUrl } from './services/api';
+import { buildUrl, apiGet } from './services/api';
 import './App.css';
 import './CardMotion.css';
 
@@ -102,26 +102,17 @@ function MainAppRoutes() {
 
     const savedRole = sessionStorage.getItem('role') as UserRole | null;
     const savedUser = sessionStorage.getItem('userId');
-    const savedTenant = sessionStorage.getItem('activeTenantId') || sessionStorage.getItem('tenantId');
-    if (savedTenant) {
-      loadTenantBranding(savedTenant);
-    }
 
-    if (savedRole && savedUser) {
-      if (savedRole === 'answerer') {
-        fetch(buildUrl(`/answerer/dashboard?userId=${encodeURIComponent(savedUser)}`), {
-          headers: { 'X-User-Id': savedUser, 'X-User-Role': savedRole },
-        })
-          .then((res) => {
-            if (res.status === 403) {
-              sessionStorage.setItem('account_permanently_blocked', 'true');
-              setIsSuspended(true);
-            }
-          })
-          .catch(() => {});
-      }
+    if (savedRole === 'answerer' && savedUser) {
+      apiGet<{ tests?: any[] }>(`/answerer/tests?userId=${encodeURIComponent(savedUser)}`)
+        .catch((err: any) => {
+          if (err?.message && (err.message.includes('suspended') || err.message.includes('blocked'))) {
+            sessionStorage.setItem('account_permanently_blocked', 'true');
+            setIsSuspended(true);
+          }
+        });
     }
-  }, [loadTenantBranding]);
+  }, []);
 
   const handleLogin = async (role: UserRole, userId: string, sessionId?: string) => {
     sessionStorage.removeItem('account_permanently_blocked');
