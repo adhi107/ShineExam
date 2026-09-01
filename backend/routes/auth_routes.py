@@ -33,7 +33,7 @@ def get_branding():
 @auth_bp.post("/login")
 @rate_limit(max_calls=settings.RATE_LIMIT_LOGIN_MAX, period_seconds=settings.RATE_LIMIT_LOGIN_PERIOD)
 def login():
-    """Unified login using userId (or naxUnid / email) + password with automatic role detection."""
+    """Login using userId (or naxUnid / email) + password + role with Super Admin API support."""
     payload = request.get_json(silent=True) or {}
     ok, msg = require_fields(payload, ["userId", "password"])
     if not ok:
@@ -41,6 +41,7 @@ def login():
 
     userId   = str(payload["userId"]).strip()
     password = str(payload["password"]).strip()
+    role     = str(payload.get("role", "auto")).strip()
 
     db = get_db()
     ensure_default_organization(db)
@@ -65,17 +66,49 @@ def login():
             {"userId": {"$regex": r"^super[\s_-]*admin$", "$options": "i"}},
         ])
 
-    # Lookup user across all roles
-    user = db.users.find_one({"$or": user_match_conditions})
+    # Determine allowed roles based on input
+    if role in ("super_admin",):
+        valid_roles = ["super_admin"]
+    elif role in ("admin",):
+        # Admin tab allows both regular Admins and Super Admin
+        valid_roles = ["admin", "super_admin"]
+    elif role in ("answerer", "candidate", "test_taker", "student"):
+        valid_roles = ["answerer"]
+    else:
+        # "auto" or omitted: match any role
+        valid_roles = None
+
+    query = {"$or": user_match_conditions}
+    if valid_roles:
+        query["role"] = {"$in": valid_roles}
+
+    # Lookup user
+    user = db.users.find_one(query)
+
+    # If not found with role filter, check without role filter to give clearer error
+    if not user and valid_roles:
+        any_user = db.users.find_one({"$or": user_match_conditions})
+        if any_user:
+            actual_role = any_user.get("role", "answerer")
+            if actual_role in ("admin", "super_admin"):
+                role_label = "Administrator"
+                tab_target = "Admin"
+            else:
+                role_label = "Test Taker"
+                tab_target = "Test Taker"
+            audit_log("LOGIN_FAILED", user_id=userId, details={"reason": "role_mismatch", "selectedRole": role, "actualRole": actual_role}, severity="warning")
+            return jsonify({
+                "error": f"Role mismatch: This account is registered as {role_label}. Please switch to the {tab_target} tab."
+            }), 401
 
     if not user:
         audit_log("LOGIN_FAILED", user_id=userId,
-                  details={"reason": "user_not_found"}, severity="warning")
+                  details={"reason": "user_not_found", "role": role}, severity="warning")
         return jsonify({"error": "Invalid User ID or password. Please check your credentials."}), 401
 
     if user.get("password") != password:
         audit_log("LOGIN_FAILED", user_id=userId,
-                  details={"reason": "wrong_password"}, severity="warning")
+                  details={"reason": "wrong_password", "role": role}, severity="warning")
         return jsonify({"error": "Invalid credentials. Please check your User ID and password."}), 401
 
     role = user.get("role", "answerer")
@@ -174,12 +207,14 @@ def change_password():
 
     db = get_db()
 
+    role_filter = {"$in": ["admin", "super_admin"]} if role in ("admin", "super_admin") else role
+
     user = db.users.find_one({
         "$or": [
             {"userId": {"$regex": f"^{re.escape(userId)}$", "$options": "i"}},
             {"naxUnid": {"$regex": f"^{re.escape(userId)}$", "$options": "i"}},
         ],
-        "role": role,
+        "role": role_filter,
     })
     if not user:
         return jsonify({"error": "User not found"}), 404

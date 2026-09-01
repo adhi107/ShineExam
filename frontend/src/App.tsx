@@ -176,11 +176,19 @@ function MainAppRoutes() {
         }
       />
       <Route
+        path="/super-admin/login"
+        element={
+          isLoggedIn && currentRole === 'super_admin'
+            ? <Navigate to="/super-admin" replace />
+            : <Login onLogin={handleLogin} defaultRole="super_admin" />
+        }
+      />
+      <Route
         path="/super-admin/*"
         element={
           isLoggedIn && currentRole === 'super_admin'
             ? <SuperAdminDashboard onLogout={handleLogout} onEnterTenantAdmin={handleEnterTenantAdmin} />
-            : <Navigate to="/login" replace />
+            : <Login onLogin={handleLogin} defaultRole="super_admin" />
         }
       />
       <Route
