@@ -28,7 +28,7 @@ const ShineLogo: React.FC<ShineLogoProps> = ({ compact = false, inverse = false,
   const activeLogo = rawLogo ? getMediaUrl(rawLogo) : null;
   const activeTitle = forceDefault ? "Portal" : (brandName || tenant?.brandTitle || tenant?.name || storedTenant?.name || "Portal");
   const isCustomTenant = !forceDefault && (
-    (tenant?.name && tenant.name !== "Shine Examination Portal" && tenant.name !== "Shine Exam" && tenant.name !== "Shine Main Organization") ||
+    (tenant?.name && !tenant.name.toLowerCase().includes("shine") && tenant.name !== "Examination Portal") ||
     Boolean(activeLogo)
   );
 

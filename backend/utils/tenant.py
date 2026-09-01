@@ -10,7 +10,7 @@ from flask import request
 from config.db import get_db
 
 DEFAULT_TENANT_ID = "default"
-DEFAULT_ORG_NAME = "Shine Main Organization"
+DEFAULT_ORG_NAME = "Main Organization"
 
 
 def get_request_tenant_id(user_doc=None) -> str:
@@ -112,10 +112,16 @@ def get_tenant_branding(tenant_id: str) -> dict:
     features = {**DEFAULT_TENANT_FEATURES, **org_features, **custom_modules}
 
     if org:
+        org_name = org.get("name", DEFAULT_ORG_NAME)
+        org_brand = org.get("brandTitle", org_name)
+        if "shine" in str(org_name).lower():
+            org_name = org_name.replace("Shine", "").replace("shine", "").strip() or DEFAULT_ORG_NAME
+        if "shine" in str(org_brand).lower():
+            org_brand = org_brand.replace("Shine", "").replace("shine", "").strip() or "Examination Portal"
         return {
             "tenantId": org.get("tenantId", DEFAULT_TENANT_ID),
-            "name": org.get("name", DEFAULT_ORG_NAME),
-            "brandTitle": org.get("brandTitle", org.get("name", DEFAULT_ORG_NAME)),
+            "name": org_name,
+            "brandTitle": org_brand,
             "logoUrl": org.get("logoUrl", ""),
             "primaryColor": org.get("primaryColor", "#2563eb"),
             "accentColor": org.get("accentColor", "#38bdf8"),
@@ -129,7 +135,7 @@ def get_tenant_branding(tenant_id: str) -> dict:
     return {
         "tenantId": DEFAULT_TENANT_ID,
         "name": DEFAULT_ORG_NAME,
-        "brandTitle": DEFAULT_ORG_NAME,
+        "brandTitle": "Examination Portal",
         "logoUrl": "",
         "primaryColor": "#2563eb",
         "accentColor": "#38bdf8",
@@ -158,11 +164,11 @@ def ensure_default_organization(db):
         "tenantId": DEFAULT_TENANT_ID,
         "slug": "default",
         "name": DEFAULT_ORG_NAME,
-        "brandTitle": "Shine Examination Portal",
+        "brandTitle": "Examination Portal",
         "logoUrl": "",
         "primaryColor": "#2563eb",
         "accentColor": "#38bdf8",
-        "contactEmail": "admin@shineexam.com",
+        "contactEmail": "admin@examinationportal.com",
         "contactPhone": "+1 (555) 019-2834",
         "address": "Headquarters, Main Campus",
         "status": "active",

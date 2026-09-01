@@ -20,8 +20,8 @@ interface TenantContextValue {
 
 const DEFAULT_TENANT: TenantInfo = {
   tenantId: "default",
-  name: "Shine Examination Portal",
-  brandTitle: "Shine Examination Portal",
+  name: "Examination Portal",
+  brandTitle: "Examination Portal",
   logoUrl: "",
   primaryColor: "#2563eb",
   accentColor: "#38bdf8",
@@ -195,10 +195,10 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [loadTenantBranding]);
 
   useEffect(() => {
-    if (tenant && tenant.name && tenant.name !== "Shine Examination Portal" && tenant.name !== "Shine Exam" && tenant.name !== "Shine Main Organization") {
+    if (tenant && tenant.name && !tenant.name.toLowerCase().includes("shine") && tenant.name !== "Examination Portal") {
       document.title = `${tenant.brandTitle || tenant.name} | Examination Portal`;
     } else {
-      document.title = "Shine Exam Prep";
+      document.title = "Examination Portal";
     }
 
     // Accurately update dynamic favicon

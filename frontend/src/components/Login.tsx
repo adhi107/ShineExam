@@ -10,6 +10,7 @@ export type UserRole = 'admin' | 'answerer' | 'super_admin';
 
 interface LoginProps {
   onLogin: (role: UserRole, userId: string, sessionId?: string, tenant?: any) => void;
+  defaultRole?: UserRole;
 }
 
 interface AlertState {
@@ -23,7 +24,6 @@ interface AlertState {
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const { tenant, setTenant } = useTenant();
-  const [selectedRole, setSelectedRole] = useState<UserRole>('answerer');
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -73,7 +73,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       const res = await apiPost<{ user: any }>("/auth/login", {
         userId,
         password,
-        role: selectedRole,
+        role: "auto",
       });
 
       if (res.user.tenant) {
@@ -125,7 +125,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         setAlertState({
           isOpen: true,
           title: "Invalid Credentials",
-          message: "Please check your User ID and password and try again. Ensure the correct role (Candidate, Admin, or Super Admin) is selected.",
+          message: msg || "Please check your User ID and password and try again.",
           variant: "warning",
           icon: "⚠️",
           buttonText: "Try Again",
@@ -142,7 +142,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       title: "Password Recovery",
       message: (
         <>
-          For candidate security and identity verification, password resets are handled directly by your Organization Administration.
+          For account security and identity verification, password resets are handled directly by your Organization Administration.
           <br /><br />
           Please contact your administrator with your <strong>User ID</strong> to receive a temporary login password.
         </>
@@ -153,14 +153,19 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     });
   };
 
+  const isCustomTheme = tenant?.primaryColor && !tenant.name?.toLowerCase().includes("shine") && tenant.name !== "Examination Portal";
+  const displayBrandTitle = tenant?.brandTitle && !tenant.brandTitle.toLowerCase().includes("shine") && tenant.brandTitle !== "Examination Portal"
+    ? tenant.brandTitle
+    : (tenant?.name && !tenant.name.toLowerCase().includes("shine") && tenant.name !== "Examination Portal" ? tenant.name : "EXAMINATION PORTAL");
+
   return (
     <div className="login-container">
-      <section className="login-brand-panel" style={tenant?.primaryColor && tenant.name !== "Shine Examination Portal" ? { background: `linear-gradient(145deg, #061631 0%, ${tenant.primaryColor} 100%)` } : undefined}>
+      <section className="login-brand-panel" style={isCustomTheme ? { background: `linear-gradient(145deg, #061631 0%, ${tenant?.primaryColor} 100%)` } : undefined}>
         <div className="login-brand-content">
           <ShineLogo inverse />
           <div className="login-brand-message">
             <span className="login-eyebrow">
-              {tenant?.brandTitle || tenant?.name || "YOUR LEARNING JOURNEY"}
+              {displayBrandTitle}
             </span>
             <h2>Prepare with purpose.<br />Perform with confidence.</h2>
             <p>
@@ -176,42 +181,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         <div className="login-header">
           <span className="login-eyebrow dark">
-            {tenant?.name && tenant.name !== "Shine Examination Portal" && tenant.name !== "Shine Main Organization"
+            {tenant?.name && !tenant.name.toLowerCase().includes("shine") && tenant.name !== "Examination Portal"
               ? tenant.name.toUpperCase()
               : "WELCOME BACK"}
           </span>
-          <h1 className="login-title">
-            {selectedRole === 'super_admin' ? 'Super Admin Portal' : selectedRole === 'admin' ? 'Admin Portal' : 'Candidate Login'}
-          </h1>
+          <h1 className="login-title">Sign In</h1>
           <p className="login-subtitle">
-            {selectedRole === 'super_admin'
-              ? 'Global multi-tenant governance and oversight'
-              : 'Sign in to access your examination workspace'}
+            Sign in to access your examination workspace
           </p>
-        </div>
-
-        <div className="role-selector compact-role-selector" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
-          <button
-            className={`role-btn ${selectedRole === 'answerer' ? 'active' : ''}`}
-            onClick={() => setSelectedRole('answerer')}
-            type="button"
-          >
-            <span className="role-label">Candidate</span>
-          </button>
-          <button
-            className={`role-btn ${selectedRole === 'admin' ? 'active' : ''}`}
-            onClick={() => setSelectedRole('admin')}
-            type="button"
-          >
-            <span className="role-label">Admin</span>
-          </button>
-          <button
-            className={`role-btn ${selectedRole === 'super_admin' ? 'active' : ''}`}
-            onClick={() => setSelectedRole('super_admin')}
-            type="button"
-          >
-            <span className="role-label">Super Admin</span>
-          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
@@ -260,9 +237,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             type="submit"
             className="submit-btn"
             disabled={isLoading}
-            style={tenant?.primaryColor && tenant.name !== "Shine Examination Portal" ? { background: `linear-gradient(90deg, ${tenant.primaryColor}, #2f6fed)` } : undefined}
+            style={isCustomTheme ? { background: `linear-gradient(90deg, ${tenant?.primaryColor}, #2f6fed)` } : undefined}
           >
-            {isLoading ? 'Signing in...' : (tenant?.name && tenant.name !== 'Shine Examination Portal' && tenant.name !== 'Shine Main Organization' ? `Sign in to ${tenant.name}` : 'Sign In')}
+            {isLoading ? 'Signing in...' : (tenant?.name && !tenant.name.toLowerCase().includes('shine') && tenant.name !== 'Examination Portal' ? `Sign in to ${tenant.name}` : 'Sign In')}
           </button>
         </form>
 
