@@ -167,11 +167,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               One focused platform for practice tests, timed assessments and meaningful performance insights.
             </p>
           </div>
-          <div className="login-brand-stats">
-            <span><strong>Multi-Tenant</strong> Platform</span>
-            <span><strong>Enterprise</strong> Security</span>
-            <span><strong>24/7</strong> Access</span>
-          </div>
         </div>
       </section>
       <div className="login-card">
