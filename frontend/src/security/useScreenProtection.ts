@@ -83,7 +83,7 @@ export function useScreenProtection(
     blockDrag = true,
     flashOnPrintScreen = true,
     screenshotLockDurationSec = 300,
-    enableBlurDetection = true,
+    enableBlurDetection = false,
     onScreenShareStart,
     onScreenShareStop,
     onPageHide,
@@ -104,6 +104,7 @@ export function useScreenProtection(
 
   const unlockScreenshotBlock = useCallback(() => {
     setIsPrintScreenAttempted(false);
+    setIsWindowBlurred(false);
     setLockRemainingSeconds(0);
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
@@ -173,6 +174,7 @@ export function useScreenProtection(
       if (hidden) {
         onPageHide?.();
       } else {
+        setIsWindowBlurred(false);
         onPageShow?.();
       }
     };
@@ -186,9 +188,9 @@ export function useScreenProtection(
   useEffect(() => {
     const onBlur = () => {
       if (!enableBlurDetection) return;
-      // Do not treat focus shift to embedded video iframe as blurred
+      // Do not treat focus shift to embedded iframe or when document has focus
       setTimeout(() => {
-        if (document.activeElement && document.activeElement.tagName === 'IFRAME') {
+        if (typeof document !== 'undefined' && (document.hasFocus?.() || (document.activeElement && document.activeElement.tagName === 'IFRAME'))) {
           return;
         }
         setIsWindowBlurred(true);
@@ -198,7 +200,7 @@ export function useScreenProtection(
         if (timeSinceMetaShift < 1500) {
           handlePrintScreenDetected();
         }
-      }, 40);
+      }, 100);
     };
     const onFocus = () => {
       setIsWindowBlurred(false);

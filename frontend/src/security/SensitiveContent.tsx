@@ -64,10 +64,10 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
   hideOnTabSwitch = true,
   blurOnTabSwitch = false,
   shieldOnScreenShare = true,
-  hideOnWindowBlur = true,
-  enableVideoOverlay = true,
+  hideOnWindowBlur = false,
+  enableVideoOverlay = false,
   className = '',
-  shieldMessage = 'Content protected for exam security.',
+  shieldMessage = 'Content is hidden while switching tabs. Return to this tab to resume.',
   exemptOnSubmit = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -213,8 +213,16 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
   const shouldBlurTab     = isModuleProtected && blurOnTabSwitch && isPageHidden;
   const shouldHideBlur    = isModuleProtected && hideOnWindowBlur && isWindowBlurred;
 
+  const [userDismissedShield, setUserDismissedShield] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!isPageHidden && !isWindowBlurred && !isScreenSharing) {
+      setUserDismissedShield(false);
+    }
+  }, [isPageHidden, isWindowBlurred, isScreenSharing]);
+
   // Distinguish permanent suspension from temporary window blur / tab hidden pause
-  const isTemporarilyShielded = !isPermanentlySuspended && (shouldShieldShare || shouldHideTab || shouldHideBlur);
+  const isTemporarilyShielded = !isPermanentlySuspended && !userDismissedShield && (shouldShieldShare || shouldHideTab || shouldHideBlur);
   const isBlurred             = !isPermanentlySuspended && shouldBlurTab && !isTemporarilyShielded;
   const isShielded            = isPermanentlySuspended || isTemporarilyShielded;
 
@@ -336,7 +344,11 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
 
       {/* ── TEMPORARY TAB-AWAY / WINDOW-BLUR PAUSE SHIELD (Non-blocking) ── */}
       {!isPermanentlySuspended && isTemporarilyShielded && (
-        <div className="shine-screen-shield shine-temporary-pause-backdrop" role="alert">
+        <div
+          className="shine-screen-shield shine-temporary-pause-backdrop"
+          role="alert"
+          onClick={() => setUserDismissedShield(true)}
+        >
           <div className="shine-screen-shield__inner shine-temporary-shield-card">
             <div className="shine-temporary-shield-icon" aria-hidden="true">
               <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -349,13 +361,20 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
             </h3>
 
             <p className="shine-temporary-msg">
-              {shieldMessage || "Content is protected while this window or tab is inactive. Return to this window to resume."}
+              {shieldMessage || "Content is protected while this window or tab is inactive. Click below or return to this window to resume."}
             </p>
 
-            <div className="shine-temporary-hint">
-              <span className="shine-pulse-dot" />
-              <span>Exam security protection active</span>
-            </div>
+            <button
+              type="button"
+              className="shine-shield-unlock-btn"
+              style={{ marginTop: '14px', width: 'auto', padding: '10px 24px', cursor: 'pointer' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setUserDismissedShield(true);
+              }}
+            >
+              Resume Exam
+            </button>
           </div>
         </div>
       )}

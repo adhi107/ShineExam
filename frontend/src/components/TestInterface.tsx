@@ -309,10 +309,10 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
       module="exam"
       hideOnTabSwitch={testStep === "exam" && !submitting}
       shieldOnScreenShare={testStep === "exam" && !submitting}
-      hideOnWindowBlur={testStep === "exam" && !submitting}
+      hideOnWindowBlur={false}
       showWatermark={testStep === "exam"}
       exemptOnSubmit={submitting || testStep === "confirm" || testStep === "submitted"}
-      shieldMessage="Exam content is hidden. Return to this tab to continue your exam."
+      shieldMessage="Exam content is hidden while tab is inactive. Return to this tab to continue your exam."
       className="test-interface-root"
     >
 
