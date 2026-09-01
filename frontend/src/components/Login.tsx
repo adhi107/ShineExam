@@ -155,12 +155,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   return (
     <div className="login-container">
-      <section className="login-brand-panel">
+      <section className="login-brand-panel" style={tenant?.primaryColor && tenant.name !== "Shine Examination Portal" ? { background: `linear-gradient(145deg, #061631 0%, ${tenant.primaryColor} 100%)` } : undefined}>
         <div className="login-brand-content">
-          <ShineLogo inverse forceDefault />
+          <ShineLogo inverse />
           <div className="login-brand-message">
             <span className="login-eyebrow">
-              YOUR LEARNING JOURNEY
+              {tenant?.brandTitle || tenant?.name || "YOUR LEARNING JOURNEY"}
             </span>
             <h2>Prepare with purpose.<br />Perform with confidence.</h2>
             <p>
@@ -176,12 +176,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       </section>
       <div className="login-card">
         <div className="login-logo-container">
-          <ShineLogo forceDefault />
+          <ShineLogo />
         </div>
 
         <div className="login-header">
           <span className="login-eyebrow dark">
-            WELCOME BACK
+            {tenant?.name && tenant.name !== "Shine Examination Portal" && tenant.name !== "Shine Main Organization"
+              ? tenant.name.toUpperCase()
+              : "WELCOME BACK"}
           </span>
           <h1 className="login-title">
             {selectedRole === 'super_admin' ? 'Super Admin Portal' : selectedRole === 'admin' ? 'Admin Portal' : 'Candidate Login'}
@@ -259,10 +261,16 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               Forgot password?
             </button>
           </div>
-          <button type="submit" className="submit-btn" disabled={isLoading}>
-            {isLoading ? 'Signing in...' : 'Login to Shine'}
+          <button
+            type="submit"
+            className="submit-btn"
+            disabled={isLoading}
+            style={tenant?.primaryColor && tenant.name !== "Shine Examination Portal" ? { background: `linear-gradient(90deg, ${tenant.primaryColor}, #2f6fed)` } : undefined}
+          >
+            {isLoading ? 'Signing in...' : (tenant?.name && tenant.name !== 'Shine Examination Portal' && tenant.name !== 'Shine Main Organization' ? `Sign in to ${tenant.name}` : 'Sign In')}
           </button>
         </form>
+
 
         <div className="security-badge">
           <AppIcon name="security" className="security-icon" />

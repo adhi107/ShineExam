@@ -1042,9 +1042,14 @@ def start_attempt():
         })
 
     now = datetime.utcnow()
+    exam_for_tenant = db.exams.find_one({"_id": exam_oid}, {"tenantId": 1})
+    user_for_tenant = db.users.find_one({"userId": userId}, {"tenantId": 1})
+    resolved_tenant_id = (exam_for_tenant.get("tenantId") if exam_for_tenant else None) or (user_for_tenant.get("tenantId") if user_for_tenant else None) or DEFAULT_TENANT_ID
+
     attempt_doc = {
         "examId": exam_oid,
         "userId": userId,
+        "tenantId": resolved_tenant_id,
         "status": "in_progress",
         "answers": [],
         "startedAt": now,
@@ -1057,6 +1062,7 @@ def start_attempt():
     }
     res = db.attempts.insert_one(attempt_doc)
     return jsonify({"attemptId": str(res.inserted_id), "isResume": False})
+
 
 
 @answerer_bp.get("/attempts/<attempt_id>")
@@ -1168,10 +1174,17 @@ def submit_attempt(attempt_id):
             for item in computed.get("review", [])
         ]
 
+        res_tenant_id = (
+            attempt.get("tenantId")
+            or (exam.get("tenantId") if exam else None)
+            or DEFAULT_TENANT_ID
+        )
+
         result_doc = {
             "attemptId": str(attempt_id),
             "examId": str(exam_id),
             "userId": str(attempt.get("userId", user_id)),
+            "tenantId": str(res_tenant_id),
             "totalMarks": computed.get("totalMarks", 0),
             "scoredMarks": computed.get("scoredMarks", 0),
             "percentage": computed.get("percentage", 0),
@@ -1183,6 +1196,7 @@ def submit_attempt(attempt_id):
             "timeSpentSec": time_spent,
             "questionTimes": question_times,
         }
+
 
         # Store the completed test result in MongoDB.
         insert_result = db.results.insert_one(result_doc)

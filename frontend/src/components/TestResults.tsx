@@ -29,14 +29,20 @@ const TestResults: React.FC = () => {
   const scrollToTestGrid = () => setTimeout(() => testGridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
 
   useEffect(() => {
-    Promise.all([
+    setLoading(true);
+    Promise.allSettled([
       apiGet<{ tests: TestSummary[] }>("/admin/results/tests"),
       apiGet<Overview>("/admin/results/overview")
-    ]).then(([testResponse, overviewResponse]) => {
-      setTests(testResponse.tests || []);
-      setOverview(overviewResponse);
+    ]).then(([testResult, overviewResult]) => {
+      if (testResult.status === "fulfilled" && testResult.value) {
+        setTests(testResult.value.tests || []);
+      }
+      if (overviewResult.status === "fulfilled" && overviewResult.value) {
+        setOverview(overviewResult.value);
+      }
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
+
 
   const openTest = async (test: TestSummary) => {
     setSelectedTest(test);
