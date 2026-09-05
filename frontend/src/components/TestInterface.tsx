@@ -81,6 +81,8 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [visited, setVisited] = useState<Set<number>>(() => new Set([0]));
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [mobilePaletteOpen, setMobilePaletteOpen] = useState(false);
+  const [fontSize, setFontSize] = useState<"normal" | "large">("normal");
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -205,8 +207,6 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
 
   const [, setResult] = useState<ResultPayload | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [mobilePaletteOpen, setMobilePaletteOpen] = useState(false);
-
 
   const handleSubmitExam = async () => {
     setSubmitting(true);
@@ -339,23 +339,52 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
       )}
 
       {testStep === "exam" && activeQuestion && (
-        <div className="tcs-bank-exam-workspace">
-          {/* 1. Top Blue Header */}
-          <div className="tcs-top-blue-header">
+        <div className={`tcs-bank-exam-workspace zoom-${fontSize || "normal"}`}>
+          {/* 1. Top Blue App Header (Mobile & Desktop Responsive) */}
+          <header className="tcs-top-blue-header">
             <div className="tcs-top-header-left">
               <div className="tcs-logo-badge">
                 <ShineLogo inverse />
               </div>
+              <span className="exam-title-pill-tag" title={testName}>📌 {testName}</span>
             </div>
-            <div className="tcs-top-header-right" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span className="exam-title-pill-tag">📌 {testName}</span>
+
+            <div className="tcs-top-header-right">
+              {/* Text Zoom Controls for Mobile Readability */}
+              <div className="zoom-toggle-group">
+                <button
+                  type="button"
+                  className={`btn-zoom ${fontSize === "normal" ? "active" : ""}`}
+                  onClick={() => setFontSize("normal")}
+                  title="Default font size"
+                >
+                  A
+                </button>
+                <button
+                  type="button"
+                  className={`btn-zoom ${fontSize === "large" ? "active" : ""}`}
+                  onClick={() => setFontSize("large")}
+                  title="Large font size"
+                >
+                  A+
+                </button>
+              </div>
+
+              {/* Live Countdown Timer Badge */}
+              <div className={`tcs-timer-badge ${timeLeft < 300 ? "urgent" : timeLeft < 600 ? "warning" : ""}`}>
+                <span className="timer-icon">⏱️</span>
+                <span className="timer-text">
+                  {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}
+                </span>
+              </div>
+
               <button type="button" className="btn-fullscreen-toggle" onClick={toggleFullscreen}>
-                {isFullscreen ? "Exit Fullscreen ⛶" : "View Fullscreen ⛶"}
+                {isFullscreen ? "Exit ⛶" : "Fullscreen ⛶"}
               </button>
             </div>
-          </div>
+          </header>
 
-          {/* 2. Section Bar */}
+          {/* 2. Section Navigation Bar */}
           <div className="tcs-section-bar">
             <div className="section-selector-left">
               <span className="section-label-text">Sections:</span>
@@ -379,30 +408,32 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
                 ))}
               </div>
             </div>
-            <div className="section-timer-right">
-              Time Left: <span className="timer-green-text">{Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}</span>
+            <div className="section-meta-right">
+              <button
+                type="button"
+                className="btn-mobile-palette-toggle"
+                onClick={() => setMobilePaletteOpen(true)}
+                title="Open question palette"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+                </svg>
+                <span>Grid ({currentQuestionIndex + 1}/{questions.length})</span>
+              </button>
             </div>
           </div>
 
           {/* 3. Question Meta Bar */}
           <div className="tcs-question-meta-bar">
             <div className="q-type-label">
-              Question Type: {activeQuestion.type === "msq" || activeQuestion.type === "multiple" ? "Multiple Choice (MSQ)" : "Multiple Choice Question (MCQ)"}
+              {activeQuestion.type === "msq" || activeQuestion.type === "multiple" ? "Multiple Choice (MSQ)" : "Multiple Choice (MCQ)"}
             </div>
             <div className="q-meta-right-group">
               <div className="q-marks-label">
-                Marks: <strong>+{activeQuestion.marks || 1}</strong>
+                Marks: <strong className="marks-pos">+{activeQuestion.marks || 1}</strong>
                 <span className="divider">|</span>
-                Negative: <strong>0</strong>
+                Neg: <strong>0</strong>
               </div>
-              <button
-                type="button"
-                className="btn-mobile-palette-toggle"
-                onClick={() => setMobilePaletteOpen(!mobilePaletteOpen)}
-                title="Toggle question grid"
-              >
-                📋 Grid ({currentQuestionIndex + 1}/{questions.length})
-              </button>
             </div>
           </div>
 
@@ -410,7 +441,9 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
           <div className="tcs-main-body-container">
             <div className="tcs-question-workspace">
               <div className="tcs-question-no-header">
-                Question No. {currentQuestionIndex + 1}
+                <div className="q-badge-current">Q{currentQuestionIndex + 1}</div>
+                <span>Question {currentQuestionIndex + 1} of {questions.length}</span>
+                {activeAnswer?.marked && <span className="marked-review-indicator">🚩 Marked for Review</span>}
               </div>
 
               <QuestionPanel
@@ -423,24 +456,34 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
                 onMarkForReview={handleMarkForReview}
               />
 
-              {/* Footer Buttons */}
+              {/* Native Mobile Sticky Action Footer */}
               <footer className="tcs-question-action-footer">
                 <div className="footer-left-buttons">
+                  {currentQuestionIndex > 0 && (
+                    <button
+                      type="button"
+                      className="tcs-btn-white btn-prev-question"
+                      onClick={() => handleSelectQuestion(currentQuestionIndex - 1)}
+                      title="Previous Question"
+                    >
+                      ← Prev
+                    </button>
+                  )}
                   <button
                     type="button"
-                    className="tcs-btn-white"
+                    className={`tcs-btn-white btn-mark-review ${activeAnswer?.marked ? "is-marked" : ""}`}
                     onClick={handleMarkForReview}
                   >
-                    {activeAnswer?.marked ? "Unmark Review" : "Mark for Review & Next"}
+                    {activeAnswer?.marked ? "✓ Marked" : "🚩 Mark Review"}
                   </button>
                   <button
                     type="button"
-                    className="tcs-btn-white"
+                    className="tcs-btn-white btn-clear-resp"
                     onClick={() => {
                       handleAnswerChange(activeQuestion.type === "ordering" ? [] : "");
                     }}
                   >
-                    Clear Response
+                    Clear
                   </button>
                 </div>
 
@@ -457,18 +500,38 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
                       }
                     }}
                   >
-                    Save & Next
+                    {currentQuestionIndex + 1 === questions.length ? "Review & Submit" : "Save & Next →"}
                   </button>
                 </div>
               </footer>
             </div>
 
-            {/* Right Question Navigator Drawer */}
+            {/* Bottom Sheet / Right Drawer Question Navigator */}
             <div className={`tcs-palette-drawer-wrapper ${mobilePaletteOpen ? "mobile-open" : ""}`}>
               {mobilePaletteOpen && (
                 <div className="mobile-palette-backdrop" onClick={() => setMobilePaletteOpen(false)} />
               )}
               <div className="palette-inner-container">
+                {/* Mobile Drag Handle */}
+                <div className="bottom-sheet-drag-handle" onClick={() => setMobilePaletteOpen(false)}>
+                  <span className="drag-pill" />
+                </div>
+
+                <div className="bottom-sheet-mobile-header">
+                  <div>
+                    <strong>Question Palette</strong>
+                    <small>Section: {currentSection}</small>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-close-sheet"
+                    onClick={() => setMobilePaletteOpen(false)}
+                    aria-label="Close question palette"
+                  >
+                    ✕
+                  </button>
+                </div>
+
                 <QuestionNavigator
                   userId={userId}
                   questions={questions}

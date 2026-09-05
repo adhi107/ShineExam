@@ -85,6 +85,7 @@ def create_app() -> Flask:
             path.startswith("/api/admin")
             or path.startswith("/api/super-admin")
             or path.startswith("/api/public")
+            or path.startswith("/api/answerer/classes/stream")
             or path.startswith("/uploads")
             or path == "/"
             or path == "/api/auth/login"
@@ -140,8 +141,8 @@ def create_app() -> Flask:
         else:
             set_cached_user_status(user_key, {"isActive": True, "statusReason": ""}, ttl_seconds=15)
 
-    # Support large video and asset uploads (up to 1 GB)
-    app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024 * 1024
+    # Support large video and asset uploads (up to 2 GB)
+    app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024
 
     # Add security headers to every API response
     app.after_request(add_security_headers)

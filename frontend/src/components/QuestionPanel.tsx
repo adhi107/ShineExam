@@ -260,19 +260,24 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
 
             {hasOptions && question.type !== 'ordering' && !isMultipleChoice && (
               <div className="tcs-options-list">
-                {question.options!.map((option, index) => (
-                  <label key={index} className={`tcs-option-label ${answer === option ? 'selected' : ''}`}>
-                    <input
-                      type="radio"
-                      name={`question-${question.id}`}
-                      value={option}
-                      checked={answer === option}
-                      onChange={() => handleOptionClick(option)}
-                      className="tcs-option-radio"
-                    />
-                    <span className="tcs-option-val">{option}</span>
-                  </label>
-                ))}
+                {question.options!.map((option, index) => {
+                  const isSelected = answer === option;
+                  const letter = String.fromCharCode(65 + index);
+                  return (
+                    <label key={index} className={`tcs-option-label ${isSelected ? 'selected' : ''}`}>
+                      <span className="option-letter-badge">{letter}</span>
+                      <input
+                        type="radio"
+                        name={`question-${question.id}`}
+                        value={option}
+                        checked={isSelected}
+                        onChange={() => handleOptionClick(option)}
+                        className="tcs-option-radio"
+                      />
+                      <span className="tcs-option-val">{option}</span>
+                    </label>
+                  );
+                })}
               </div>
             )}
 
@@ -282,8 +287,10 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
                 <div className="tcs-options-list">
                   {question.options!.map((option, index) => {
                     const isSelected = Array.isArray(answer) && answer.includes(option);
+                    const letter = String.fromCharCode(65 + index);
                     return (
                       <label key={index} className={`tcs-option-label ${isSelected ? 'selected' : ''}`}>
+                        <span className="option-letter-badge">{letter}</span>
                         <input
                           type="checkbox"
                           name={`question-${question.id}`}
@@ -337,19 +344,24 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
 
             {hasOptions && question.type !== 'ordering' && !isMultipleChoice && (
               <div className="tcs-options-list">
-                {question.options!.map((option, index) => (
-                  <label key={index} className={`tcs-option-label ${answer === option ? 'selected' : ''}`}>
-                    <input
-                      type="radio"
-                      name={`question-${question.id}`}
-                      value={option}
-                      checked={answer === option}
-                      onChange={() => handleOptionClick(option)}
-                      className="tcs-option-radio"
-                    />
-                    <span className="tcs-option-val">{option}</span>
-                  </label>
-                ))}
+                {question.options!.map((option, index) => {
+                  const isSelected = answer === option;
+                  const letter = String.fromCharCode(65 + index);
+                  return (
+                    <label key={index} className={`tcs-option-label ${isSelected ? 'selected' : ''}`}>
+                      <span className="option-letter-badge">{letter}</span>
+                      <input
+                        type="radio"
+                        name={`question-${question.id}`}
+                        value={option}
+                        checked={isSelected}
+                        onChange={() => handleOptionClick(option)}
+                        className="tcs-option-radio"
+                      />
+                      <span className="tcs-option-val">{option}</span>
+                    </label>
+                  );
+                })}
               </div>
             )}
 
@@ -359,8 +371,10 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
                 <div className="tcs-options-list">
                   {question.options!.map((option, index) => {
                     const isSelected = Array.isArray(answer) && answer.includes(option);
+                    const letter = String.fromCharCode(65 + index);
                     return (
                       <label key={index} className={`tcs-option-label ${isSelected ? 'selected' : ''}`}>
+                        <span className="option-letter-badge">{letter}</span>
                         <input
                           type="checkbox"
                           name={`question-${question.id}`}

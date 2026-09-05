@@ -567,6 +567,27 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
         {view === "documents" && <CandidateDocuments userId={userName} />}
         {view === "announcements" && <CandidateAnnouncements userId={userName} />}
       </main>
+
+      {/* Native Play Store Mobile Bottom Navigation Bar */}
+      <nav className="mobile-app-bottom-nav" aria-label="Mobile Navigation">
+        {navItems.map((item) => (
+          <button
+            key={item.view}
+            type="button"
+            className={`mobile-bottom-nav-item ${view === item.view ? "active" : ""}`}
+            onClick={() => handleGoTo(item.view)}
+          >
+            <div className="mobile-bottom-nav-icon-wrap">
+              {item.icon}
+              {item.view === "announcements" && unreadNotifications > 0 && (
+                <span className="mobile-bottom-nav-badge">{unreadNotifications}</span>
+              )}
+            </div>
+            <span className="mobile-bottom-nav-label">{item.label}</span>
+          </button>
+        ))}
+      </nav>
+
       {accountPanel && <div className="account-modal-backdrop" onMouseDown={() => setAccountPanel(null)}><section className="account-modal" onMouseDown={event => event.stopPropagation()}>
         <header><div><span>{accountPanel === "profile" ? "CANDIDATE ACCOUNT" : "ACCOUNT SETTINGS"}</span><h2>{accountPanel === "profile" ? "My Profile" : "Settings & Password"}</h2></div><button onClick={() => setAccountPanel(null)}>×</button></header>
         {accountPanel === "profile" ? <div className="profile-details"><div className="large-avatar">{userName.charAt(0).toUpperCase()}</div><h3>{accountInfo?.name || userName}</h3><p>Shine Candidate</p><dl><div><dt>User ID</dt><dd>{accountInfo?.userId || userName}</dd></div><div><dt>Email</dt><dd>{accountInfo?.email || "Not provided"}</dd></div><div><dt>College email</dt><dd>{accountInfo?.collegeEmail || "Not provided"}</dd></div><div><dt>Account status</dt><dd className="active-account">● {accountInfo?.isActive === false ? "Inactive" : "Active"}</dd></div></dl></div> : <div className="settings-content">

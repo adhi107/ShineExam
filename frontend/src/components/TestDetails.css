@@ -163,3 +163,80 @@
 .primary-btn.large:hover {
   background: #1e64a8;
 }
+
+/* Mobile App Screen Optimization */
+@media (max-width: 768px) {
+  .test-details-root {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .test-header {
+    height: 48px;
+    padding: 0 14px;
+  }
+
+  .test-header-right {
+    display: none;
+  }
+
+  .test-details-content {
+    flex: 1;
+    padding: 12px 14px 24px 14px;
+    align-items: flex-start;
+  }
+
+  .details-card {
+    padding: 20px 16px;
+    border-radius: 14px;
+    box-shadow: 0 4px 16px rgba(15, 39, 76, 0.06);
+  }
+
+  .details-title {
+    font-size: 1.3rem;
+    margin-bottom: 20px;
+  }
+
+  .details-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .detail-box {
+    padding: 12px 16px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .detail-label {
+    margin-bottom: 0;
+  }
+
+  .detail-value {
+    font-size: 1.1rem;
+  }
+
+  .details-actions {
+    margin-top: 24px;
+  }
+
+  .primary-btn.large {
+    width: 100%;
+    height: 48px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    border-radius: 10px;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  .primary-btn.large:active {
+    transform: scale(0.98);
+  }
+}

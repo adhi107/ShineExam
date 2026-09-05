@@ -175,6 +175,192 @@ def list_videos():
         return jsonify({"error": str(e)}), 500
 
 
+def get_temp_chunks_dir(session_id: str) -> str:
+    safe_session = re.sub(r"[^A-Za-z0-9_-]", "", session_id)
+    temp_dir = os.path.join(get_videos_dir(), "temp", safe_session)
+    os.makedirs(temp_dir, exist_ok=True)
+    return temp_dir
+
+
+def parse_assigned_to(raw_value):
+    if not raw_value or raw_value == "all":
+        return "all"
+    if isinstance(raw_value, list):
+        clean = [str(x).strip() for x in raw_value if str(x).strip()]
+        return clean if clean else "all"
+    if isinstance(raw_value, str):
+        parts = [x.strip() for x in raw_value.split(",") if x.strip()]
+        if not parts:
+            return "all"
+        if len(parts) == 1 and parts[0].lower() == "all":
+            return "all"
+        return parts
+    return "all"
+
+
+@admin_videos_bp.post("/upload-init")
+def init_chunked_upload():
+    """Initializes a high-speed chunked video upload session."""
+    try:
+        data = request.get_json(silent=True) or request.form or {}
+        filename = data.get("filename", "video.mp4")
+        file_size = int(data.get("fileSize", 0))
+
+        if not allowed_file(filename):
+            return jsonify({"error": f"Invalid video format for '{filename}'. Allowed: MP4, WebM, MKV, MOV, AVI, etc."}), 400
+
+        session_id = f"vup_{uuid.uuid4().hex}"
+        temp_dir = get_temp_chunks_dir(session_id)
+
+        # 5 MB standard high-throughput chunk size
+        chunk_size = 5 * 1024 * 1024
+
+        return jsonify({
+            "sessionId": session_id,
+            "chunkSize": chunk_size,
+            "message": "Upload session initialized",
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_videos_bp.post("/upload-chunk")
+def upload_video_chunk():
+    """Receives and writes an individual binary chunk with high-speed unbuffered I/O."""
+    try:
+        session_id = request.form.get("sessionId") or request.args.get("sessionId") or ""
+        chunk_index_raw = request.form.get("chunkIndex") or request.args.get("chunkIndex")
+        total_chunks_raw = request.form.get("totalChunks") or request.args.get("totalChunks")
+
+        if not session_id or chunk_index_raw is None:
+            return jsonify({"error": "Missing sessionId or chunkIndex"}), 400
+
+        chunk_index = int(chunk_index_raw)
+        temp_dir = get_temp_chunks_dir(session_id)
+
+        if "chunk" not in request.files:
+            return jsonify({"error": "Chunk file data missing"}), 400
+
+        chunk_file = request.files["chunk"]
+        part_filename = f"chunk_{chunk_index:05d}.part"
+        part_path = os.path.join(temp_dir, part_filename)
+
+        # Ultra-fast direct save
+        chunk_file.save(part_path)
+
+        return jsonify({
+            "status": "ok",
+            "sessionId": session_id,
+            "chunkIndex": chunk_index,
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_videos_bp.post("/upload-complete")
+def complete_chunked_upload():
+    """Reassembles all chunks with 4MB streaming blocks into a final video file and saves DB record."""
+    import shutil
+    import threading
+    try:
+        db = get_db()
+        tenant_id = get_request_tenant_id()
+        data = request.get_json(silent=True) or request.form or {}
+
+        session_id = data.get("sessionId", "")
+        filename = data.get("filename", "video.mp4")
+        total_chunks = int(data.get("totalChunks", 1))
+        title = (data.get("title") or "").strip()
+        description = (data.get("description") or "").strip()
+        category = (data.get("category") or "General").strip()
+        duration = (data.get("duration") or "15m").strip()
+        assigned_to_raw = data.get("assignedTo", "all")
+        tags_raw = data.get("tags", "")
+
+        if not session_id:
+            return jsonify({"error": "sessionId is required"}), 400
+        if not title:
+            return jsonify({"error": "Video title is required"}), 400
+
+        temp_dir = get_temp_chunks_dir(session_id)
+        if not os.path.exists(temp_dir):
+            return jsonify({"error": "Upload session not found or expired"}), 404
+
+        # Verify all chunks exist
+        missing_chunks = []
+        for idx in range(total_chunks):
+            part_path = os.path.join(temp_dir, f"chunk_{idx:05d}.part")
+            if not os.path.exists(part_path):
+                missing_chunks.append(idx)
+
+        if missing_chunks:
+            return jsonify({
+                "error": f"Missing {len(missing_chunks)} chunks",
+                "missingChunks": missing_chunks
+            }), 400
+
+        ext = filename.rsplit(".", 1)[1].lower() if "." in filename else "mp4"
+        unique_filename = f"video_{uuid.uuid4().hex[:12]}.{ext}"
+        videos_dir = get_videos_dir()
+        final_path = os.path.join(videos_dir, unique_filename)
+
+        # High-throughput 4MB block assembly
+        with open(final_path, "wb", buffering=4 * 1024 * 1024) as f_out:
+            for idx in range(total_chunks):
+                part_path = os.path.join(temp_dir, f"chunk_{idx:05d}.part")
+                with open(part_path, "rb", buffering=4 * 1024 * 1024) as f_in:
+                    shutil.copyfileobj(f_in, f_out, length=4 * 1024 * 1024)
+
+        # Asynchronous cleanup so client response is not delayed by disk deletions
+        def async_cleanup(p):
+            shutil.rmtree(p, ignore_errors=True)
+        threading.Thread(target=async_cleanup, args=(temp_dir,), daemon=True).start()
+
+        file_size_bytes = os.path.getsize(final_path)
+
+        tags = [t.strip() for t in tags_raw.split(",") if t.strip()] if isinstance(tags_raw, str) else (tags_raw or [])
+        assigned_to = parse_assigned_to(assigned_to_raw)
+
+        video_record = {
+            "tenantId": tenant_id,
+            "title": title,
+            "description": description,
+            "category": category,
+            "duration": duration,
+            "assignedTo": assigned_to,
+            "tags": tags,
+            "sourceType": "file",
+            "filename": unique_filename,
+            "originalFilename": secure_filename(filename),
+            "fileSize": file_size_bytes,
+            "videoUrl": f"/api/answerer/classes/stream/{unique_filename}",
+            "provider": "local",
+            "viewCount": 0,
+            "createdAt": datetime.utcnow().isoformat(),
+            "updatedAt": datetime.utcnow().isoformat(),
+        }
+
+        result = db.videos.insert_one(video_record)
+        video_record["id"] = str(result.inserted_id)
+        if "_id" in video_record:
+            del video_record["_id"]
+
+        # Ensure database indexes
+        try:
+            db.videos.create_index([("tenantId", 1), ("createdAt", -1)], background=True)
+            db.videos.create_index([("category", 1)], background=True)
+        except Exception:
+            pass
+
+        return jsonify({
+            "message": "Video uploaded and published successfully",
+            "video": video_record
+        }), 201
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @admin_videos_bp.post("")
 def create_video():
     try:
@@ -186,13 +372,14 @@ def create_video():
         description = request.form.get("description") or (request.json.get("description") if request.is_json else "")
         category = request.form.get("category") or (request.json.get("category") if request.is_json else "General")
         duration = request.form.get("duration") or (request.json.get("duration") if request.is_json else "15m")
-        assigned_to = request.form.get("assignedTo") or (request.json.get("assignedTo") if request.is_json else "all")
+        assigned_to_raw = request.form.get("assignedTo") or (request.json.get("assignedTo") if request.is_json else "all")
         tags_raw = request.form.get("tags") or (request.json.get("tags") if request.is_json else "")
 
         if not title:
             return jsonify({"error": "Video title is required"}), 400
 
         tags = [t.strip() for t in tags_raw.split(",") if t.strip()] if isinstance(tags_raw, str) else (tags_raw or [])
+        assigned_to = parse_assigned_to(assigned_to_raw)
 
         video_record = {
             "tenantId": tenant_id,
@@ -213,21 +400,15 @@ def create_video():
                 return jsonify({"error": "Video file is required for file upload mode"}), 400
             file = request.files["file"]
             if file.filename == "" or not allowed_file(file.filename):
-                return jsonify({"error": "Invalid or missing video file. Allowed formats: MP4, WebM, OGG, MOV"}), 400
+                return jsonify({"error": "Invalid or missing video file. Allowed formats: MP4, WebM, MKV, MOV, AVI, etc."}), 400
 
             ext = file.filename.rsplit(".", 1)[1].lower() if "." in file.filename else "mp4"
             unique_filename = f"video_{uuid.uuid4().hex[:12]}.{ext}"
             videos_dir = get_videos_dir()
-            os.makedirs(videos_dir, exist_ok=True)
             file_path = os.path.join(videos_dir, unique_filename)
 
-            with open(file_path, "wb") as f_out:
-                while True:
-                    chunk = file.stream.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    f_out.write(chunk)
-
+            # Fast direct save
+            file.save(file_path)
             file_size_bytes = os.path.getsize(file_path)
 
             video_record["filename"] = unique_filename

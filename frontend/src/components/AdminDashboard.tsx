@@ -222,14 +222,16 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
     <div className="shine-admin-shell">
       {/* Mobile-only topbar with hamburger */}
       <div className="admin-mobile-topbar">
-        <button
-          className={`admin-hamburger-btn ${mobileOpen ? "open" : ""}`}
-          onClick={() => setMobileOpen((o) => !o)}
-          aria-label="Toggle navigation"
-        >
-          <span /><span /><span />
-        </button>
-        <span className="admin-mobile-title">Admin Console</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <button
+            className={`admin-hamburger-btn ${mobileOpen ? "open" : ""}`}
+            onClick={() => setMobileOpen((o) => !o)}
+            aria-label="Toggle navigation"
+          >
+            <span /><span /><span />
+          </button>
+          <span className="admin-mobile-title">Admin Console</span>
+        </div>
         <div className="admin-mobile-topbar-right">
           <button
             type="button"
@@ -237,7 +239,7 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
             onClick={() => setShowPassword(true)}
             title="Change password"
           >
-            Change password
+            Password
           </button>
           <button className="admin-mobile-signout-btn" onClick={onLogout}>Sign out</button>
         </div>

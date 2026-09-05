@@ -24,41 +24,55 @@
   --shadow-card: 0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
   --shadow-card-hover: 0 12px 32px -4px rgba(15, 23, 42, 0.08), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
   --shadow-primary-btn: 0 4px 14px rgba(37, 99, 235, 0.3);
+  
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
 }
 
-* {
+*, *::before, *::after {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
-body {
+html, body {
   margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
   font-family: var(--font-family-primary);
   background-color: var(--color-bg-app);
   color: var(--color-text-main);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+button, a, input, select, textarea {
+  touch-action: manipulation;
 }
 
 code {
   font-family: var(--font-family-code);
 }
 
-
-/* ═══════════════════════════════════════════════════════════
-   GLOBAL PRINT PROTECTION
-   Hides all page content during printing and shows a
-   security notice. Component-level @media print rules in
-   security.css provide finer-grained control per component.
-   ═══════════════════════════════════════════════════════════ */
 @media print {
-  /* Hide everything in the app */
   body > * {
     display: none !important;
     visibility: hidden !important;
   }
-
-  /* Inject protection message via pseudo-element */
   body::after {
     content: '🔒  Content Protected\A\AThis application does not allow printing of its content.\AShine Exam — All sessions are watermarked and logged.';
     display: block !important;

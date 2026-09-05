@@ -1020,8 +1020,8 @@
     display: flex !important;
     align-items: center;
     justify-content: space-between;
-    height: 58px;
-    padding: 0 18px;
+    height: 52px;
+    padding: 0 12px;
     background: linear-gradient(90deg, #09132b 0%, #0d1e40 100%);
     position: sticky;
     top: 0;
@@ -1033,15 +1033,16 @@
     display: flex !important;
     flex-direction: column;
     justify-content: center;
-    gap: 5px;
-    width: 38px;
-    height: 38px;
+    gap: 4px;
+    width: 36px;
+    height: 36px;
     padding: 6px;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 10px;
+    border-radius: 8px;
     cursor: pointer;
     transition: background 0.2s ease;
+    flex-shrink: 0;
   }
 
   .admin-hamburger-btn:hover {
@@ -1050,7 +1051,7 @@
 
   .admin-hamburger-btn span {
     display: block;
-    width: 18px;
+    width: 16px;
     height: 2px;
     background: #ffffff;
     border-radius: 2px;
@@ -1058,7 +1059,7 @@
   }
 
   .admin-hamburger-btn.open span:nth-child(1) {
-    transform: translateY(7px) rotate(45deg);
+    transform: translateY(6px) rotate(45deg);
   }
 
   .admin-hamburger-btn.open span:nth-child(2) {
@@ -1067,33 +1068,38 @@
   }
 
   .admin-hamburger-btn.open span:nth-child(3) {
-    transform: translateY(-7px) rotate(-45deg);
+    transform: translateY(-6px) rotate(-45deg);
   }
 
   .admin-mobile-title {
     color: #ffffff;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 800;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.02em;
     text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .admin-mobile-topbar-right {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 6px;
+    flex-shrink: 0;
   }
 
   .admin-mobile-pw-btn {
     background: rgba(255, 255, 255, 0.12);
     border: 1px solid rgba(255, 255, 255, 0.22);
     color: #ffffff;
-    padding: 6px 12px;
-    border-radius: 8px;
-    font-size: 12px;
+    padding: 5px 9px;
+    border-radius: 7px;
+    font-size: 11px;
     font-weight: 700;
     cursor: pointer;
     transition: all 0.2s ease;
+    white-space: nowrap;
   }
 
   .admin-mobile-pw-btn:hover {
@@ -1102,28 +1108,32 @@
   }
 
   .admin-mobile-signout-btn {
-    background: rgba(239, 68, 68, 0.15);
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid rgba(239, 68, 68, 0.35);
     color: #fca5a5;
-    padding: 6px 12px;
-    border-radius: 8px;
-    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: 7px;
+    font-size: 11px;
     font-weight: 700;
     cursor: pointer;
     transition: background 0.2s ease;
+    white-space: nowrap;
   }
 
   .admin-mobile-signout-btn:hover {
     background: rgba(239, 68, 68, 0.28);
   }
 
-  /* Main content takes full width on mobile */
+  /* Main content takes full width on mobile with smooth scrolling */
   .shine-admin-main,
   .shine-admin-main.collapsed {
     margin-left: 0 !important;
     width: 100% !important;
     max-width: 100vw !important;
     box-sizing: border-box !important;
+    overflow-y: visible !important;
+    overflow-x: hidden !important;
+    min-height: auto !important;
   }
 
   .shine-admin-sidebar,
@@ -1253,24 +1263,31 @@
   }
 
   .admin-card-link {
-    font-size: 9px !important;
-    padding: 2px 7px !important;
+    font-size: 10px !important;
+    padding: 3px 8px !important;
     border-radius: 12px !important;
   }
 
   .admin-card-label {
-    font-size: 9px !important;
-    letter-spacing: 0.02em !important;
+    font-size: 10px !important;
+    letter-spacing: 0.4px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+    line-height: 1.3 !important;
   }
 
   .admin-card-val {
-    font-size: 20px !important;
-    margin-top: 2px !important;
+    font-size: 22px !important;
+    font-weight: 800 !important;
+    margin-top: 3px !important;
+    color: #ffffff !important;
   }
 
   .admin-card-help {
-    font-size: 9.5px !important;
-    margin-top: 2px !important;
+    font-size: 10px !important;
+    margin-top: 3px !important;
+    color: rgba(255, 255, 255, 0.75) !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
@@ -1378,6 +1395,8 @@
 }
 
 /* Hide mobile-only elements on desktop */
-.admin-mobile-topbar { display: none; }
-.admin-mobile-overlay { display: none; }
-.admin-hamburger-btn { display: none; }
+@media (min-width: 861px) {
+  .admin-mobile-topbar { display: none !important; }
+  .admin-mobile-overlay { display: none !important; }
+  .admin-hamburger-btn { display: none !important; }
+}

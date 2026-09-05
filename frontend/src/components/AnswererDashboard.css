@@ -3259,6 +3259,166 @@
   }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   PLAY STORE NATIVE MOBILE BOTTOM NAVIGATION BAR
+   ═══════════════════════════════════════════════════════════ */
+.mobile-app-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .candidate-main {
+    padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .portal-page {
+    padding-bottom: 24px !important;
+  }
+
+  .mobile-app-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: calc(58px + env(safe-area-inset-bottom, 0px));
+    padding: 5px 8px env(safe-area-inset-bottom, 0px);
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-top: 1px solid rgba(226, 232, 240, 0.9);
+    box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.08);
+    z-index: 9000;
+    justify-content: space-around;
+    align-items: center;
+    box-sizing: border-box;
+  }
+
+  .mobile-bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: transparent;
+    border: none;
+    color: #64748b;
+    padding: 4px 6px;
+    min-width: 52px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-bottom-nav-item:active {
+    transform: scale(0.92);
+  }
+
+  .mobile-bottom-nav-icon-wrap {
+    position: relative;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease;
+  }
+
+  .mobile-bottom-nav-icon-wrap svg {
+    width: 20px;
+    height: 20px;
+    stroke: currentColor;
+    transition: stroke 0.2s ease;
+  }
+
+  .mobile-bottom-nav-badge {
+    position: absolute;
+    top: -2px;
+    right: -6px;
+    min-width: 16px;
+    height: 16px;
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: 800;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    border: 2px solid #ffffff;
+    box-shadow: 0 2px 5px rgba(239, 68, 68, 0.4);
+  }
+
+  .mobile-bottom-nav-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1;
+    color: inherit;
+  }
+
+  .mobile-bottom-nav-item.active {
+    color: #2563eb;
+  }
+
+  .mobile-bottom-nav-item.active .mobile-bottom-nav-icon-wrap {
+    transform: translateY(-2px);
+  }
+
+  .mobile-bottom-nav-item.active .mobile-bottom-nav-icon-wrap::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    width: 4px;
+    height: 4px;
+    background: #2563eb;
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgba(37, 99, 235, 0.6);
+  }
+
+  /* Candidate test cards mobile polish */
+  .portal-test-list.grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .portal-test-card {
+    padding: 18px 16px !important;
+    border-radius: 14px !important;
+    box-shadow: 0 3px 12px rgba(15, 23, 42, 0.05) !important;
+  }
+
+  .test-card-heading h3 {
+    font-size: 15.5px !important;
+    min-height: 0 !important;
+    margin-bottom: 10px !important;
+  }
+
+  .test-info-box {
+    padding: 10px 12px !important;
+    margin-bottom: 14px !important;
+  }
+
+  .test-validity-box {
+    padding: 8px 10px !important;
+    font-size: 11px !important;
+  }
+
+  .shine-primary {
+    height: 44px !important;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    border-radius: 10px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3) !important;
+  }
+}
+
 
 
 

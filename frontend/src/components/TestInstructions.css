@@ -313,3 +313,83 @@
   color: #64748b;
   font-size: 0.8rem;
 }
+
+/* Mobile App Screen Optimization for Instructions */
+@media (max-width: 768px) {
+  .official-instructions {
+    height: 100dvh;
+  }
+
+  .official-brand {
+    height: 44px;
+  }
+
+  .official-layout {
+    flex-direction: column;
+  }
+
+  .official-candidate {
+    display: none;
+  }
+
+  .official-main {
+    border-right: none;
+    height: 100%;
+  }
+
+  .official-main > h1 {
+    font-size: 1.05rem;
+    height: 40px;
+    padding: 0 14px;
+  }
+
+  .official-language {
+    padding: 0 14px;
+    height: 36px;
+  }
+
+  .official-scroll {
+    padding: 14px 16px;
+  }
+
+  .official-pattern {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+
+  .official-consent {
+    padding: 12px 14px;
+  }
+
+  .declaration {
+    font-size: 0.85rem;
+    gap: 12px;
+  }
+
+  .declaration input {
+    width: 20px;
+    height: 20px;
+    margin-top: 0;
+  }
+
+  .official-main footer {
+    height: auto;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)) 14px;
+    gap: 10px;
+  }
+
+  .official-main footer button {
+    flex: 1;
+    height: 46px;
+    font-size: 0.95rem;
+    border-radius: 8px;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  .official-main footer button:active {
+    transform: scale(0.97);
+  }
+}

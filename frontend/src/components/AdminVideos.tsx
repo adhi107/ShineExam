@@ -102,6 +102,8 @@ const AdminVideos: React.FC = () => {
   const [formSelectedStudents, setFormSelectedStudents] = useState<string[]>([]);
   const [formStudentSearch, setFormStudentSearch] = useState<string>("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [videoDurationDetected, setVideoDurationDetected] = useState<string>("");
+  const [videoThumbnailSnapshot, setVideoThumbnailSnapshot] = useState<string | null>(null);
 
   // Playback Preview Modal
   const [previewVideo, setPreviewVideo] = useState<VideoItem | null>(null);
@@ -117,9 +119,15 @@ const AdminVideos: React.FC = () => {
     onConfirm: () => void;
   } | null>(null);
 
-  // Toast
+  // High-Speed Upload State & Live Metrics
   const [toast, setToast] = useState<string>("");
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadSpeed, setUploadSpeed] = useState<string>("");
+  const [uploadEta, setUploadEta] = useState<string>("");
+  const [uploadChunkInfo, setUploadChunkInfo] = useState<string>("");
+  const [uploadedBytesFormatted, setUploadedBytesFormatted] = useState<string>("");
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
+
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(""), 3500);
@@ -157,6 +165,77 @@ const AdminVideos: React.FC = () => {
     }
   };
 
+  // Extract video duration and snapshot thumbnail client-side
+  const handleFileSelection = (file: File) => {
+    setSelectedFile(file);
+    setUploadProgress(0);
+    setUploadSpeed("");
+    setUploadEta("");
+    setUploadChunkInfo("");
+    setUploadedBytesFormatted("");
+
+    // Auto-fill title if empty
+    if (!title.trim()) {
+      const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+      setTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
+    }
+
+    try {
+      const objUrl = URL.createObjectURL(file);
+      const tempVideo = document.createElement("video");
+      tempVideo.preload = "metadata";
+      tempVideo.src = objUrl;
+      tempVideo.muted = true;
+      tempVideo.playsInline = true;
+
+      tempVideo.onloadedmetadata = () => {
+        const totalSec = Math.floor(tempVideo.duration);
+        if (totalSec && !isNaN(totalSec) && isFinite(totalSec)) {
+          const hrs = Math.floor(totalSec / 3600);
+          const mins = Math.floor((totalSec % 3600) / 60);
+          const secs = totalSec % 60;
+          let formatted = "";
+          if (hrs > 0) {
+            formatted = `${hrs}h ${mins}m`;
+          } else if (mins > 0) {
+            formatted = secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+          } else {
+            formatted = `${secs}s`;
+          }
+          setDuration(formatted);
+          setVideoDurationDetected(formatted);
+        }
+
+        // Seek to 1s to capture snapshot thumbnail
+        tempVideo.currentTime = Math.min(1.0, (tempVideo.duration || 1) / 2);
+      };
+
+      tempVideo.onseeked = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.min(tempVideo.videoWidth || 480, 480);
+          canvas.height = Math.min(tempVideo.videoHeight || 270, 270);
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
+            const thumbUrl = canvas.toDataURL("image/jpeg", 0.75);
+            setVideoThumbnailSnapshot(thumbUrl);
+          }
+        } catch {
+          // Canvas capture optional
+        } finally {
+          URL.revokeObjectURL(objUrl);
+        }
+      };
+
+      tempVideo.onerror = () => {
+        URL.revokeObjectURL(objUrl);
+      };
+    } catch {
+      // Non-blocking metadata extraction
+    }
+  };
+
   const openCreateModal = () => {
     setEditingVideo(null);
     setSourceType("link");
@@ -170,6 +249,12 @@ const AdminVideos: React.FC = () => {
     setFormSelectedStudents([]);
     setFormStudentSearch("");
     setSelectedFile(null);
+    setVideoDurationDetected("");
+    setVideoThumbnailSnapshot(null);
+    setUploadProgress(0);
+    setUploadSpeed("");
+    setUploadEta("");
+    setUploadChunkInfo("");
     setShowModal(true);
   };
 
@@ -191,6 +276,9 @@ const AdminVideos: React.FC = () => {
     }
     setFormStudentSearch("");
     setSelectedFile(null);
+    setVideoDurationDetected("");
+    setVideoThumbnailSnapshot(null);
+    setUploadProgress(0);
     setShowModal(true);
   };
 
@@ -222,6 +310,183 @@ const AdminVideos: React.FC = () => {
     }
   };
 
+  // High-Speed Multi-Stream Parallel Chunked Uploader Engine
+  const uploadVideoParallelChunks = async (
+    file: File,
+    meta: {
+      title: string;
+      description: string;
+      category: string;
+      duration: string;
+      assignedTo: string | string[];
+      tags: string;
+    }
+  ) => {
+    const authHeaders = getAuthHeaders();
+    const startTime = Date.now();
+    let lastTime = Date.now();
+    let lastLoadedTotal = 0;
+
+    // 1. Initialize Chunk Session
+    const initRes = await fetch(buildUrl("/admin/videos/upload-init"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders,
+      },
+      body: JSON.stringify({
+        filename: file.name,
+        fileSize: file.size,
+      }),
+    });
+
+    if (!initRes.ok) {
+      const errData = await initRes.json().catch(() => ({ error: "Failed to initialize upload session." }));
+      throw new Error(errData.error || "Failed to initialize upload session.");
+    }
+
+    const { sessionId, chunkSize = 5 * 1024 * 1024 } = await initRes.json();
+    const totalChunks = Math.max(1, Math.ceil(file.size / chunkSize));
+    const chunkLoaded = new Array(totalChunks).fill(0);
+
+    const updateLiveMetrics = () => {
+      const currentTotalLoaded = chunkLoaded.reduce((a, b) => a + b, 0);
+      const percent = Math.min(99, Math.round((currentTotalLoaded / file.size) * 100));
+      setUploadProgress(percent);
+
+      const now = Date.now();
+      const elapsedTotalSec = (now - startTime) / 1000;
+      const intervalSec = (now - lastTime) / 1000;
+
+      if (intervalSec >= 0.3) {
+        const deltaBytes = currentTotalLoaded - lastLoadedTotal;
+        const currentSpeedBytesPerSec = intervalSec > 0 ? deltaBytes / intervalSec : (currentTotalLoaded / elapsedTotalSec);
+        
+        if (currentSpeedBytesPerSec > 0) {
+          const speedMB = currentSpeedBytesPerSec / (1024 * 1024);
+          setUploadSpeed(`${speedMB >= 1 ? speedMB.toFixed(1) : (currentSpeedBytesPerSec / 1024).toFixed(0)} ${speedMB >= 1 ? "MB/s" : "KB/s"}`);
+
+          const remainingBytes = Math.max(0, file.size - currentTotalLoaded);
+          const etaSec = Math.round(remainingBytes / currentSpeedBytesPerSec);
+          if (etaSec > 60) {
+            setUploadEta(`ETA: ${Math.floor(etaSec / 60)}m ${etaSec % 60}s`);
+          } else {
+            setUploadEta(`ETA: ${etaSec}s`);
+          }
+        }
+
+        const loadedMB = (currentTotalLoaded / (1024 * 1024)).toFixed(1);
+        const totalMB = (file.size / (1024 * 1024)).toFixed(1);
+        setUploadedBytesFormatted(`${loadedMB} MB / ${totalMB} MB`);
+
+        lastTime = now;
+        lastLoadedTotal = currentTotalLoaded;
+      }
+    };
+
+    // 2. Upload Individual Chunk with Auto-Retry
+    const uploadSingleChunk = async (chunkIndex: number, retries = 3): Promise<void> => {
+      const start = chunkIndex * chunkSize;
+      const end = Math.min(file.size, start + chunkSize);
+      const blobSlice = file.slice(start, end);
+
+      const formData = new FormData();
+      formData.append("sessionId", sessionId);
+      formData.append("chunkIndex", String(chunkIndex));
+      formData.append("totalChunks", String(totalChunks));
+      formData.append("chunk", blobSlice, `${file.name}.part${chunkIndex}`);
+
+      return new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", buildUrl("/admin/videos/upload-chunk"));
+        Object.entries(authHeaders).forEach(([k, v]) => {
+          xhr.setRequestHeader(k, v);
+        });
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            chunkLoaded[chunkIndex] = e.loaded;
+            updateLiveMetrics();
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            chunkLoaded[chunkIndex] = blobSlice.size;
+            updateLiveMetrics();
+            resolve();
+          } else {
+            if (retries > 0) {
+              setTimeout(() => {
+                uploadSingleChunk(chunkIndex, retries - 1).then(resolve).catch(reject);
+              }, 600);
+            } else {
+              reject(new Error(`Chunk ${chunkIndex + 1}/${totalChunks} upload failed.`));
+            }
+          }
+        };
+
+        xhr.onerror = () => {
+          if (retries > 0) {
+            setTimeout(() => {
+              uploadSingleChunk(chunkIndex, retries - 1).then(resolve).catch(reject);
+            }, 600);
+          } else {
+            reject(new Error(`Network interruption on chunk ${chunkIndex + 1}.`));
+          }
+        };
+
+        xhr.send(formData);
+      });
+    };
+
+    // 3. Parallel Worker Pool (3 Concurrent Upload Streams)
+    const CONCURRENCY = Math.min(3, totalChunks);
+    let nextChunkIdx = 0;
+    let completedChunks = 0;
+
+    const worker = async (): Promise<void> => {
+      while (nextChunkIdx < totalChunks) {
+        const idx = nextChunkIdx++;
+        setUploadChunkInfo(`Stream pipeline: Part ${idx + 1} of ${totalChunks}`);
+        await uploadSingleChunk(idx);
+        completedChunks++;
+        setUploadChunkInfo(`Completed ${completedChunks} of ${totalChunks} parts`);
+      }
+    };
+
+    const workers = Array.from({ length: CONCURRENCY }, () => worker());
+    await Promise.all(workers);
+
+    // 4. Finalize and assemble chunks into database record
+    setUploadChunkInfo("Finalizing video & generating DRM streams...");
+    setUploadProgress(100);
+
+    const completeRes = await fetch(buildUrl("/admin/videos/upload-complete"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders,
+      },
+      body: JSON.stringify({
+        sessionId,
+        filename: file.name,
+        totalChunks,
+        title: meta.title,
+        description: meta.description,
+        category: meta.category,
+        duration: meta.duration,
+        assignedTo: meta.assignedTo,
+        tags: meta.tags,
+      }),
+    });
+
+    if (!completeRes.ok) {
+      const errData = await completeRes.json().catch(() => ({ error: "Failed to finalize video assembly." }));
+      throw new Error(errData.error || "Failed to finalize video assembly.");
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
@@ -245,7 +510,7 @@ const AdminVideos: React.FC = () => {
           assignedTo: finalAssignedTo,
           tags: tags.split(",").map(t => t.trim()).filter(Boolean),
         });
-        showToast("Video updated successfully.");
+        showToast("Video lecture updated successfully.");
       } else {
         // Create video
         if (sourceType === "file") {
@@ -254,47 +519,17 @@ const AdminVideos: React.FC = () => {
             setSubmitting(false);
             return;
           }
-          const formData = new FormData();
-          formData.append("sourceType", "file");
-          formData.append("title", title);
-          formData.append("description", description);
-          formData.append("category", category);
-          formData.append("duration", duration);
-          formData.append("assignedTo", typeof finalAssignedTo === "string" ? finalAssignedTo : finalAssignedTo.join(","));
-          formData.append("tags", tags);
-          formData.append("file", selectedFile);
 
-          const authHeaders = getAuthHeaders();
-          await new Promise<void>((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open("POST", buildUrl("/admin/videos"));
-            Object.entries(authHeaders).forEach(([k, v]) => {
-              xhr.setRequestHeader(k, v);
-            });
-            xhr.upload.onprogress = (e) => {
-              if (e.lengthComputable) {
-                setUploadProgress(Math.round((e.loaded / e.total) * 100));
-              }
-            };
-            xhr.onload = () => {
-              setUploadProgress(0);
-              if (xhr.status >= 200 && xhr.status < 300) {
-                resolve();
-              } else {
-                try {
-                  const errData = JSON.parse(xhr.responseText);
-                  reject(new Error(errData.error || "Failed to upload video file."));
-                } catch {
-                  reject(new Error("Failed to upload video file."));
-                }
-              }
-            };
-            xhr.onerror = () => {
-              setUploadProgress(0);
-              reject(new Error("Network error during video upload. Please check your connection."));
-            };
-            xhr.send(formData);
+          await uploadVideoParallelChunks(selectedFile, {
+            title,
+            description,
+            category,
+            duration,
+            assignedTo: finalAssignedTo,
+            tags,
           });
+
+          showToast("Video lecture uploaded and published at high speed!");
         } else {
           if (!videoUrl.trim()) {
             alert("Please enter a valid YouTube, Vimeo, or video stream link.");
@@ -311,16 +546,22 @@ const AdminVideos: React.FC = () => {
             assignedTo: finalAssignedTo,
             tags: tags.split(",").map(t => t.trim()).filter(Boolean),
           });
+          showToast("New video lecture published.");
         }
-        showToast("New video lecture published.");
       }
 
       setShowModal(false);
       loadVideos();
     } catch (err: any) {
+      console.error("Video save error:", err);
       alert(err.message || "Failed to save video.");
     } finally {
       setSubmitting(false);
+      setUploadProgress(0);
+      setUploadSpeed("");
+      setUploadEta("");
+      setUploadChunkInfo("");
+      setUploadedBytesFormatted("");
     }
   };
 
@@ -630,7 +871,7 @@ const AdminVideos: React.FC = () => {
 
               {/* Source Input */}
               {sourceType === "link" ? (
-                  <div className="form-group">
+                <div className="form-group">
                   <label>Video URL / Stream Link *</label>
                   <input
                     type="url"
@@ -643,32 +884,126 @@ const AdminVideos: React.FC = () => {
                 </div>
               ) : (
                 <div className="form-group">
-                  <label>Upload Video File *</label>
-                  <div className="file-upload-box">
-                    <input
-                      type="file"
-                      accept="video/mp4,video/webm,video/ogg,video/quicktime,video/x-matroska,video/x-msvideo,video/x-flv,video/x-ms-wmv,video/3gpp,video/mpeg,.mp4,.webm,.ogg,.mov,.mkv,.avi,.flv,.wmv,.3gp,.m4v,.ts,.mpeg,.mpg"
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          setSelectedFile(e.target.files[0]);
+                  <div className="form-label-row">
+                    <label>Upload Video File *</label>
+                    {videoDurationDetected && (
+                      <span className="auto-detect-pill">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        Detected Duration: {videoDurationDetected}
+                      </span>
+                    )}
+                  </div>
+
+                  {!selectedFile ? (
+                    <div
+                      className={`file-upload-box ${isDragOver ? "drag-active" : ""}`}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDragOver(true);
+                      }}
+                      onDragLeave={() => setIsDragOver(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDragOver(false);
+                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                          handleFileSelection(e.dataTransfer.files[0]);
                         }
                       }}
-                      required={!editingVideo}
-                    />
-                    <div className="file-upload-label">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                      </svg>
-                      <strong>{selectedFile ? selectedFile.name : "Click or drag video file here"}</strong>
-                      <small>{selectedFile ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB` : "MP4, WebM, MKV, MOV, AVI, FLV, WMV, 3GP, MPEG and more"}</small>
-                      {uploadProgress > 0 && (
-                        <div className="upload-progress-bar">
-                          <div className="upload-progress-fill" style={{ width: `${uploadProgress}%` }} />
-                          <span>{uploadProgress}%</span>
+                    >
+                      <input
+                        type="file"
+                        accept="video/mp4,video/webm,video/ogg,video/quicktime,video/x-matroska,video/x-msvideo,video/x-flv,video/x-ms-wmv,video/3gpp,video/mpeg,.mp4,.webm,.ogg,.mov,.mkv,.avi,.flv,.wmv,.3gp,.m4v,.ts,.mpeg,.mpg"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            handleFileSelection(e.target.files[0]);
+                          }
+                        }}
+                        required={!editingVideo}
+                      />
+                      <div className="file-upload-label">
+                        <div className="upload-icon-pulse">
+                          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                          </svg>
                         </div>
+                        <strong>Click to browse or drag video file here</strong>
+                        <small>MP4, WebM, MKV, MOV, AVI, FLV, WMV, 3GP, MPEG &amp; all formats (Up to 2 GB)</small>
+                        <span className="turbo-badge">⚡ Turbo High-Speed Multi-Stream Upload Enabled</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="selected-video-preview-card">
+                      <div className="preview-media-thumb">
+                        {videoThumbnailSnapshot ? (
+                          <img src={videoThumbnailSnapshot} alt="Video Snapshot" />
+                        ) : (
+                          <div className="thumb-fallback-icon">🎬</div>
+                        )}
+                        <span className="preview-play-icon">▶</span>
+                      </div>
+                      <div className="preview-file-details">
+                        <strong className="file-name" title={selectedFile.name}>{selectedFile.name}</strong>
+                        <div className="file-meta-pills">
+                          <span className="meta-pill">{formatFileSize(selectedFile.size)}</span>
+                          {videoDurationDetected && <span className="meta-pill duration">⏱️ {videoDurationDetected}</span>}
+                          <span className="meta-pill high-speed">🚀 Fast Parallel Pipeline</span>
+                        </div>
+                      </div>
+                      {!submitting && (
+                        <button
+                          type="button"
+                          className="btn-change-file"
+                          onClick={() => {
+                            setSelectedFile(null);
+                            setVideoThumbnailSnapshot(null);
+                            setVideoDurationDetected("");
+                          }}
+                        >
+                          Change
+                        </button>
                       )}
                     </div>
-                  </div>
+                  )}
+
+                  {/* High-Speed Real-time Upload Progress Dashboard */}
+                  {submitting && (
+                    <div className="turbo-upload-dashboard">
+                      <div className="turbo-top-row">
+                        <div className="turbo-status-label">
+                          <span className="live-pulse-dot" />
+                          <strong>{uploadChunkInfo || "Uploading video streams..."}</strong>
+                        </div>
+                        <span className="turbo-percent">{uploadProgress}%</span>
+                      </div>
+
+                      <div className="turbo-progress-track">
+                        <div
+                          className="turbo-progress-fill"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+
+                      <div className="turbo-metrics-row">
+                        {uploadSpeed && (
+                          <span className="turbo-metric-chip speed">
+                            ⚡ {uploadSpeed}
+                          </span>
+                        )}
+                        {uploadEta && (
+                          <span className="turbo-metric-chip eta">
+                            ⏱️ {uploadEta}
+                          </span>
+                        )}
+                        {uploadedBytesFormatted && (
+                          <span className="turbo-metric-chip bytes">
+                            📊 {uploadedBytesFormatted}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
