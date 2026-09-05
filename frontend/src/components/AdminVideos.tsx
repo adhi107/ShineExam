@@ -345,8 +345,8 @@ const AdminVideos: React.FC = () => {
       throw new Error(errData.error || "Failed to initialize upload session.");
     }
 
-    const { sessionId, chunkSize = 1024 * 1024 } = await initRes.json();
-    const effectiveChunkSize = Math.min(chunkSize, 1.5 * 1024 * 1024); // Cap to 1.5MB for Nginx reverse-proxy safety
+    const { sessionId, chunkSize = 512 * 1024 } = await initRes.json();
+    const effectiveChunkSize = Math.min(chunkSize, 512 * 1024); // 512KB safe binary chunks
     const totalChunks = Math.max(1, Math.ceil(file.size / effectiveChunkSize));
     const chunkLoaded = new Array(totalChunks).fill(0);
 
@@ -385,24 +385,22 @@ const AdminVideos: React.FC = () => {
       }
     };
 
-    // 2. Upload Individual Chunk with Exponential Backoff Auto-Retry
+    // 2. Upload Individual Chunk with Exponential Backoff Auto-Retry (Raw Binary Stream)
     const uploadSingleChunk = async (chunkIndex: number, retries = 4): Promise<void> => {
       const start = chunkIndex * effectiveChunkSize;
       const end = Math.min(file.size, start + effectiveChunkSize);
       const blobSlice = file.slice(start, end);
 
-      const formData = new FormData();
-      formData.append("sessionId", sessionId);
-      formData.append("chunkIndex", String(chunkIndex));
-      formData.append("totalChunks", String(totalChunks));
-      formData.append("chunk", blobSlice, `${file.name}.part${chunkIndex}`);
-
       return new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open("POST", buildUrl("/admin/videos/upload-chunk"));
+        const chunkUrl = buildUrl(
+          `/admin/videos/upload-chunk?sessionId=${encodeURIComponent(sessionId)}&chunkIndex=${chunkIndex}&totalChunks=${totalChunks}`
+        );
+        xhr.open("POST", chunkUrl);
         Object.entries(authHeaders).forEach(([k, v]) => {
           xhr.setRequestHeader(k, v);
         });
+        xhr.setRequestHeader("Content-Type", "application/octet-stream");
         xhr.setRequestHeader("X-Session-Id", sessionId);
         xhr.setRequestHeader("X-Chunk-Index", String(chunkIndex));
 
@@ -424,11 +422,11 @@ const AdminVideos: React.FC = () => {
               const resJson = JSON.parse(xhr.responseText);
               errMsg = resJson.error || resJson.message || errMsg;
             } catch {
-              if (xhr.status === 413) errMsg = "Payload too large for server proxy";
+              if (xhr.status === 413) errMsg = "Proxy buffer limit";
             }
 
             if (retries > 0) {
-              const delay = (5 - retries) * 600;
+              const delay = (5 - retries) * 500;
               setTimeout(() => {
                 uploadSingleChunk(chunkIndex, retries - 1).then(resolve).catch(reject);
               }, delay);
@@ -440,16 +438,17 @@ const AdminVideos: React.FC = () => {
 
         xhr.onerror = () => {
           if (retries > 0) {
-            const delay = (5 - retries) * 600;
+            const delay = (5 - retries) * 500;
             setTimeout(() => {
               uploadSingleChunk(chunkIndex, retries - 1).then(resolve).catch(reject);
             }, delay);
           } else {
-            reject(new Error(`Network drop on chunk ${chunkIndex + 1}. Please verify server connection.`));
+            reject(new Error(`Network drop on chunk ${chunkIndex + 1}. Retrying...`));
           }
         };
 
-        xhr.send(formData);
+        // Send raw binary stream without multipart form overhead
+        xhr.send(blobSlice);
       });
     };
 

@@ -200,7 +200,7 @@ def parse_assigned_to(raw_value):
 
 @admin_videos_bp.post("/upload-init")
 def init_chunked_upload():
-    """Initializes a high-speed chunked video upload session compatible with all Nginx/proxy limits."""
+    """Initializes a high-speed chunked video upload session compatible with all Nginx/Cloudflare/proxy limits."""
     try:
         data = request.get_json(silent=True) or request.form or {}
         filename = data.get("filename", "video.mp4")
@@ -212,8 +212,8 @@ def init_chunked_upload():
         session_id = f"vup_{uuid.uuid4().hex}"
         temp_dir = get_temp_chunks_dir(session_id)
 
-        # 1 MB safe high-throughput chunk size that bypasses standard Nginx 1M/2M client_max_body_size limits
-        chunk_size = 1024 * 1024  # 1 MB
+        # 512 KB ultra-safe high-speed chunk size that easily bypasses all Nginx / Cloudflare 1M limits
+        chunk_size = 512 * 1024  # 512 KB
 
         return jsonify({
             "sessionId": session_id,
@@ -226,18 +226,18 @@ def init_chunked_upload():
 
 @admin_videos_bp.post("/upload-chunk")
 def upload_video_chunk():
-    """Receives and writes an individual binary chunk with high-speed unbuffered I/O."""
+    """Receives and writes an individual binary chunk (supports both raw octet-stream and multipart)."""
     try:
         session_id = (
-            request.form.get("sessionId")
+            request.args.get("sessionId")
             or request.headers.get("X-Session-Id")
-            or request.args.get("sessionId")
+            or request.form.get("sessionId")
             or ""
         )
         chunk_index_raw = (
-            request.form.get("chunkIndex")
+            request.args.get("chunkIndex")
             or request.headers.get("X-Chunk-Index")
-            or request.args.get("chunkIndex")
+            or request.form.get("chunkIndex")
         )
 
         if not session_id or chunk_index_raw is None:
@@ -252,7 +252,7 @@ def upload_video_chunk():
             chunk_file = request.files["chunk"]
             chunk_file.save(part_path)
         else:
-            # Direct binary stream fallback
+            # Direct raw binary stream write (no multipart boundary overhead)
             raw_data = request.get_data()
             if not raw_data:
                 return jsonify({"error": "Chunk file data missing"}), 400
