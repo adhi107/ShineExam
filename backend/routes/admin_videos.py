@@ -200,7 +200,7 @@ def parse_assigned_to(raw_value):
 
 @admin_videos_bp.post("/upload-init")
 def init_chunked_upload():
-    """Initializes a high-speed chunked video upload session."""
+    """Initializes a high-speed chunked video upload session compatible with all Nginx/proxy limits."""
     try:
         data = request.get_json(silent=True) or request.form or {}
         filename = data.get("filename", "video.mp4")
@@ -212,8 +212,8 @@ def init_chunked_upload():
         session_id = f"vup_{uuid.uuid4().hex}"
         temp_dir = get_temp_chunks_dir(session_id)
 
-        # 5 MB standard high-throughput chunk size
-        chunk_size = 5 * 1024 * 1024
+        # 1 MB safe high-throughput chunk size that bypasses standard Nginx 1M/2M client_max_body_size limits
+        chunk_size = 1024 * 1024  # 1 MB
 
         return jsonify({
             "sessionId": session_id,
@@ -228,25 +228,36 @@ def init_chunked_upload():
 def upload_video_chunk():
     """Receives and writes an individual binary chunk with high-speed unbuffered I/O."""
     try:
-        session_id = request.form.get("sessionId") or request.args.get("sessionId") or ""
-        chunk_index_raw = request.form.get("chunkIndex") or request.args.get("chunkIndex")
-        total_chunks_raw = request.form.get("totalChunks") or request.args.get("totalChunks")
+        session_id = (
+            request.form.get("sessionId")
+            or request.headers.get("X-Session-Id")
+            or request.args.get("sessionId")
+            or ""
+        )
+        chunk_index_raw = (
+            request.form.get("chunkIndex")
+            or request.headers.get("X-Chunk-Index")
+            or request.args.get("chunkIndex")
+        )
 
         if not session_id or chunk_index_raw is None:
             return jsonify({"error": "Missing sessionId or chunkIndex"}), 400
 
         chunk_index = int(chunk_index_raw)
         temp_dir = get_temp_chunks_dir(session_id)
-
-        if "chunk" not in request.files:
-            return jsonify({"error": "Chunk file data missing"}), 400
-
-        chunk_file = request.files["chunk"]
         part_filename = f"chunk_{chunk_index:05d}.part"
         part_path = os.path.join(temp_dir, part_filename)
 
-        # Ultra-fast direct save
-        chunk_file.save(part_path)
+        if "chunk" in request.files:
+            chunk_file = request.files["chunk"]
+            chunk_file.save(part_path)
+        else:
+            # Direct binary stream fallback
+            raw_data = request.get_data()
+            if not raw_data:
+                return jsonify({"error": "Chunk file data missing"}), 400
+            with open(part_path, "wb") as f_part:
+                f_part.write(raw_data)
 
         return jsonify({
             "status": "ok",
@@ -254,6 +265,8 @@ def upload_video_chunk():
             "chunkIndex": chunk_index,
         }), 200
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 

@@ -345,8 +345,9 @@ const AdminVideos: React.FC = () => {
       throw new Error(errData.error || "Failed to initialize upload session.");
     }
 
-    const { sessionId, chunkSize = 5 * 1024 * 1024 } = await initRes.json();
-    const totalChunks = Math.max(1, Math.ceil(file.size / chunkSize));
+    const { sessionId, chunkSize = 1024 * 1024 } = await initRes.json();
+    const effectiveChunkSize = Math.min(chunkSize, 1.5 * 1024 * 1024); // Cap to 1.5MB for Nginx reverse-proxy safety
+    const totalChunks = Math.max(1, Math.ceil(file.size / effectiveChunkSize));
     const chunkLoaded = new Array(totalChunks).fill(0);
 
     const updateLiveMetrics = () => {
@@ -384,10 +385,10 @@ const AdminVideos: React.FC = () => {
       }
     };
 
-    // 2. Upload Individual Chunk with Auto-Retry
-    const uploadSingleChunk = async (chunkIndex: number, retries = 3): Promise<void> => {
-      const start = chunkIndex * chunkSize;
-      const end = Math.min(file.size, start + chunkSize);
+    // 2. Upload Individual Chunk with Exponential Backoff Auto-Retry
+    const uploadSingleChunk = async (chunkIndex: number, retries = 4): Promise<void> => {
+      const start = chunkIndex * effectiveChunkSize;
+      const end = Math.min(file.size, start + effectiveChunkSize);
       const blobSlice = file.slice(start, end);
 
       const formData = new FormData();
@@ -402,6 +403,8 @@ const AdminVideos: React.FC = () => {
         Object.entries(authHeaders).forEach(([k, v]) => {
           xhr.setRequestHeader(k, v);
         });
+        xhr.setRequestHeader("X-Session-Id", sessionId);
+        xhr.setRequestHeader("X-Chunk-Index", String(chunkIndex));
 
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
@@ -416,23 +419,33 @@ const AdminVideos: React.FC = () => {
             updateLiveMetrics();
             resolve();
           } else {
+            let errMsg = `HTTP ${xhr.status}`;
+            try {
+              const resJson = JSON.parse(xhr.responseText);
+              errMsg = resJson.error || resJson.message || errMsg;
+            } catch {
+              if (xhr.status === 413) errMsg = "Payload too large for server proxy";
+            }
+
             if (retries > 0) {
+              const delay = (5 - retries) * 600;
               setTimeout(() => {
                 uploadSingleChunk(chunkIndex, retries - 1).then(resolve).catch(reject);
-              }, 600);
+              }, delay);
             } else {
-              reject(new Error(`Chunk ${chunkIndex + 1}/${totalChunks} upload failed.`));
+              reject(new Error(`Chunk ${chunkIndex + 1}/${totalChunks} upload failed: ${errMsg}`));
             }
           }
         };
 
         xhr.onerror = () => {
           if (retries > 0) {
+            const delay = (5 - retries) * 600;
             setTimeout(() => {
               uploadSingleChunk(chunkIndex, retries - 1).then(resolve).catch(reject);
-            }, 600);
+            }, delay);
           } else {
-            reject(new Error(`Network interruption on chunk ${chunkIndex + 1}.`));
+            reject(new Error(`Network drop on chunk ${chunkIndex + 1}. Please verify server connection.`));
           }
         };
 
