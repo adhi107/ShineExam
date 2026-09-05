@@ -284,11 +284,12 @@
   }
 
   .palette-status-legend {
-    padding: 10px 16px;
-    background: #ffffff;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px 12px;
+    gap: 10px 14px;
   }
 
   .legend-row {
@@ -296,49 +297,90 @@
   }
 
   .legend-item {
-    font-size: 0.8rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #334155;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .legend-badge {
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    font-size: 0.75rem;
   }
 
   .questions-palette-title-bar {
-    padding: 8px 16px;
-    font-size: 0.9rem;
+    padding: 10px 16px;
+    font-size: 0.92rem;
+    font-weight: 800;
+    background: #0f172a;
+    color: #ffffff;
   }
 
   .questions-grid-container {
-    padding: 12px 16px 24px 16px;
+    padding: 14px 16px 28px 16px;
     grid-template-columns: repeat(5, 1fr);
     gap: 10px;
+    background: #ffffff;
   }
 
   .tcs-q-btn {
     height: 44px;
     font-size: 1rem;
-    font-weight: 700;
-    border-radius: 8px;
+    font-weight: 800;
+    border-radius: 10px;
+    border: 1.5px solid #cbd5e1;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
+    transition: transform 0.1s ease;
   }
 
   .tcs-q-btn:active {
     transform: scale(0.92);
   }
 
+  .tcs-q-btn.answered {
+    background: #16a34a;
+    border-color: #15803d;
+    color: #ffffff;
+  }
+
+  .tcs-q-btn.unanswered {
+    background: #dc2626;
+    border-color: #b91c1c;
+    color: #ffffff;
+  }
+
+  .tcs-q-btn.marked {
+    background: #7c3aed;
+    border-color: #6d28d9;
+    color: #ffffff;
+    border-radius: 50%;
+  }
+
+  .tcs-q-btn.current {
+    outline: 3px solid #2563eb;
+    outline-offset: 2px;
+  }
+
   .palette-submit-container {
-    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)) 16px;
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px)) 16px;
     height: auto;
     background: #ffffff;
-    border-top: 1px solid #e2e8f0;
+    border-top: 1.5px solid #e2e8f0;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
   }
 
   .tcs-btn-submit {
-    height: 46px;
+    height: 48px;
     font-size: 1rem;
-    border-radius: 8px;
+    font-weight: 800;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
     margin-bottom: 0;
   }
 }

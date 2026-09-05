@@ -1113,10 +1113,12 @@
 /* ═══════════════════════════════════════════════════════════
    MOBILE SMARTPHONE EXPERIENCE (< 640px)
    ═══════════════════════════════════════════════════════════ */
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .tcs-top-blue-header {
-    height: 46px;
-    padding: 0 10px;
+    height: 48px;
+    padding: 0 12px;
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   }
 
   .exam-title-pill-tag {
@@ -1134,11 +1136,13 @@
 
   .tcs-section-bar {
     height: auto;
-    min-height: 38px;
-    padding: 6px 10px;
+    min-height: 42px;
+    padding: 6px 12px;
     flex-wrap: nowrap;
     gap: 8px;
     align-items: center;
+    background: #f8fafc;
+    border-bottom: 1.5px solid #e2e8f0;
   }
 
   .section-buttons-row {
@@ -1146,6 +1150,7 @@
     flex: 1;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    gap: 6px;
   }
 
   .section-buttons-row::-webkit-scrollbar {
@@ -1153,60 +1158,108 @@
   }
 
   .tcs-section-btn {
-    font-size: 0.75rem !important;
-    padding: 3px 10px !important;
+    font-size: 0.78rem !important;
+    padding: 5px 12px !important;
     white-space: nowrap;
     flex-shrink: 0;
+    border-radius: 20px !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  .tcs-section-btn.active {
+    background: #2563eb !important;
+    border-color: #2563eb !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35) !important;
   }
 
   .tcs-question-meta-bar {
     height: auto;
-    padding: 6px 10px;
-    font-size: 0.76rem;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    background: #ffffff;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  .tcs-question-no-header {
+    height: 38px;
+    padding: 0 12px;
+    background: #f8fafc;
+    border-bottom: 1.5px solid #e2e8f0;
+    font-size: 0.88rem;
+  }
+
+  .q-badge-current {
+    background: #2563eb;
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-weight: 800;
+    font-size: 0.82rem;
+  }
+
+  .marked-review-indicator {
+    background: #fef3c7;
+    color: #b45309;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
   }
 
   .tcs-question-scroll-pane {
-    padding: 12px 12px 20px !important;
+    padding: 14px 12px 24px !important;
   }
 
   .question-text {
-    font-size: 15px !important;
-    line-height: 1.55 !important;
+    font-size: 16px !important;
+    line-height: 1.6 !important;
+    font-weight: 600;
+    color: #0f172a;
   }
 
   /* Native Mobile Sticky Action Footer */
   .tcs-question-action-footer {
     height: auto !important;
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)) !important;
     flex-direction: column !important;
     gap: 8px !important;
     background: #ffffff !important;
     border-top: 1.5px solid #e2e8f0 !important;
-    box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.08) !important;
   }
 
-  .footer-left-buttons,
+  .footer-left-buttons {
+    width: 100% !important;
+    display: flex !important;
+    gap: 8px !important;
+  }
+
   .footer-right-buttons {
     width: 100% !important;
     display: flex !important;
-    gap: 6px !important;
   }
 
   .tcs-btn-white {
     flex: 1 !important;
-    height: 40px !important;
-    font-size: 12px !important;
+    height: 42px !important;
+    font-size: 13px !important;
     font-weight: 700 !important;
-    padding: 0 6px !important;
+    padding: 0 8px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    border-radius: 8px !important;
+    border-radius: 10px !important;
+    border: 1.5px solid #cbd5e1 !important;
+    background: #ffffff !important;
+    color: #334155 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
     touch-action: manipulation;
   }
 
   .tcs-btn-white:active {
     transform: scale(0.96);
+    background: #f1f5f9;
   }
 
   .tcs-btn-white.btn-mark-review.is-marked {
@@ -1217,20 +1270,21 @@
 
   .tcs-btn-blue-save {
     width: 100% !important;
-    height: 44px !important;
-    font-size: 14px !important;
+    height: 48px !important;
+    font-size: 15px !important;
     font-weight: 800 !important;
-    border-radius: 10px !important;
+    border-radius: 12px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35) !important;
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4) !important;
     touch-action: manipulation;
+    letter-spacing: 0.02em;
   }
 
   .tcs-btn-blue-save:active {
-    transform: scale(0.97);
+    transform: scale(0.975);
   }
 
   /* Full-page confirmation summary on mobile */
