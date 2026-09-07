@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import './QuestionPanel.css';
 import { VisualContentRenderer } from './VisualContentRenderer';
 
@@ -130,9 +130,9 @@ const renderFormattedContent = (content: string) => {
       blocks.push(
         <div key={`img-${idx}`} className="candidate-graph-wrap" style={{ margin: '0.75rem 0', textAlign: 'center' }}>
           {extractedImgUrl.startsWith('http') || extractedImgUrl.startsWith('data:image') ? (
-            <img src={extractedImgUrl} alt="Exam diagram" style={{ maxWidth: '100%', maxHeight: '420px', borderRadius: '0.5rem', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
+            <img src={extractedImgUrl} alt="Exam diagram" style={{ maxWidth: '100%', maxHeight: '400px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
           ) : (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1rem', background: '#f8fafc', border: '1.5px dashed #94a3b8', borderRadius: '0.5rem', fontWeight: 600 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1rem', background: '#f8fafc', border: '1.5px dashed #94a3b8', borderRadius: '8px', fontWeight: 600, fontSize: '0.88rem' }}>
               📊 Graph / Diagram: {extractedImgUrl}
             </div>
           )}
@@ -155,7 +155,7 @@ const renderFormattedContent = (content: string) => {
           blocks.push(
             <div key={`txt-${idx}`} className="direction-header-block">
               <div className="q-paragraph-line direction-header-line">{headerTitle}</div>
-              {bodyContent && <div className="q-paragraph-line passage-body-line" style={{ marginTop: '0.4rem', color: '#1e293b' }}>{bodyContent}</div>}
+              {bodyContent && <div className="q-paragraph-line passage-body-line" style={{ marginTop: '0.35rem', color: '#1e293b', fontWeight: 400 }}>{bodyContent}</div>}
             </div>
           );
         } else {
@@ -174,6 +174,21 @@ const renderFormattedContent = (content: string) => {
   return <div className="formatted-content-wrap">{blocks}</div>;
 };
 
+/* ─── Chevron Icon ─── */
+const ChevronIcon: React.FC<{ isOpen: boolean }> = ({ isOpen }) => (
+  <svg
+    className={`mobile-accordion-chevron ${isOpen ? 'open' : ''}`}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
+
 const QuestionPanel: React.FC<QuestionPanelProps> = ({
   question,
   answer,
@@ -190,6 +205,17 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
   });
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  // Mobile accordion: context pane collapsed by default on mobile
+  const [contextOpen, setContextOpen] = useState<boolean>(false);
+
+  // Check if we're on mobile — used to decide initial accordion state
+  useEffect(() => {
+    if (window.innerWidth <= 768) {
+      setContextOpen(false); // Start collapsed on mobile
+    } else {
+      setContextOpen(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (question.type === 'ordering') {
@@ -201,7 +227,7 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
     }
   }, [answer, question.id, question.options, question.type]);
 
-  const handleOptionClick = (option: string) => {
+  const handleOptionClick = useCallback((option: string) => {
     if (isMultipleChoice) {
       const currentAnswers = Array.isArray(answer) ? answer : [];
       if (currentAnswers.includes(option)) {
@@ -211,9 +237,8 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
       }
       return;
     }
-
     onAnswer(option);
-  };
+  }, [isMultipleChoice, answer, onAnswer]);
 
   const handleDragStart = (index: number) => setDragIndex(index);
 
@@ -234,194 +259,162 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
   const fullText = question.question || '';
   const contextText = question.context || '';
   const hasOptions = Array.isArray(question.options) && question.options.length > 0;
+  const hasContext = !!(contextText || question.chartData || question.imageReference || (question.visualReferences && question.visualReferences.length > 0));
 
-  return (
-    <div className="bank-question-panel">
-      {contextText || question.chartData || question.imageReference || (question.visualReferences && question.visualReferences.length > 0) ? (
-        <div className="split-directions-layout">
-          <div className="directions-pane">
-            <strong className="directions-title">Data / Context:</strong>
-            {contextText && renderFormattedContent(contextText)}
-            <VisualContentRenderer
-              visualReferences={question.visualReferences}
-              imageReference={question.imageReference}
-              chartData={question.chartData}
-              tableData={question.tableData}
-              context={contextText}
-              contextType={question.contextType}
-              title={contextText ? contextText.split('\n')[0] : ''}
-              mappingStatus={(question as any).mappingStatus}
-              mappingConfidence={(question as any).mappingConfidence}
-            />
-          </div>
+  /* ─── Options Renderer ─── */
+  const renderOptions = () => {
+    if (!hasOptions || question.type === 'ordering') return null;
 
-          <div className="question-content-pane">
-            <div className="q-prompt-statement">{renderFormattedContent(fullText)}</div>
-
-            {hasOptions && question.type !== 'ordering' && !isMultipleChoice && (
-              <div className="tcs-options-list">
-                {question.options!.map((option, index) => {
-                  const isSelected = answer === option;
-                  const letter = String.fromCharCode(65 + index);
-                  return (
-                    <label key={index} className={`tcs-option-label ${isSelected ? 'selected' : ''}`}>
-                      <span className="option-letter-badge">{letter}</span>
-                      <input
-                        type="radio"
-                        name={`question-${question.id}`}
-                        value={option}
-                        checked={isSelected}
-                        onChange={() => handleOptionClick(option)}
-                        className="tcs-option-radio"
-                      />
-                      <span className="tcs-option-val">{option}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-
-            {hasOptions && question.type !== 'ordering' && isMultipleChoice && (
-              <>
-                <p className="note-text">Note: There are multiple correct answers to this question.</p>
-                <div className="tcs-options-list">
-                  {question.options!.map((option, index) => {
-                    const isSelected = Array.isArray(answer) && answer.includes(option);
-                    const letter = String.fromCharCode(65 + index);
-                    return (
-                      <label key={index} className={`tcs-option-label ${isSelected ? 'selected' : ''}`}>
-                        <span className="option-letter-badge">{letter}</span>
-                        <input
-                          type="checkbox"
-                          name={`question-${question.id}`}
-                          value={option}
-                          checked={isSelected}
-                          onChange={() => handleOptionClick(option)}
-                          className="tcs-option-checkbox"
-                        />
-                        <span className="tcs-option-val">{option}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-
-            {question.type === 'ordering' && (
-              <div className="ordering-list">
-                <p className="note-text">Note: Drag and drop to arrange in order.</p>
-                {orderedItems.map((item: string, index: number) => (
-                  <div
-                    key={item}
-                    className={`ordering-item ${dragIndex === index ? 'dragging' : ''}`}
-                    draggable
-                    onDragStart={() => handleDragStart(index)}
-                    onDragOver={(e) => handleDragOver(e, index)}
-                    onDragEnd={handleDragEnd}
-                  >
-                    <span className="ordering-index">{index + 1}.</span>
-                    <span>{item}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {!hasOptions && question.type === 'text' && (
-              <textarea
-                className="bank-text-area"
-                value={typeof answer === 'string' ? answer : ''}
-                onChange={(e) => onAnswer(e.target.value)}
-                placeholder="Type your answer here..."
-                rows={6}
+    return (
+      <div className="tcs-options-list">
+        {question.options!.map((option, index) => {
+          const isSelected = isMultipleChoice
+            ? Array.isArray(answer) && answer.includes(option)
+            : answer === option;
+          const letter = String.fromCharCode(65 + index);
+          return (
+            <label
+              key={index}
+              className={`tcs-option-label ${isSelected ? 'selected' : ''}`}
+              onClick={() => handleOptionClick(option)}
+            >
+              <span className="option-letter-badge">{letter}</span>
+              <input
+                type={isMultipleChoice ? 'checkbox' : 'radio'}
+                name={`question-${question.id}`}
+                value={option}
+                checked={isSelected}
+                onChange={() => handleOptionClick(option)}
+                className={isMultipleChoice ? 'tcs-option-checkbox' : 'tcs-option-radio'}
+                style={{ display: 'none' }}
               />
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="single-question-layout">
-          <div className="question-content-pane">
-            <div className="q-prompt-statement">{renderFormattedContent(fullText)}</div>
+              <span className="tcs-option-val">{option}</span>
+            </label>
+          );
+        })}
+      </div>
+    );
+  };
 
-            {hasOptions && question.type !== 'ordering' && !isMultipleChoice && (
-              <div className="tcs-options-list">
-                {question.options!.map((option, index) => {
-                  const isSelected = answer === option;
-                  const letter = String.fromCharCode(65 + index);
-                  return (
-                    <label key={index} className={`tcs-option-label ${isSelected ? 'selected' : ''}`}>
-                      <span className="option-letter-badge">{letter}</span>
-                      <input
-                        type="radio"
-                        name={`question-${question.id}`}
-                        value={option}
-                        checked={isSelected}
-                        onChange={() => handleOptionClick(option)}
-                        className="tcs-option-radio"
-                      />
-                      <span className="tcs-option-val">{option}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
+  /* ─── Question Content Section ─── */
+  const renderQuestionContent = () => (
+    <>
+      {isMultipleChoice && hasOptions && question.type !== 'ordering' && (
+        <p className="note-text">ⓘ Multiple correct answers</p>
+      )}
 
-            {hasOptions && question.type !== 'ordering' && isMultipleChoice && (
-              <>
-                <p className="note-text">Note: There are multiple correct answers to this question.</p>
-                <div className="tcs-options-list">
-                  {question.options!.map((option, index) => {
-                    const isSelected = Array.isArray(answer) && answer.includes(option);
-                    const letter = String.fromCharCode(65 + index);
-                    return (
-                      <label key={index} className={`tcs-option-label ${isSelected ? 'selected' : ''}`}>
-                        <span className="option-letter-badge">{letter}</span>
-                        <input
-                          type="checkbox"
-                          name={`question-${question.id}`}
-                          value={option}
-                          checked={isSelected}
-                          onChange={() => handleOptionClick(option)}
-                          className="tcs-option-checkbox"
-                        />
-                        <span className="tcs-option-val">{option}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </>
-            )}
+      <div className="q-prompt-statement">{renderFormattedContent(fullText)}</div>
 
-            {question.type === 'ordering' && (
-              <div className="ordering-list">
-                <p className="note-text">Note: Drag and drop to arrange in order.</p>
-                {orderedItems.map((item: string, index: number) => (
-                  <div
-                    key={item}
-                    className={`ordering-item ${dragIndex === index ? 'dragging' : ''}`}
-                    draggable
-                    onDragStart={() => handleDragStart(index)}
-                    onDragOver={(e) => handleDragOver(e, index)}
-                    onDragEnd={handleDragEnd}
-                  >
-                    <span className="ordering-index">{index + 1}.</span>
-                    <span>{item}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+      {renderOptions()}
 
-            {!hasOptions && question.type === 'text' && (
-              <textarea
-                className="bank-text-area"
-                value={typeof answer === 'string' ? answer : ''}
-                onChange={(e) => onAnswer(e.target.value)}
-                placeholder="Type your answer here..."
-                rows={6}
-              />
-            )}
-          </div>
+      {question.type === 'ordering' && (
+        <div className="ordering-list">
+          <p className="note-text">↕ Drag to arrange in order</p>
+          {orderedItems.map((item: string, index: number) => (
+            <div
+              key={item}
+              className={`ordering-item ${dragIndex === index ? 'dragging' : ''}`}
+              draggable
+              onDragStart={() => handleDragStart(index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragEnd={handleDragEnd}
+            >
+              <span className="ordering-index">{index + 1}</span>
+              <span style={{ flex: 1, fontSize: '0.94rem', lineHeight: 1.4 }}>{item}</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+                <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+              </svg>
+            </div>
+          ))}
         </div>
       )}
+
+      {!hasOptions && question.type === 'text' && (
+        <textarea
+          className="bank-text-area"
+          value={typeof answer === 'string' ? answer : ''}
+          onChange={(e) => onAnswer(e.target.value)}
+          placeholder="Type your answer here..."
+          rows={6}
+        />
+      )}
+    </>
+  );
+
+  /* ─── Context / Directions Pane Content ─── */
+  const renderContextContent = () => (
+    <>
+      {contextText && renderFormattedContent(contextText)}
+      <VisualContentRenderer
+        visualReferences={question.visualReferences}
+        imageReference={question.imageReference}
+        chartData={question.chartData}
+        tableData={question.tableData}
+        context={contextText}
+        contextType={question.contextType}
+        title={contextText ? contextText.split('\n')[0] : ''}
+        mappingStatus={(question as any).mappingStatus}
+        mappingConfidence={(question as any).mappingConfidence}
+      />
+    </>
+  );
+
+  if (!hasContext) {
+    /* ─── Simple layout: no context ─── */
+    return (
+      <div className="bank-question-panel">
+        <div className="single-question-layout">
+          {renderQuestionContent()}
+        </div>
+      </div>
+    );
+  }
+
+  /* ─── Split layout: context + question ─── */
+  return (
+    <div className="bank-question-panel">
+      <div className="split-directions-layout">
+        {/* Desktop: left directions pane */}
+        <div className="directions-pane">
+          <strong className="directions-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            Data / Context
+          </strong>
+          {renderContextContent()}
+        </div>
+
+        {/* Mobile: accordion above question */}
+        <div className="mobile-context-accordion">
+          <button
+            type="button"
+            className="mobile-accordion-trigger"
+            onClick={() => setContextOpen((p) => !p)}
+            aria-expanded={contextOpen}
+          >
+            <span className="mobile-accordion-trigger-label">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              {contextOpen ? 'Hide' : 'Show'} Context / Data
+            </span>
+            <ChevronIcon isOpen={contextOpen} />
+          </button>
+          <div
+            className={`mobile-accordion-body ${contextOpen ? 'open' : ''}`}
+            style={contextOpen ? { maxHeight: '45vh' } : { maxHeight: 0 }}
+          >
+            {renderContextContent()}
+          </div>
+        </div>
+
+        {/* Question content pane */}
+        <div className="question-content-pane">
+          {renderQuestionContent()}
+        </div>
+      </div>
     </div>
   );
 };

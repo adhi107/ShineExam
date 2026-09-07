@@ -230,7 +230,25 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
           >
             <span /><span /><span />
           </button>
-          <span className="admin-mobile-title">Admin Console</span>
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
+            <span className="admin-mobile-title">
+              {/* Show current section name on mobile */}
+              {currentView === 'dashboard' ? 'Admin Console'
+                : currentView === 'users' ? '👥 Students'
+                : currentView === 'tests' ? '📄 Tests'
+                : currentView === 'create-test' ? '✏️ Create Test'
+                : currentView === 'edit-test' ? '✏️ Edit Test'
+                : currentView === 'results' ? '📊 Analytics'
+                : currentView === 'violations' ? '🔒 Violations'
+                : currentView === 'audit-logs' ? '📋 Audit Logs'
+                : currentView === 'security-controls' ? '🛡 Controls'
+                : currentView === 'categories' ? '🗂 Categories'
+                : currentView === 'documents' ? '📁 Documents'
+                : currentView === 'announcements' ? '📢 Announcements'
+                : currentView === 'videos' ? '🎬 Videos'
+                : 'Admin Console'}
+            </span>
+          </div>
         </div>
         <div className="admin-mobile-topbar-right">
           <button
@@ -239,7 +257,7 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
             onClick={() => setShowPassword(true)}
             title="Change password"
           >
-            Password
+            🔑
           </button>
           <button className="admin-mobile-signout-btn" onClick={onLogout}>Sign out</button>
         </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import QuestionPanel from "./QuestionPanel";
 import QuestionNavigator from "./QuestionNavigator";
 import TestDetails from "./TestDetails";
@@ -71,18 +71,52 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
   sectionConfig = [],
   onExit,
 }) => {
+  // ── Unique storage key per exam + user ──────────────────────────────────
+  const STORAGE_KEY = `shine_exam_progress_${examId}_${userId}`;
+
   const getInitialAnswer = (question: Question): string | string[] => {
     if (question.type === "ordering") return [];
     const isMultipleChoice = Array.isArray(question.correctAnswer);
     return isMultipleChoice ? [] : "";
   };
 
-  const [testStep, setTestStep] = useState<"details" | "instructions" | "exam" | "confirm" | "submitted">("details");
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [visited, setVisited] = useState<Set<number>>(() => new Set([0]));
+  // ── Try to restore saved progress from sessionStorage ──────────────────
+  const getSavedProgress = () => {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const saved = JSON.parse(raw);
+      // Only restore if the exam hasn't already been submitted
+      if (saved?.testStep === 'submitted') return null;
+      return saved;
+    } catch {
+      return null;
+    }
+  };
+
+  const saved = getSavedProgress();
+
+  const [testStep, setTestStepRaw] = useState<"details" | "instructions" | "exam" | "confirm" | "submitted">(
+    saved?.testStep === 'exam' ? 'exam' : 'details'
+  );
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(
+    saved?.currentQuestionIndex ?? 0
+  );
+  const [visited, setVisited] = useState<Set<number>>(() =>
+    saved?.visited ? new Set(saved.visited as number[]) : new Set([0])
+  );
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mobilePaletteOpen, setMobilePaletteOpen] = useState(false);
   const [fontSize, setFontSize] = useState<"normal" | "large">("normal");
+
+  // Wrap setTestStep to also clear storage on submission
+  const setTestStep = useCallback((step: "details" | "instructions" | "exam" | "confirm" | "submitted") => {
+    if (step === 'submitted') {
+      try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
+    }
+    setTestStepRaw(step);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [STORAGE_KEY]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -100,18 +134,51 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
     return () => document.removeEventListener("fullscreenchange", handleFsChange);
   }, []);
 
-  const [answers, setAnswers] = useState<Answer[]>(
-    questions.map((q) => ({
+  const [answers, setAnswers] = useState<Answer[]>(() => {
+    if (saved?.answers && Array.isArray(saved.answers) && saved.answers.length === questions.length) {
+      return saved.answers as Answer[];
+    }
+    return questions.map((q) => ({
       questionId: q.id,
       answer: getInitialAnswer(q),
       marked: false,
-    }))
-  );
+    }));
+  });
 
-  const [timeLeft, setTimeLeft] = useState(duration * 60);
-  const [currentSection, setCurrentSection] = useState<string>(questions[0]?.section || "");
+  const [timeLeft, setTimeLeft] = useState<number>(
+    saved?.timeLeft != null && saved.timeLeft > 0 ? saved.timeLeft : duration * 60
+  );
+  const [currentSection, setCurrentSection] = useState<string>(
+    saved?.currentSection || questions[0]?.section || ""
+  );
   const sections = Array.from(new Set(questions.map((q) => q.section)));
   const isSectional = timerMode === "sectional" && sectionConfig.length > 0;
+
+  // ── Persist progress to sessionStorage on every change ─────────────────
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (testStep !== 'exam') return; // Only persist during active exam
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(() => {
+      try {
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+          testStep,
+          currentQuestionIndex,
+          currentSection,
+          currentSectionIndex: 0, // will be updated below
+          timeLeft,
+          answers,
+          visited: Array.from(visited),
+        }));
+      } catch {
+        // sessionStorage full or unavailable
+      }
+    }, 400);
+    return () => {
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answers, currentQuestionIndex, currentSection, timeLeft, visited, testStep]);
 
   const derivedSectionConfig = React.useMemo(() => {
     if (sectionConfig && sectionConfig.length > 0) {
@@ -303,6 +370,12 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
     { total: 0, answered: 0, notAnswered: 0, marked: 0, ansAndMarked: 0, notVisited: 0 }
   );
 
+  // Dynamic resume message with question + time context
+  const resumeMsg = testStep === "exam"
+    ? `⏸ Your exam is paused. You were on Question ${currentQuestionIndex + 1} of ${questions.length}. ` +
+      `Time remaining: ${Math.floor(timeLeft / 60)}m ${timeLeft % 60}s. Tap Resume to continue.`
+    : undefined;
+
   return (
     <SensitiveContent
       userId={userId}
@@ -311,8 +384,8 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
       shieldOnScreenShare={testStep === "exam" && !submitting}
       hideOnWindowBlur={false}
       showWatermark={testStep === "exam"}
-      exemptOnSubmit={submitting || testStep === "confirm" || testStep === "submitted"}
-      shieldMessage="Exam content is hidden while tab is inactive. Return to this tab to continue your exam."
+      exemptOnSubmit={submitting || testStep === "confirm" || testStep === "submitted" || testStep === "details" || testStep === "instructions"}
+      shieldMessage={resumeMsg}
       className="test-interface-root"
     >
 

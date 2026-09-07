@@ -193,6 +193,10 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
     blockContextMenu: isModuleProtected && !exemptOnSubmit,
     blockDrag: isModuleProtected && !exemptOnSubmit,
     flashOnPrintScreen: isModuleProtected && !exemptOnSubmit,
+    // Enable blur detection only when the module is actively protected
+    enableBlurDetection: isModuleProtected && !exemptOnSubmit,
+    // Block MediaRecorder-based screen recording
+    blockMediaRecorder: isModuleProtected && !exemptOnSubmit,
     onPrintScreenAttempt: () => {
       if (!exemptOnSubmit && isModuleProtected) {
         triggerViolation('screenshot');
@@ -347,34 +351,51 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
         <div
           className="shine-screen-shield shine-temporary-pause-backdrop"
           role="alert"
-          onClick={() => setUserDismissedShield(true)}
         >
           <div className="shine-screen-shield__inner shine-temporary-shield-card">
+            {/* Shield icon with pulse */}
             <div className="shine-temporary-shield-icon" aria-hidden="true">
-              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
               </svg>
             </div>
-            
-            <h3 className="shine-temporary-title">
-              Content Paused
-            </h3>
 
-            <p className="shine-temporary-msg">
-              {shieldMessage || "Content is protected while this window or tab is inactive. Click below or return to this window to resume."}
-            </p>
+            <h3 className="shine-temporary-title">Exam Paused</h3>
 
+            {/* Resume context info extracted from shieldMessage */}
+            {shieldMessage ? (
+              <div className="shine-resume-info-box">
+                <p className="shine-resume-info-text">{shieldMessage}</p>
+              </div>
+            ) : (
+              <p className="shine-temporary-msg">
+                Your exam is protected. Return to this tab to resume where you left off.
+              </p>
+            )}
+
+            {/* Live pulse indicator */}
+            <div className="shine-resume-pulse-row" aria-hidden="true">
+              <span className="shine-pulse-dot" />
+              <span style={{ fontSize: '0.78rem', color: '#7dd3fc', fontWeight: 600 }}>
+                Timer paused — your answers are saved
+              </span>
+            </div>
+
+            {/* Resume CTA */}
             <button
               type="button"
-              className="shine-shield-unlock-btn"
-              style={{ marginTop: '14px', width: 'auto', padding: '10px 24px', cursor: 'pointer' }}
+              className="shine-shield-unlock-btn shine-resume-btn"
               onClick={(e) => {
                 e.stopPropagation();
                 setUserDismissedShield(true);
               }}
             >
-              Resume Exam
+              ▶ Resume Exam
             </button>
+
+            <p className="shine-resume-hint">
+              Tap anywhere or press Resume to continue
+            </p>
           </div>
         </div>
       )}

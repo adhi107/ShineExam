@@ -27,7 +27,10 @@ interface UseScreenProtectionOptions {
   blockDrag?: boolean;
   flashOnPrintScreen?: boolean;
   screenshotLockDurationSec?: number;
+  /** Enable window blur / focus-loss detection (default: true) */
   enableBlurDetection?: boolean;
+  /** Block MediaRecorder API (screen recording via browser APIs) */
+  blockMediaRecorder?: boolean;
   onScreenShareStart?: () => void;
   onScreenShareStop?: () => void;
   onPageHide?: () => void;
@@ -83,7 +86,8 @@ export function useScreenProtection(
     blockDrag = true,
     flashOnPrintScreen = true,
     screenshotLockDurationSec = 300,
-    enableBlurDetection = false,
+    enableBlurDetection = true,   // ← Default ON for protected modules
+    blockMediaRecorder = true,
     onScreenShareStart,
     onScreenShareStop,
     onPageHide,
@@ -214,13 +218,9 @@ export function useScreenProtection(
   }, [enableBlurDetection, handlePrintScreenDetected]);
 
   // ── Print event protection ──────────────────────────────────────────────
-  useEffect(() => {
-    const beforePrint = () => {
-      handlePrintScreenDetected();
-    };
-    window.addEventListener('beforeprint', beforePrint);
-    return () => window.removeEventListener('beforeprint', beforePrint);
-  }, [handlePrintScreenDetected]);
+  // NOTE: beforeprint is skipped intentionally — some browsers fire it during
+  // form submission network transitions which creates false positives.
+  // Ctrl+P is already caught in the keyboard handler above.
 
   // ── Copy / drag / context-menu listeners ─────────────────────────────────
   useEffect(() => {
@@ -299,12 +299,8 @@ export function useScreenProtection(
         handlePrintScreenDetected();
         return;
       }
-      // 6. Ctrl+S (Save Page)
-      if ((e.ctrlKey || e.metaKey) && (key.toLowerCase() === 's' || code === 'KeyS')) {
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
+      // 6. Ctrl+S (Save Page) — intentionally NOT blocked; browser save won't capture exam content
+      // NOTE: We only block screenshot-specific combos above
       // 7. Ctrl+U (View Source)
       if ((e.ctrlKey || e.metaKey) && (key.toLowerCase() === 'u' || code === 'KeyU')) {
         e.preventDefault();
@@ -387,6 +383,45 @@ export function useScreenProtection(
       streamTrackerRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, [onScreenShareStart, onScreenShareStop]);
+
+  // ── MediaRecorder API Interception (screen recording detection) ──────────
+  useEffect(() => {
+    if (!blockMediaRecorder) return;
+    if (typeof window === 'undefined' || !(window as any).MediaRecorder) return;
+
+    const OriginalMediaRecorder = (window as any).MediaRecorder as typeof MediaRecorder;
+
+    class PatchedMediaRecorder extends OriginalMediaRecorder {
+      constructor(stream: MediaStream, options?: MediaRecorderOptions) {
+        // Check if any track comes from a screen capture (display surface)
+        const hasScreenTrack = stream.getVideoTracks().some((t) => {
+          const settings = t.getSettings();
+          return (settings as any).displaySurface !== undefined;
+        });
+        super(stream, options);
+        if (hasScreenTrack) {
+          // Notify that screen recording started
+          setIsScreenSharing(true);
+          onScreenShareStart?.();
+          // Stop recording immediately
+          try { (this as any).stop(); } catch {}
+        }
+      }
+    }
+
+    try {
+      (window as any).MediaRecorder = PatchedMediaRecorder;
+    } catch {
+      // Some browsers don't allow MediaRecorder override — silent fail
+    }
+
+    return () => {
+      try {
+        (window as any).MediaRecorder = OriginalMediaRecorder;
+      } catch {}
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockMediaRecorder, onScreenShareStart]);
 
   // ── Cleanup ───────────────────────────────────────────────────────────────
   useEffect(() => {

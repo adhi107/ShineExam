@@ -10,9 +10,11 @@
  *  - Redraws every 8-15 seconds with a new timestamp and random position offset
  *  - pointer-events: none so it doesn't interfere with candidate interaction
  *  - Supports customizable bold colors, opacity, and custom text stamps
+ *  - Multi-tenant: listens to sessionStorage 'storage' events for live tenant changes
+ *  - Mobile-optimized: smaller tile width (240px) on narrow viewports
  */
 
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useSecurityContext } from './SecurityContext';
 import './security.css';
 
@@ -37,6 +39,45 @@ export interface DynamicWatermarkProps {
   includeSession?: boolean;
   /** Redraw interval in milliseconds; default 8000 (8s) */
   intervalMs?: number;
+}
+
+/** Resolve tenant org name from all available sources */
+function resolveTenantOrgName(ctxOrgName?: string): { orgName: string; color: string } {
+  let orgName = '';
+  let color = '';
+
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      const storedTenant = sessionStorage.getItem('tenant_info');
+      if (storedTenant) {
+        const parsed = JSON.parse(storedTenant);
+        if (parsed.brandTitle || parsed.name) {
+          orgName = parsed.brandTitle || parsed.name;
+        }
+        if (parsed.watermarkColor) {
+          color = parsed.watermarkColor;
+        }
+      }
+      if (!orgName) {
+        orgName =
+          sessionStorage.getItem('tenantBrandTitle') ||
+          sessionStorage.getItem('tenantName') ||
+          sessionStorage.getItem('orgName') ||
+          '';
+      }
+      if (!color) {
+        color = sessionStorage.getItem('tenantWatermarkColor') || '';
+      }
+    } catch {
+      // sessionStorage may be unavailable in some contexts
+    }
+  }
+
+  if (!orgName) {
+    orgName = ctxOrgName || 'Shine Exam';
+  }
+
+  return { orgName, color };
 }
 
 function drawWatermark(
@@ -101,17 +142,21 @@ function drawWatermark(
   ctx.globalAlpha = Math.max(0.04, Math.min(0.95, opacity));
   ctx.fillStyle = color || '#1a1a2e';
   const weight = isBold ? '900' : '700';
-  ctx.font = `${weight} 13.5px "Inter", "Segoe UI", Roboto, sans-serif`;
+
+  // Scale font for short org names so they look prominent, smaller for long names
+  const baseFontSize = orgName.length > 20 ? 12 : orgName.length > 12 ? 13 : 14.5;
+  ctx.font = `${weight} ${baseFontSize}px "Inter", "Segoe UI", Roboto, sans-serif`;
   ctx.textAlign = 'center';
 
-  // Tile the watermark in a diagonal grid across the canvas
-  const tileW = 340;
-  const tileH = Math.max(130, lines.length * 28 + 40);
+  // Tile width: narrower on mobile viewports for proper tiling
+  const isMobile = canvas.width < 600;
+  const tileW = isMobile ? 220 : 340;
+  const tileH = Math.max(120, lines.length * 26 + 36);
   const angleRad = -Math.PI / 6; // -30 degrees
 
   // Random positional jitter (re-applied on each draw cycle)
-  const jitterX = Math.floor(Math.random() * 30) - 15;
-  const jitterY = Math.floor(Math.random() * 30) - 15;
+  const jitterX = Math.floor(Math.random() * 28) - 14;
+  const jitterY = Math.floor(Math.random() * 28) - 14;
 
   for (let y = -tileH; y < canvas.height + tileH * 2; y += tileH) {
     for (let x = -tileW; x < canvas.width + tileW * 2; x += tileW) {
@@ -120,7 +165,7 @@ function drawWatermark(
       ctx.rotate(angleRad);
 
       lines.forEach((line, idx) => {
-        ctx.fillText(line, 0, idx * 19 - ((lines.length - 1) * 19) / 2);
+        ctx.fillText(line, 0, idx * 18 - ((lines.length - 1) * 18) / 2);
       });
 
       ctx.restore();
@@ -132,7 +177,7 @@ const DynamicWatermark: React.FC<DynamicWatermarkProps> = ({
   userId: userIdProp,
   orgName: orgNameProp,
   customText = '',
-  color = '#1a1a2e',
+  color: colorProp,
   isBold = true,
   opacity = 0.18,
   includeCandidate = true,
@@ -143,28 +188,37 @@ const DynamicWatermark: React.FC<DynamicWatermarkProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { userId: ctxUserId, sessionId: ctxSessionId, orgName: ctxOrgName } = useSecurityContext();
 
-  let resolvedOrgName = orgNameProp || '';
-  if (!resolvedOrgName && typeof sessionStorage !== 'undefined') {
-    try {
-      const storedTenant = sessionStorage.getItem('tenant_info');
-      if (storedTenant) {
-        const parsed = JSON.parse(storedTenant);
-        if (parsed.brandTitle || parsed.name) {
-          resolvedOrgName = parsed.brandTitle || parsed.name;
-        }
+  // Tenant org state — refreshed on storage events for multi-tenant accuracy
+  const [tenantInfo, setTenantInfo] = useState(() => resolveTenantOrgName(ctxOrgName));
+
+  // Listen to sessionStorage changes from other parts of the app (e.g., tenant switch)
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (
+        e.key === 'tenant_info' ||
+        e.key === 'tenantName' ||
+        e.key === 'tenantBrandTitle' ||
+        e.key === 'orgName' ||
+        e.key === 'tenantWatermarkColor'
+      ) {
+        setTenantInfo(resolveTenantOrgName(ctxOrgName));
       }
-      if (!resolvedOrgName) {
-        resolvedOrgName = sessionStorage.getItem('tenantName') || sessionStorage.getItem('orgName') || '';
-      }
-    } catch {}
-  }
-  if (!resolvedOrgName) {
-    resolvedOrgName = ctxOrgName || 'Shine Exam';
-  }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [ctxOrgName]);
+
+  // Re-resolve when context org name changes
+  useEffect(() => {
+    setTenantInfo(resolveTenantOrgName(ctxOrgName));
+  }, [ctxOrgName]);
+
+  const resolvedOrgName = orgNameProp || tenantInfo.orgName;
+  // Color priority: explicit prop > tenant_info.watermarkColor > default
+  const resolvedColor = colorProp || tenantInfo.color || '#1a1a2e';
 
   const userId = userIdProp || ctxUserId || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('userId') || '' : '') || 'Candidate';
   const sessionId = ctxSessionId || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('securitySessionId') || '' : '');
-  const orgName = resolvedOrgName;
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -173,16 +227,16 @@ const DynamicWatermark: React.FC<DynamicWatermarkProps> = ({
       canvas,
       userId,
       sessionId,
-      orgName,
+      resolvedOrgName,
       customText,
-      color,
+      resolvedColor,
       opacity,
       isBold,
       includeCandidate,
       includeTimestamp,
       includeSession
     );
-  }, [userId, sessionId, orgName, customText, color, opacity, isBold, includeCandidate, includeTimestamp, includeSession]);
+  }, [userId, sessionId, resolvedOrgName, customText, resolvedColor, opacity, isBold, includeCandidate, includeTimestamp, includeSession]);
 
   // Initial draw and redraw on resize
   useEffect(() => {
@@ -217,4 +271,3 @@ const DynamicWatermark: React.FC<DynamicWatermarkProps> = ({
 };
 
 export default DynamicWatermark;
-
