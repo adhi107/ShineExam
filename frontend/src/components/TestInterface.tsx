@@ -532,6 +532,7 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
               {/* Native Mobile Sticky Action Footer */}
               <footer className="tcs-question-action-footer">
                 <div className="footer-left-buttons">
+                  {/* Prev — only if not first question */}
                   {currentQuestionIndex > 0 && (
                     <button
                       type="button"
@@ -547,7 +548,7 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
                     className={`tcs-btn-white btn-mark-review ${activeAnswer?.marked ? "is-marked" : ""}`}
                     onClick={handleMarkForReview}
                   >
-                    {activeAnswer?.marked ? "✓ Marked" : "🚩 Mark Review"}
+                    {activeAnswer?.marked ? "✓ Marked" : "🚩 Mark"}
                   </button>
                   <button
                     type="button"
@@ -566,14 +567,32 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
                     className="tcs-btn-blue-save"
                     onClick={() => {
                       const nextIdx = currentQuestionIndex + 1;
-                      if (nextIdx < questions.length) {
+                      const isLastQinCurrentSection = isSectional
+                        ? questions[nextIdx]?.section !== currentSection || nextIdx >= questions.length
+                        : nextIdx >= questions.length;
+
+                      if (!isLastQinCurrentSection) {
+                        // Simply move to next question
                         handleSelectQuestion(nextIdx);
+                      } else if (isSectional && !isLastSection) {
+                        // Last question of this section but NOT the final section
+                        // Show section transition — NOT final submit
+                        handleNextSection();
                       } else {
+                        // Last question of final section — go to review & submit
                         setTestStep("confirm");
                       }
                     }}
                   >
-                    {currentQuestionIndex + 1 === questions.length ? "Review & Submit" : "Save & Next →"}
+                    {(() => {
+                      const nextIdx = currentQuestionIndex + 1;
+                      const isLastQinSection = isSectional
+                        ? questions[nextIdx]?.section !== currentSection || nextIdx >= questions.length
+                        : nextIdx >= questions.length;
+                      if (!isLastQinSection) return "Save & Next →";
+                      if (isSectional && !isLastSection) return "Submit Section →";
+                      return "Review & Submit";
+                    })()}
                   </button>
                 </div>
               </footer>
