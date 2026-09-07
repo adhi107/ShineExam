@@ -249,10 +249,14 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
 
   const handleSelectQuestion = (index: number) => {
     const targetQ = questions[index];
-    if (isSectional && targetQ && targetQ.section !== currentSection) {
+    if (!targetQ) return;
+    if (isSectional && targetQ.section !== currentSection) {
       return;
     }
     setCurrentQuestionIndex(index);
+    if (!isSectional && targetQ.section && targetQ.section !== currentSection) {
+      setCurrentSection(targetQ.section);
+    }
     setVisited((prev) => new Set([...Array.from(prev), index]));
   };
 
@@ -511,8 +515,8 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
           </div>
 
           {/* 4. Main Body Split Workspace */}
-          <div className="tcs-main-body-container">
-            <div className="tcs-question-workspace">
+          <div className="tcs-main-body-container" style={{ flex: '1 1 0%', minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+            <div className="tcs-question-workspace" style={{ flex: '1 1 0%', minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <div className="tcs-question-no-header">
                 <div className="q-badge-current">Q{currentQuestionIndex + 1}</div>
                 <span>Question {currentQuestionIndex + 1} of {questions.length}</span>

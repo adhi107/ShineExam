@@ -215,7 +215,7 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
     } else {
       setContextOpen(true);
     }
-  }, []);
+  }, [question.id]);
 
   useEffect(() => {
     if (question.type === 'ordering') {
@@ -261,35 +261,45 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
   const hasOptions = Array.isArray(question.options) && question.options.length > 0;
   const hasContext = !!(contextText || question.chartData || question.imageReference || (question.visualReferences && question.visualReferences.length > 0));
 
+  /* ─── Move ordering item for touch devices ─── */
+  const moveOrderingItem = (fromIdx: number, toIdx: number) => {
+    if (toIdx < 0 || toIdx >= orderedItems.length) return;
+    const updated = [...orderedItems];
+    const [moved] = updated.splice(fromIdx, 1);
+    updated.splice(toIdx, 0, moved);
+    setOrderedItems(updated);
+    onAnswer(updated);
+  };
+
   /* ─── Options Renderer ─── */
   const renderOptions = () => {
     if (!hasOptions || question.type === 'ordering') return null;
 
     return (
-      <div className="tcs-options-list">
+      <div className="tcs-options-list" role={isMultipleChoice ? "group" : "radiogroup"} aria-label="Answer options">
         {question.options!.map((option, index) => {
           const isSelected = isMultipleChoice
             ? Array.isArray(answer) && answer.includes(option)
             : answer === option;
           const letter = String.fromCharCode(65 + index);
           return (
-            <label
+            <div
               key={index}
+              role={isMultipleChoice ? "checkbox" : "radio"}
+              aria-checked={isSelected}
+              tabIndex={0}
               className={`tcs-option-label ${isSelected ? 'selected' : ''}`}
               onClick={() => handleOptionClick(option)}
+              onKeyDown={(e) => {
+                if (e.key === ' ' || e.key === 'Enter') {
+                  e.preventDefault();
+                  handleOptionClick(option);
+                }
+              }}
             >
               <span className="option-letter-badge">{letter}</span>
-              <input
-                type={isMultipleChoice ? 'checkbox' : 'radio'}
-                name={`question-${question.id}`}
-                value={option}
-                checked={isSelected}
-                onChange={() => handleOptionClick(option)}
-                className={isMultipleChoice ? 'tcs-option-checkbox' : 'tcs-option-radio'}
-                style={{ display: 'none' }}
-              />
               <span className="tcs-option-val">{option}</span>
-            </label>
+            </div>
           );
         })}
       </div>
@@ -298,9 +308,9 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
 
   /* ─── Question Content Section ─── */
   const renderQuestionContent = () => (
-    <>
+    <div className="question-inner-flow">
       {isMultipleChoice && hasOptions && question.type !== 'ordering' && (
-        <p className="note-text">ⓘ Multiple correct answers</p>
+        <p className="note-text">ⓘ Select one or more correct options</p>
       )}
 
       <div className="q-prompt-statement">{renderFormattedContent(fullText)}</div>
@@ -309,7 +319,7 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
 
       {question.type === 'ordering' && (
         <div className="ordering-list">
-          <p className="note-text">↕ Drag to arrange in order</p>
+          <p className="note-text">↕ Drag or tap arrows to arrange in correct order</p>
           {orderedItems.map((item: string, index: number) => (
             <div
               key={item}
@@ -320,31 +330,49 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
               onDragEnd={handleDragEnd}
             >
               <span className="ordering-index">{index + 1}</span>
-              <span style={{ flex: 1, fontSize: '0.94rem', lineHeight: 1.4 }}>{item}</span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-                <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-              </svg>
+              <span className="ordering-item-text">{item}</span>
+              <div className="ordering-touch-controls">
+                <button
+                  type="button"
+                  className="btn-order-move"
+                  disabled={index === 0}
+                  onClick={(e) => { e.stopPropagation(); moveOrderingItem(index, index - 1); }}
+                  aria-label="Move item up"
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  className="btn-order-move"
+                  disabled={index === orderedItems.length - 1}
+                  onClick={(e) => { e.stopPropagation(); moveOrderingItem(index, index + 1); }}
+                  aria-label="Move item down"
+                >
+                  ▼
+                </button>
+              </div>
             </div>
           ))}
         </div>
       )}
 
       {!hasOptions && question.type === 'text' && (
-        <textarea
-          className="bank-text-area"
-          value={typeof answer === 'string' ? answer : ''}
-          onChange={(e) => onAnswer(e.target.value)}
-          placeholder="Type your answer here..."
-          rows={6}
-        />
+        <div className="bank-text-wrap">
+          <textarea
+            className="bank-text-area"
+            value={typeof answer === 'string' ? answer : ''}
+            onChange={(e) => onAnswer(e.target.value)}
+            placeholder="Type your descriptive answer here..."
+            rows={5}
+          />
+        </div>
       )}
-    </>
+    </div>
   );
 
   /* ─── Context / Directions Pane Content ─── */
   const renderContextContent = () => (
-    <>
+    <div className="context-content-inner">
       {contextText && renderFormattedContent(contextText)}
       <VisualContentRenderer
         visualReferences={question.visualReferences}
@@ -357,13 +385,49 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
         mappingStatus={(question as any).mappingStatus}
         mappingConfidence={(question as any).mappingConfidence}
       />
-    </>
+    </div>
   );
+
+  // Determine smart accordion label
+  const getAccordionLabel = () => {
+    const isPassage = question.contextType === 'passage' || /passage/i.test(contextText);
+    const isGraph = question.contextType === 'graph' || !!question.chartData;
+    const isTable = question.contextType === 'table' || !!question.tableData;
+
+    if (isPassage) {
+      return {
+        icon: '📖',
+        text: contextOpen ? 'Hide Passage' : 'Read Passage / Directions',
+        tag: 'Passage'
+      };
+    }
+    if (isGraph) {
+      return {
+        icon: '📊',
+        text: contextOpen ? 'Hide Graph / Chart' : 'View Graph & Data',
+        tag: 'Graph'
+      };
+    }
+    if (isTable) {
+      return {
+        icon: '📋',
+        text: contextOpen ? 'Hide Table' : 'View Data Table',
+        tag: 'Table'
+      };
+    }
+    return {
+      icon: 'ℹ️',
+      text: contextOpen ? 'Hide Context' : 'View Context / Directions',
+      tag: 'Context'
+    };
+  };
+
+  const accordionMeta = getAccordionLabel();
 
   if (!hasContext) {
     /* ─── Simple layout: no context ─── */
     return (
-      <div className="bank-question-panel">
+      <div className="bank-question-panel" style={{ flex: '1 1 0%', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className="single-question-layout">
           {renderQuestionContent()}
         </div>
@@ -373,9 +437,9 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
 
   /* ─── Split layout: context + question ─── */
   return (
-    <div className="bank-question-panel">
+    <div className="bank-question-panel" style={{ flex: '1 1 0%', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div className="split-directions-layout">
-        {/* Desktop: left directions pane */}
+        {/* Desktop: left directions pane (HIDDEN ON MOBILE via CSS) */}
         <div className="directions-pane">
           <strong className="directions-title">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -386,7 +450,7 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
           {renderContextContent()}
         </div>
 
-        {/* Mobile: accordion above question */}
+        {/* Mobile: accordion above question (ONLY VISIBLE ON MOBILE via CSS) */}
         <div className="mobile-context-accordion">
           <button
             type="button"
@@ -395,16 +459,15 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
             aria-expanded={contextOpen}
           >
             <span className="mobile-accordion-trigger-label">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
-              {contextOpen ? 'Hide' : 'Show'} Context / Data
+              <span className="accordion-label-icon">{accordionMeta.icon}</span>
+              <span className="accordion-label-title">{accordionMeta.text}</span>
+              <span className="accordion-label-tag">{accordionMeta.tag}</span>
             </span>
             <ChevronIcon isOpen={contextOpen} />
           </button>
           <div
             className={`mobile-accordion-body ${contextOpen ? 'open' : ''}`}
-            style={contextOpen ? { maxHeight: '45vh' } : { maxHeight: 0 }}
+            style={contextOpen ? { maxHeight: '42vh' } : { maxHeight: 0 }}
           >
             {renderContextContent()}
           </div>
