@@ -1,0 +1,29 @@
+{
+  "brandId": "xyz",
+  "appName": "XYZ Institute Exams",
+  "applicationId": "com.xyzinstitute.portal",
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "tenantId": "xyz-institute",
+  "isWhiteLabel": true,
+  "brandTitle": "XYZ Institute Assessment Engine",
+  "tagline": "Empowering Aspirants with Rigorous Mock Tests.",
+  "theme": {
+    "primaryColor": "#7c3aed",
+    "primaryDark": "#6d28d9",
+    "accentColor": "#c084fc",
+    "headerBg": "#1a0f30",
+    "surface": "#ffffff",
+    "background": "#faf5ff",
+    "text": "#3b0764",
+    "textMuted": "#7e22ce"
+  },
+  "features": {
+    "videoClasses": true,
+    "learningDocuments": true,
+    "screenProtection": true,
+    "customWatermark": true,
+    "bilingualQuestions": true,
+    "offlineExamSync": true
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "brandId": "abc",
+  "appName": "ABC Academy Exams",
+  "applicationId": "com.abcacademy.exams",
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "tenantId": "abc-academy",
+  "isWhiteLabel": true,
+  "brandTitle": "ABC Academy Examination Portal",
+  "tagline": "Excellence in Competitive Examinations & Career Prep.",
+  "theme": {
+    "primaryColor": "#059669",
+    "primaryDark": "#047857",
+    "accentColor": "#34d399",
+    "headerBg": "#06281e",
+    "surface": "#ffffff",
+    "background": "#f0fdf4",
+    "text": "#064e3b",
+    "textMuted": "#047857"
+  },
+  "features": {
+    "videoClasses": true,
+    "learningDocuments": true,
+    "screenProtection": true,
+    "customWatermark": true,
+    "bilingualQuestions": true,
+    "offlineExamSync": true
+  }
+}

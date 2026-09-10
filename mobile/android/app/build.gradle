@@ -1,0 +1,80 @@
+apply plugin: "com.android.application"
+apply plugin: "com.facebook.react"
+
+android {
+    ndkVersion rootProject.ext.ndkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk rootProject.ext.compileSdkVersion
+
+    namespace "com.shineexam.app"
+    defaultConfig {
+        applicationId "com.shineexam.portal"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0.0"
+        missingDimensionStrategy "store", "play"
+    }
+
+    signingConfigs {
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+        release {
+            if (project.hasProperty('VICTORY_RELEASE_STORE_FILE')) {
+                storeFile file(VICTORY_RELEASE_STORE_FILE)
+                storePassword VICTORY_RELEASE_STORE_PASSWORD
+                keyAlias VICTORY_RELEASE_KEY_ALIAS
+                keyPassword VICTORY_RELEASE_KEY_PASSWORD
+            } else if (project.hasProperty('SHINE_RELEASE_STORE_FILE')) {
+                storeFile file(SHINE_RELEASE_STORE_FILE)
+                storePassword SHINE_RELEASE_STORE_PASSWORD
+                keyAlias SHINE_RELEASE_KEY_ALIAS
+                keyPassword SHINE_RELEASE_KEY_PASSWORD
+            } else {
+                storeFile file('debug.keystore')
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+            }
+        }
+    }
+
+    flavorDimensions "brand"
+    productFlavors {
+        generic {
+            dimension "brand"
+            applicationId "com.victoryexam.portal"
+            resValue "string", "app_name", "Victory Study Circle"
+        }
+        abc {
+            dimension "brand"
+            applicationId "com.abcacademy.exams"
+            resValue "string", "app_name", "ABC Academy Exams"
+        }
+        xyz {
+            dimension "brand"
+            applicationId "com.xyzinstitute.portal"
+            resValue "string", "app_name", "XYZ Institute Exams"
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+        }
+    }
+}
+
+dependencies {
+    implementation("com.facebook.react:react-android")
+}

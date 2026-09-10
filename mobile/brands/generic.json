@@ -1,0 +1,29 @@
+{
+  "brandId": "generic",
+  "appName": "Victory Study Circle",
+  "applicationId": "com.victoryexam.portal",
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "tenantId": "default",
+  "isWhiteLabel": false,
+  "brandTitle": "Victory Study Circle",
+  "tagline": "Prepare with purpose. Perform with confidence.",
+  "theme": {
+    "primaryColor": "#2563eb",
+    "primaryDark": "#1d4ed8",
+    "accentColor": "#38bdf8",
+    "headerBg": "#090e1a",
+    "surface": "#ffffff",
+    "background": "#f8fafc",
+    "text": "#0f172a",
+    "textMuted": "#64748b"
+  },
+  "features": {
+    "videoClasses": true,
+    "learningDocuments": true,
+    "screenProtection": true,
+    "customWatermark": true,
+    "bilingualQuestions": true,
+    "offlineExamSync": true
+  }
+}

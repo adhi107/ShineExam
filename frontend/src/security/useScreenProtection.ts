@@ -69,7 +69,7 @@ async function tryOverwriteClipboard(): Promise<void> {
   try {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(
-        '[🔒 Screenshot Blocked by Shine Exam Security — Account has been permanently suspended]'
+        '[🔒 Screenshot Blocked by Victory Study Circle Security — Account has been permanently suspended]'
       );
     }
   } catch {

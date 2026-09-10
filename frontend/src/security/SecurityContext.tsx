@@ -23,7 +23,7 @@ export interface SecurityContextValue {
 const SecurityContext = createContext<SecurityContextValue>({
   userId: '',
   sessionId: '',
-  orgName: 'Shine Exam',
+  orgName: 'Victory Study Circle',
   initSession: async () => {},
   clearSession: () => {},
 });
@@ -43,7 +43,7 @@ function generateLocalSessionId(): string {
 export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [userId, setUserId] = useState<string>('');
   const [sessionId, setSessionId] = useState<string>('');
-  const [orgName] = useState<string>('Shine Exam');
+  const [orgName] = useState<string>('Victory Study Circle');
 
   /** Restore session on page refresh. */
   useEffect(() => {
