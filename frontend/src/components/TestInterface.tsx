@@ -109,6 +109,12 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
   const [mobilePaletteOpen, setMobilePaletteOpen] = useState(false);
   const [fontSize, setFontSize] = useState<"normal" | "large">("normal");
 
+  // Attempt Tracking & Cloud Synchronization
+  const [attemptId, setAttemptId] = useState<string>("");
+  const [resumedBanner, setResumedBanner] = useState<string | null>(null);
+  const [pauseModalOpen, setPauseModalOpen] = useState<boolean>(false);
+  const [pausing, setPausing] = useState<boolean>(false);
+
   // Wrap setTestStep to also clear storage on submission
   const setTestStep = useCallback((step: "details" | "instructions" | "exam" | "confirm" | "submitted") => {
     if (step === 'submitted') {
@@ -151,10 +157,71 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
   const [currentSection, setCurrentSection] = useState<string>(
     saved?.currentSection || questions[0]?.section || ""
   );
+  const [questionTimes, setQuestionTimes] = useState<Record<string, number>>(() => {
+    if (saved?.questionTimes && typeof saved.questionTimes === 'object') {
+      return saved.questionTimes;
+    }
+    return {};
+  });
+
   const sections = Array.from(new Set(questions.map((q) => q.section)));
   const isSectional = timerMode === "sectional" && sectionConfig.length > 0;
 
-  // ── Persist progress to sessionStorage on every change ─────────────────
+  // Initialize or resume attempt from server accurately
+  useEffect(() => {
+    let isMounted = true;
+    const initServerAttempt = async () => {
+      try {
+        const res = await apiPost<any>("/answerer/attempts/start", { userId, examId });
+        if (!isMounted) return;
+        if (res?.attemptId) {
+          setAttemptId(res.attemptId);
+        }
+        if (res?.isResume) {
+          // Cloud resume: restore answers, question position, remaining time and question times
+          const serverAnswers = res.answers || [];
+          if (serverAnswers.length > 0) {
+            setAnswers(prev => prev.map(p => {
+              const found = serverAnswers.find((sa: any) => String(sa.questionId) === String(p.questionId));
+              return found ? { ...p, answer: found.answer, marked: !!found.marked } : p;
+            }));
+          }
+          if (res.questionTimes && typeof res.questionTimes === 'object') {
+            setQuestionTimes(res.questionTimes);
+          }
+          const restoredIdx = Math.min(Math.max(0, res.currentQuestionIndex || 0), questions.length - 1);
+          setCurrentQuestionIndex(restoredIdx);
+          if (res.currentSection) {
+            setCurrentSection(res.currentSection);
+          }
+          if (res.timeSpentSec != null) {
+            const remaining = Math.max(15, duration * 60 - res.timeSpentSec);
+            setTimeLeft(remaining);
+          }
+          // Mark visited questions
+          setVisited(prev => {
+            const nextSet = new Set(prev);
+            nextSet.add(restoredIdx);
+            serverAnswers.forEach((sa: any) => {
+              if (sa.answer && (Array.isArray(sa.answer) ? sa.answer.length > 0 : String(sa.answer).trim() !== "")) {
+                const qIdx = questions.findIndex(q => String(q.id) === String(sa.questionId));
+                if (qIdx >= 0) nextSet.add(qIdx);
+              }
+            });
+            return nextSet;
+          });
+          setTestStep("exam");
+          setResumedBanner(`Resumed from Question #${restoredIdx + 1}. All saved answers and countdown restored.`);
+        }
+      } catch (err) {
+        console.warn("Could not synchronize attempt with server:", err);
+      }
+    };
+    initServerAttempt();
+    return () => { isMounted = false; };
+  }, [examId, userId, duration, questions]);
+
+  // ── Persist progress to sessionStorage & cloud on every change ─────────────────
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (testStep !== 'exam') return; // Only persist during active exam
@@ -165,20 +232,33 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
           testStep,
           currentQuestionIndex,
           currentSection,
-          currentSectionIndex: 0, // will be updated below
+          currentSectionIndex: 0,
           timeLeft,
           answers,
           visited: Array.from(visited),
+          questionTimes,
         }));
+
+        // Cloud auto-save
+        apiPost("/answerer/attempts/save", {
+          attemptId: attemptId || "current",
+          examId,
+          userId,
+          answers,
+          timeSpentSec: duration * 60 - timeLeft,
+          currentQuestionIndex,
+          currentSection,
+          questionTimes,
+        }).catch(() => {});
       } catch {
-        // sessionStorage full or unavailable
+        // storage full or unavailable
       }
     }, 400);
     return () => {
       if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [answers, currentQuestionIndex, currentSection, timeLeft, visited, testStep]);
+  }, [answers, currentQuestionIndex, currentSection, timeLeft, visited, testStep, attemptId, questionTimes]);
 
   const derivedSectionConfig = React.useMemo(() => {
     if (sectionConfig && sectionConfig.length > 0) {
@@ -242,10 +322,19 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
         }
         return prev - 1;
       });
+
+      // Track seconds spent on current active question
+      const activeQ = questions[currentQuestionIndex];
+      if (activeQ?.id) {
+        setQuestionTimes((prev) => ({
+          ...prev,
+          [activeQ.id]: (prev[activeQ.id] || 0) + 1,
+        }));
+      }
     }, 1000);
     return () => clearInterval(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [testStep, isSectional, currentSectionIndex]);
+  }, [testStep, isSectional, currentSectionIndex, currentQuestionIndex, questions]);
 
   const handleSelectQuestion = (index: number) => {
     const targetQ = questions[index];
@@ -287,6 +376,7 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
         examId,
         answers,
         timeSpentSec: duration * 60 - timeLeft,
+        questionTimes,
       });
       const resultObj = res?.result || res;
       setResult(resultObj);
@@ -305,6 +395,29 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
       }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleConfirmPause = async () => {
+    setPausing(true);
+    try {
+      await apiPost("/answerer/attempts/pause", {
+        attemptId: attemptId || "current",
+        examId,
+        userId,
+        answers,
+        timeSpentSec: duration * 60 - timeLeft,
+        currentQuestionIndex,
+        currentSection,
+        questionTimes,
+      });
+      setPauseModalOpen(false);
+      if (onExit) onExit();
+    } catch (err) {
+      console.error("Pause exam error:", err);
+      if (onExit) onExit();
+    } finally {
+      setPausing(false);
     }
   };
 
@@ -455,11 +568,22 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
                 </span>
               </div>
 
+              <button type="button" className="btn-pause-exam" onClick={() => setPauseModalOpen(true)} title="Save progress and exit exam">
+                ⏸ Pause & Exit
+              </button>
+
               <button type="button" className="btn-fullscreen-toggle" onClick={toggleFullscreen}>
                 {isFullscreen ? "Exit ⛶" : "Fullscreen ⛶"}
               </button>
             </div>
           </header>
+
+          {resumedBanner && (
+            <div className="exam-resumed-alert-banner">
+              <span>🔄 {resumedBanner}</span>
+              <button type="button" onClick={() => setResumedBanner(null)} title="Dismiss alert">✕</button>
+            </div>
+          )}
 
           {/* 2. Section Navigation Bar */}
           <div className="tcs-section-bar">
@@ -794,6 +918,31 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
             <button type="button" className="btn-return-dashboard" onClick={onExit} style={{ width: "100%", height: "46px", fontSize: "0.95rem", fontWeight: 700 }}>
               Return to Candidate Dashboard
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Pause & Exit Modal Dialog */}
+      {pauseModalOpen && (
+        <div className="exam-pause-modal-backdrop" onClick={() => setPauseModalOpen(false)}>
+          <div className="exam-pause-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="pause-modal-icon">⏸️</div>
+            <h3>Pause & Exit Exam</h3>
+            <p>
+              Your progress up to <strong>Question #{currentQuestionIndex + 1}</strong> with{" "}
+              <strong>{answers.filter(a => Array.isArray(a.answer) ? a.answer.length > 0 : Boolean(a.answer)).length}</strong> answered question(s) will be safely saved.
+            </p>
+            <p className="pause-note">
+              You can resume this assessment anytime from your Candidate Dashboard from where you stopped.
+            </p>
+            <div className="pause-modal-actions">
+              <button type="button" className="btn-cancel-pause" onClick={() => setPauseModalOpen(false)}>
+                Continue Exam
+              </button>
+              <button type="button" className="btn-confirm-pause" disabled={pausing} onClick={handleConfirmPause}>
+                {pausing ? "Saving Progress…" : "Save & Exit Now"}
+              </button>
+            </div>
           </div>
         </div>
       )}

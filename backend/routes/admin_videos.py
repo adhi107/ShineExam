@@ -467,6 +467,21 @@ def update_video(video_id: str):
             if k in data:
                 update_fields[k] = data[k]
 
+        if "batches" in data and isinstance(data["batches"], list):
+            tenant_id = get_request_tenant_id()
+            filter_q = build_tenant_filter(tenant_id)
+            clean_batches = [str(b).strip() for b in data["batches"] if str(b).strip()]
+            if clean_batches:
+                batch_users = list(db.users.find(
+                    {**filter_q, "role": "answerer", "batch": {"$in": clean_batches}},
+                    {"userId": 1}
+                ))
+                existing_uids = set(update_fields.get("assignedTo") if isinstance(update_fields.get("assignedTo"), list) else (data.get("assignedTo") if isinstance(data.get("assignedTo"), list) else []))
+                for bu in batch_users:
+                    if bu.get("userId"):
+                        existing_uids.add(str(bu["userId"]).strip())
+                update_fields["assignedTo"] = list(existing_uids)
+
         if "videoUrl" in data and data.get("sourceType") == "link":
             parsed = normalize_video_url(data["videoUrl"])
             update_fields["originalUrl"] = parsed["originalUrl"]

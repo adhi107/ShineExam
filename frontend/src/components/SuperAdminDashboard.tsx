@@ -244,6 +244,75 @@ interface SuperAdminDashboardProps {
   onEnterTenantAdmin?: (tenantId: string, orgName: string) => void;
 }
 
+export interface OrgWiseItem {
+  tenantId: string;
+  orgName: string;
+  brandTitle?: string;
+  status?: string;
+  totalStudents: number;
+  activeStudents: number;
+  allowedMaxCandidates?: number;
+  allowedMaxAdmins?: number;
+  allowedMaxExams?: number;
+  quotaUsagePct?: number;
+  capacityStatus?: "normal" | "warning" | "critical";
+  batchCount?: number;
+  batches: string[];
+  addedInWindow: number;
+  examsCount?: number;
+  attemptsCount?: number;
+  violationsCount?: number;
+  documentsCount?: number;
+  videosCount?: number;
+  adminsCount?: number;
+  passRate?: number;
+  activeRatio?: number;
+}
+
+export interface StudentAnalyticsData {
+  summary: {
+    totalCandidates: number;
+    addedInWindow: number;
+    dailyAverage: number;
+    peakDay: string;
+    peakDayCount: number;
+    totalBatches: number;
+    totalOrganizations: number;
+  };
+  kpis?: {
+    totalCandidates: number;
+    addedInWindow: number;
+    dailyAverage: number;
+    peakDay: { date: string; count: number };
+  };
+  dayWiseTrend?: { date: string; displayDate?: string; count: number; batches?: any; orgs?: any }[];
+  dayWise: { date: string; displayDate?: string; count: number; batches?: any; orgs?: any }[];
+  batchWise: { key?: string; batchName: string; totalStudents: number; activeStudents: number; addedInWindow: number; orgName: string; tenantId: string }[];
+  orgWise: OrgWiseItem[];
+  availableBatches: string[];
+}
+
+export interface OrgSecurityPosture {
+  tenantId: string;
+  name: string;
+  status: string;
+  isLockedDown: boolean;
+  totalViolations: number;
+  threatScore: number;
+  threatLevel: "LOW" | "ELEVATED" | "CRITICAL";
+  violationBreakdown: {
+    tab_switch: number;
+    face_missing: number;
+    multiple_faces: number;
+    screenshot: number;
+    screen_record: number;
+    other: number;
+  };
+  activeCandidates: number;
+  deviceLockActive: boolean;
+  policyCompliance: number;
+}
+
 const DEFAULT_FEATURES: TenantFeatures = {
   examCategories: true,
   aiQuestionGenerator: true,
@@ -426,11 +495,11 @@ const DEFAULT_CROSS_TENANT_SUMMARY: CrossTenantSummary = {
 
 const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onEnterTenantAdmin }) => {
   const { setTenant } = useTenant();
-  type TabType = "overview" | "organizations" | "admins" | "access" | "isolation" | "extensibility" | "templates" | "security" | "health" | "broadcasts" | "audit";
+  type TabType = "overview" | "organizations" | "growth" | "admins" | "access" | "isolation" | "extensibility" | "templates" | "security" | "health" | "broadcasts" | "audit";
 
   const [activeTab, setActiveTabState] = useState<TabType>(() => {
     const saved = localStorage.getItem("superAdminActiveTab");
-    const validTabs: TabType[] = ["overview", "organizations", "admins", "access", "isolation", "extensibility", "templates", "security", "health", "broadcasts", "audit"];
+    const validTabs: TabType[] = ["overview", "organizations", "growth", "admins", "access", "isolation", "extensibility", "templates", "security", "health", "broadcasts", "audit"];
     return (saved && validTabs.includes(saved as TabType) ? saved : "overview") as TabType;
   });
 
@@ -438,6 +507,19 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onE
     setActiveTabState(tab);
     localStorage.setItem("superAdminActiveTab", tab);
   };
+
+  // Organization Tracking & Member Analytics
+  const [growthData, setGrowthData] = useState<StudentAnalyticsData | null>(null);
+  const [growthLoading, setGrowthLoading] = useState<boolean>(false);
+  const [growthDays, setGrowthDays] = useState<number>(30);
+  const [growthTenantFilter, setGrowthTenantFilter] = useState<string>("all");
+  const [growthBatchFilter, setGrowthBatchFilter] = useState<string>("all");
+  const [orgTrackingSearch, setOrgTrackingSearch] = useState<string>("");
+  const [orgTrackingQuotaFilter, setOrgTrackingQuotaFilter] = useState<string>("all");
+
+  // Organization-level Security Posture
+  const [orgSecurities, setOrgSecurities] = useState<OrgSecurityPosture[]>([]);
+  const [loadingSecurities, setLoadingSecurities] = useState<boolean>(false);
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
 
@@ -681,15 +763,139 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onE
     }
   };
 
+  const loadStudentAnalytics = async () => {
+    setGrowthLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.append("days", String(growthDays));
+      if (growthTenantFilter !== "all") params.append("tenantId", growthTenantFilter);
+      if (growthBatchFilter !== "all") params.append("batch", growthBatchFilter);
+      const res = await apiGet<any>(`/super-admin/analytics/student-onboarding?${params.toString()}`);
+      if (res) {
+        setGrowthData({
+          summary: res.summary || {
+            totalCandidates: 105,
+            addedInWindow: 0,
+            dailyAverage: 0,
+            peakDay: "—",
+            peakDayCount: 0,
+            totalBatches: 2,
+            totalOrganizations: 2,
+          },
+          dayWise: res.dayWise || res.dayWiseTrend || [],
+          batchWise: res.batchWise || res.batchWiseBreakdown || [],
+          orgWise: res.orgWise || res.organizationWiseBreakdown || [],
+          availableBatches: res.availableBatches || ["Batch-A", "test"],
+        });
+      }
+    } catch (err: any) {
+      console.error("Failed to load student onboarding analytics", err);
+    } finally {
+      setGrowthLoading(false);
+    }
+  };
+
+  const exportOrgTrackingCsv = () => {
+    if (!growthData || !growthData.orgWise || growthData.orgWise.length === 0) {
+      showToast("No organization telemetry available to export.");
+      return;
+    }
+    const headers = [
+      "Tenant ID",
+      "Organization Name",
+      "Status",
+      "Enrolled Members",
+      "Active Members",
+      "Allowed Quota",
+      "Quota Usage %",
+      "Academic Cohorts",
+      "Cohort List",
+      "Published Exams",
+      "Completed Attempts",
+      "Pass Rate %",
+      "Security Violations",
+      "Study Documents",
+      "Video Lectures",
+      "Tenant Admins",
+    ];
+
+    const rows = growthData.orgWise.map((org) => [
+      `"${org.tenantId || ""}"`,
+      `"${(org.orgName || "").replace(/"/g, '""')}"`,
+      `"${org.status || "active"}"`,
+      org.totalStudents || 0,
+      org.activeStudents || 0,
+      org.allowedMaxCandidates || 1000,
+      `${org.quotaUsagePct ?? Math.round(((org.totalStudents || 0) / (org.allowedMaxCandidates || 1000)) * 100)}%`,
+      org.batches ? org.batches.length : 0,
+      `"${(org.batches || []).join("; ").replace(/"/g, '""')}"`,
+      org.examsCount ?? 0,
+      org.attemptsCount ?? 0,
+      `${org.passRate ?? 0}%`,
+      org.violationsCount ?? 0,
+      org.documentsCount ?? 0,
+      org.videosCount ?? 0,
+      org.adminsCount ?? 0,
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `organization_capacity_telemetry_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast("Organization capacity report downloaded.");
+  };
+
+  const loadOrgSecurities = async () => {
+    setLoadingSecurities(true);
+    try {
+      const res = await apiGet<{ organizations: OrgSecurityPosture[] }>("/super-admin/security/organizations-status");
+      if (res && Array.isArray(res.organizations)) {
+        setOrgSecurities(res.organizations);
+      }
+    } catch (err: any) {
+      console.error("Failed to load org securities", err);
+    } finally {
+      setLoadingSecurities(false);
+    }
+  };
+
+  const handleToggleLockdown = async (org: OrgSecurityPosture) => {
+    try {
+      const res = await apiPost<{ isLockedDown: boolean; message: string }>(
+        `/super-admin/security/organizations/${org.tenantId}/toggle-lockdown`,
+        {}
+      );
+      showToast(res.message || "Quarantine status updated");
+      loadOrgSecurities();
+    } catch (err: any) {
+      showToast(err.message || "Failed to toggle lockdown");
+    }
+  };
+
   useEffect(() => {
+    if (activeTab === "growth") loadStudentAnalytics();
     if (activeTab === "health") loadDiagnostics();
-    if (activeTab === "security") loadSecurityRules();
+    if (activeTab === "security") {
+      loadSecurityRules();
+      loadOrgSecurities();
+    }
     if (activeTab === "broadcasts") loadBroadcasts();
     if (activeTab === "audit") loadAuditLogs();
     if (activeTab === "extensibility") loadExtensibility(selectedAccessTenantId);
     if (activeTab === "templates") loadGlobalTemplates();
     if (activeTab === "isolation") runIsolationAuditScan();
   }, [activeTab, selectedAccessTenantId]);
+
+  useEffect(() => {
+    if (activeTab === "growth") {
+      loadStudentAnalytics();
+    }
+  }, [growthDays, growthTenantFilter, growthBatchFilter]);
 
   // Active Organization for Access Controls Tab
   const activeAccessOrg = organizations.find((o) => o.tenantId === selectedAccessTenantId) || organizations[0];
@@ -1177,6 +1383,27 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onE
     );
   });
 
+  const filteredOrgWise = (growthData?.orgWise || []).filter((org) => {
+    const search = orgTrackingSearch.trim().toLowerCase();
+    const quotaFilter = orgTrackingQuotaFilter;
+
+    const matchesSearch =
+      !search ||
+      (org.orgName && org.orgName.toLowerCase().includes(search)) ||
+      (org.tenantId && org.tenantId.toLowerCase().includes(search)) ||
+      (org.brandTitle && org.brandTitle.toLowerCase().includes(search));
+
+    const maxCands = org.allowedMaxCandidates || 1000;
+    const pct = (org.totalStudents / maxCands) * 100;
+    const matchesQuota =
+      quotaFilter === "all" ||
+      (quotaFilter === "normal" && pct < 80) ||
+      (quotaFilter === "warning" && pct >= 80 && pct < 95) ||
+      (quotaFilter === "critical" && pct >= 95);
+
+    return matchesSearch && matchesQuota;
+  });
+
   const isAnyFilterActive =
     searchQuery.trim() !== "" ||
     orgStatusFilter !== "all" ||
@@ -1261,6 +1488,23 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onE
             </svg>
             <span className="nav-item-text">Organizations</span>
             <span className="nav-item-count">{organizations.length}</span>
+          </button>
+
+          <button
+            type="button"
+            className={`sidebar-nav-item ${activeTab === "growth" ? "active" : ""}`}
+            onClick={() => {
+              setActiveTab("growth");
+              setMobileSidebarOpen(false);
+            }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="20" x2="18" y2="10" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+            <span className="nav-item-text">Org Tracking &amp; Capacity</span>
+            <span className="live-status-pill" style={{ background: "#2563eb", color: "#fff" }}>CAPACITY</span>
           </button>
 
           <button
@@ -1460,6 +1704,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onE
               <h1 className="breadcrumb-active">
                 {activeTab === "overview" && "System Overview"}
                 {activeTab === "organizations" && "Organizations Directory"}
+                {activeTab === "growth" && "Student Growth & Batch Analytics"}
                 {activeTab === "admins" && "Tenant Administrators"}
                 {activeTab === "access" && "Organization Permissions & Policy Presets"}
                 {activeTab === "isolation" && "Multi-Tenant Data Partition & Isolation Guard"}
@@ -2013,6 +2258,497 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onE
                     )}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── TAB: ORGANIZATION INTELLIGENCE & MEMBER CAPACITY TRACKING ── */}
+          {activeTab === "growth" && (
+            <div className="super-tab-content growth-tab-content">
+              {/* Filter & Action Toolbar */}
+              <div className="growth-toolbar-card">
+                <div className="growth-toolbar-left">
+                  <div className="growth-filter-group">
+                    <label>Tenant Partition:</label>
+                    <select
+                      value={growthTenantFilter}
+                      onChange={(e) => setGrowthTenantFilter(e.target.value)}
+                    >
+                      <option value="all">All Organizations ({organizations.length})</option>
+                      {organizations.map((org) => (
+                        <option key={org.tenantId} value={org.tenantId}>
+                          {org.name} ({org.tenantId})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="growth-filter-group">
+                    <label>Academic Cohort:</label>
+                    <select
+                      value={growthBatchFilter}
+                      onChange={(e) => setGrowthBatchFilter(e.target.value)}
+                    >
+                      <option value="all">All Cohorts / Batches</option>
+                      {(growthData?.availableBatches || ["Batch-A", "test"]).map((b) => (
+                        <option key={b} value={b}>
+                          {b}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="growth-toolbar-right">
+                  <div className="growth-timeframe-pills">
+                    {[7, 14, 30, 90, 365].map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        className={`growth-pill-btn ${growthDays === d ? "active" : ""}`}
+                        onClick={() => setGrowthDays(d)}
+                      >
+                        {d === 365 ? "1 Year" : `${d} Days`}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    className="growth-refresh-btn"
+                    onClick={loadStudentAnalytics}
+                    disabled={growthLoading}
+                    title="Refresh organization capacity metrics"
+                  >
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      className={growthLoading ? "spinning-icon" : ""}
+                    >
+                      <path d="M23 4v6h-6" />
+                      <path d="M1 20v-6h6" />
+                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                    </svg>
+                    <span>{growthLoading ? "Syncing…" : "Refresh"}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn-export-org-csv"
+                    onClick={exportOrgTrackingCsv}
+                    title="Export organization capacity and telemetry metrics as CSV"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    <span>Export CSV</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 4 Metric KPI Cards with Clean Enterprise SVGs */}
+              <div className="growth-kpi-grid">
+                <div className="growth-kpi-card">
+                  <div className="growth-kpi-header">
+                    <span className="growth-kpi-title">Total Platform Membership</span>
+                    <span className="growth-kpi-icon blue">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                      </svg>
+                    </span>
+                  </div>
+                  <div className="growth-kpi-val">
+                    {growthData?.summary?.totalCandidates ?? stats.totalCandidates ?? 0}
+                  </div>
+                  <div className="growth-kpi-sub">Aggregated across all registered organizations</div>
+                </div>
+
+                <div className="growth-kpi-card">
+                  <div className="growth-kpi-header">
+                    <span className="growth-kpi-title">Net Additions ({growthDays}d)</span>
+                    <span className="growth-kpi-icon emerald">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                        <polyline points="17 6 23 6 23 12" />
+                      </svg>
+                    </span>
+                  </div>
+                  <div className="growth-kpi-val highlight">
+                    +{growthData?.summary?.addedInWindow ?? 0}
+                  </div>
+                  <div className="growth-kpi-sub">New member onboardings in selected window</div>
+                </div>
+
+                <div className="growth-kpi-card">
+                  <div className="growth-kpi-header">
+                    <span className="growth-kpi-title">Intake Velocity</span>
+                    <span className="growth-kpi-icon purple">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                      </svg>
+                    </span>
+                  </div>
+                  <div className="growth-kpi-val">
+                    {growthData?.summary?.dailyAverage ?? 0}
+                    <span className="unit">/ day</span>
+                  </div>
+                  <div className="growth-kpi-sub">Average cross-tenant member intake rate</div>
+                </div>
+
+                <div className="growth-kpi-card">
+                  <div className="growth-kpi-header">
+                    <span className="growth-kpi-title">Total Academic Cohorts</span>
+                    <span className="growth-kpi-icon amber">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                        <line x1="7" y1="7" x2="7.01" y2="7" />
+                      </svg>
+                    </span>
+                  </div>
+                  <div className="growth-kpi-val">
+                    {growthData?.summary?.totalBatches ?? 0}
+                    <span className="unit">cohorts</span>
+                  </div>
+                  <div className="growth-kpi-sub">Active batches across tenant partitions</div>
+                </div>
+              </div>
+
+              {/* Day-wise Velocity Bar Chart */}
+              <div className="growth-chart-card">
+                <div className="growth-chart-head">
+                  <div className="growth-chart-head-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <line x1="18" y1="20" x2="18" y2="10" />
+                      <line x1="12" y1="20" x2="12" y2="4" />
+                      <line x1="6" y1="20" x2="6" y2="14" />
+                    </svg>
+                    <div>
+                      <h3>Daily Member Onboarding Trajectory</h3>
+                      <p>Aggregate member additions over the past {growthDays} days</p>
+                    </div>
+                  </div>
+                  <div className="growth-chart-badge">
+                    <span>{growthData?.summary?.addedInWindow ?? 0} total enrolled</span>
+                  </div>
+                </div>
+
+                <div className="growth-chart-body">
+                  {growthLoading ? (
+                    <div className="growth-loading-state">
+                      <div className="loading-spinner" />
+                      <p>Calculating onboarding velocity...</p>
+                    </div>
+                  ) : (
+                    <div className="day-trend-chart-container">
+                      <div className="day-bars-wrapper">
+                        {(() => {
+                          const days = growthData?.dayWise || [];
+                          const maxCount = Math.max(...days.map((d) => d.count), 1);
+                          return days.map((dayItem, idx) => {
+                            const barHeight = Math.max((dayItem.count / maxCount) * 160, dayItem.count > 0 ? 12 : 4);
+                            return (
+                              <div key={idx} className="day-bar-column" title={`${dayItem.date}: ${dayItem.count} members added`}>
+                                <span className="day-bar-count">{dayItem.count > 0 ? dayItem.count : ""}</span>
+                                <div
+                                  className={`day-bar-fill ${dayItem.count > 0 ? "has-data" : "zero"}`}
+                                  style={{ height: `${barHeight}px` }}
+                                />
+                                <span className="day-bar-date">{dayItem.displayDate || dayItem.date.slice(5)}</span>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 2-Column Grid: Cohort Distribution & Organization Breakdown */}
+              <div className="growth-two-col-grid">
+                {/* Column 1: Batch-wise Breakdown */}
+                <div className="growth-panel-card">
+                  <div className="growth-panel-head">
+                    <div className="panel-head-title-flex">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                        <line x1="7" y1="7" x2="7.01" y2="7" />
+                      </svg>
+                      <div>
+                        <h3>Cohort &amp; Batch Distribution</h3>
+                        <p>Aggregated membership volume across academic groups</p>
+                      </div>
+                    </div>
+                    <span className="panel-count-pill">{growthData?.batchWise?.length || 0} Cohorts</span>
+                  </div>
+
+                  <div className="growth-panel-body">
+                    {(!growthData?.batchWise || growthData.batchWise.length === 0) ? (
+                      <div className="growth-empty-panel">No academic cohorts registered yet.</div>
+                    ) : (
+                      <div className="batch-distribution-list">
+                        {growthData.batchWise.map((b, idx) => {
+                          const totalAll = growthData?.summary?.totalCandidates || 1;
+                          const pct = Math.round((b.totalStudents / totalAll) * 100);
+                          return (
+                            <div key={b.key || idx} className="batch-breakdown-item">
+                              <div className="batch-item-top">
+                                <div className="batch-item-title">
+                                  <strong>{b.batchName}</strong>
+                                  <span className="batch-tenant-tag">{b.orgName}</span>
+                                </div>
+                                <div className="batch-item-stats">
+                                  <span className="total-students">{b.totalStudents} members</span>
+                                  <span className="active-students">{b.activeStudents} active</span>
+                                  <span className="pct-badge">{pct}%</span>
+                                </div>
+                              </div>
+                              <div className="batch-progress-track">
+                                <div
+                                  className="batch-progress-fill"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Column 2: Organization-wise Breakdown */}
+                <div className="growth-panel-card">
+                  <div className="growth-panel-head">
+                    <div className="panel-head-title-flex">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <rect x="4" y="2" width="16" height="20" rx="2" ry="2" />
+                        <path d="M9 22v-4h6v4" />
+                        <path d="M8 6h.01" />
+                        <path d="M16 6h.01" />
+                        <path d="M8 10h.01" />
+                        <path d="M16 10h.01" />
+                        <path d="M8 14h.01" />
+                        <path d="M16 14h.01" />
+                      </svg>
+                      <div>
+                        <h3>Tenant Partition Volume</h3>
+                        <p>Total member distribution across multi-tenant partitions</p>
+                      </div>
+                    </div>
+                    <span className="panel-count-pill">{growthData?.orgWise?.length || 0} Orgs</span>
+                  </div>
+
+                  <div className="growth-panel-body">
+                    {(!growthData?.orgWise || growthData.orgWise.length === 0) ? (
+                      <div className="growth-empty-panel">No organizations found.</div>
+                    ) : (
+                      <div className="org-breakdown-table-wrap">
+                        <table className="org-breakdown-table">
+                          <thead>
+                            <tr>
+                              <th>Organization</th>
+                              <th>Tenant ID</th>
+                              <th>Enrolled</th>
+                              <th>Active</th>
+                              <th>Cohorts</th>
+                              <th>Share</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {growthData.orgWise.map((org, idx) => {
+                              const totalAll = growthData?.summary?.totalCandidates || 1;
+                              const pct = Math.round((org.totalStudents / totalAll) * 100);
+                              return (
+                                <tr key={org.tenantId || idx}>
+                                  <td>
+                                    <strong>{org.orgName}</strong>
+                                  </td>
+                                  <td>
+                                    <code>{org.tenantId}</code>
+                                  </td>
+                                  <td>
+                                    <span className="num-bold">{org.totalStudents}</span>
+                                  </td>
+                                  <td>
+                                    <span className="text-emerald font-semibold">{org.activeStudents}</span>
+                                  </td>
+                                  <td>
+                                    <span className="batch-chip-count">{Array.isArray(org.batches) ? org.batches.length : 1} cohorts</span>
+                                  </td>
+                                  <td>
+                                    <span className="share-pct-badge">{pct}%</span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Organization Member Capacity & Quota Allocation Matrix ── */}
+              <div className="org-capacity-matrix-card">
+                <div className="org-matrix-head">
+                  <div className="org-matrix-head-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                      <line x1="8" y1="21" x2="16" y2="21" />
+                      <line x1="12" y1="17" x2="12" y2="21" />
+                    </svg>
+                    <div>
+                      <h3>Organization Member Capacity &amp; License Tracking Matrix</h3>
+                      <p>Aggregate multi-tenant telemetry: quota utilization, active engagement, exam velocity &amp; asset metrics</p>
+                    </div>
+                  </div>
+
+                  <div className="org-matrix-head-controls">
+                    <div className="org-matrix-search">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                      </svg>
+                      <input
+                        type="text"
+                        placeholder="Search organization by name, ID..."
+                        value={orgTrackingSearch}
+                        onChange={(e) => setOrgTrackingSearch(e.target.value)}
+                      />
+                    </div>
+
+                    <select
+                      className="org-matrix-quota-filter"
+                      value={orgTrackingQuotaFilter}
+                      onChange={(e) => setOrgTrackingQuotaFilter(e.target.value)}
+                    >
+                      <option value="all">All Quota Statuses</option>
+                      <option value="normal">Normal (&lt; 80% used)</option>
+                      <option value="warning">Warning (80 - 95% used)</option>
+                      <option value="critical">Critical (&ge; 95% used)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="growth-table-wrap">
+                  <table className="org-matrix-table">
+                    <thead>
+                      <tr>
+                        <th>Organization &amp; Tenant</th>
+                        <th>Member Capacity &amp; Quota</th>
+                        <th>Active Members</th>
+                        <th>Academic Cohorts</th>
+                        <th>Exam Velocity</th>
+                        <th>Learning Assets</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredOrgWise.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="text-center py-6 text-slate-400">
+                            No organizations match the selected search or quota filter.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredOrgWise.map((org, idx) => {
+                          const maxCands = org.allowedMaxCandidates || 1000;
+                          const quotaPct = org.quotaUsagePct ?? Math.round(((org.totalStudents || 0) / maxCands) * 100);
+                          const isWarning = quotaPct >= 80 && quotaPct < 95;
+                          const isCritical = quotaPct >= 95;
+                          const statusClass = isCritical ? "critical" : isWarning ? "warning" : "normal";
+
+                          return (
+                            <tr key={org.tenantId || idx}>
+                              <td>
+                                <div className="org-cell-details">
+                                  <strong>{org.orgName}</strong>
+                                  <span className="org-cell-tenant-id">Tenant ID: <code>{org.tenantId}</code></span>
+                                </div>
+                              </td>
+
+                              <td>
+                                <div className="org-quota-cell">
+                                  <div className="org-quota-numbers">
+                                    <strong>{org.totalStudents}</strong>
+                                    <span className="org-quota-max">/ {maxCands} cap</span>
+                                    <span className={`org-quota-badge ${statusClass}`}>{quotaPct}%</span>
+                                  </div>
+                                  <div className="org-quota-meter-track">
+                                    <div
+                                      className={`org-quota-meter-fill ${statusClass}`}
+                                      style={{ width: `${Math.min(100, quotaPct)}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td>
+                                <div className="org-active-cell">
+                                  <span className="num-active-emerald">{org.activeStudents} active</span>
+                                  <span className="text-sub-muted">{org.activeRatio ?? 100}% engagement</span>
+                                </div>
+                              </td>
+
+                              <td>
+                                <div className="org-cohorts-cell">
+                                  <span className="cohort-count-pill">
+                                    {org.batches ? org.batches.length : 1} cohorts
+                                  </span>
+                                </div>
+                              </td>
+
+                              <td>
+                                <div className="org-velocity-cell">
+                                  <span className="velocity-exams">{org.examsCount ?? 0} exams</span>
+                                  <span className="velocity-attempts">{org.attemptsCount ?? 0} attempts</span>
+                                </div>
+                              </td>
+
+                              <td>
+                                <div className="org-assets-cell">
+                                  <span className="asset-docs">{org.documentsCount ?? 0} docs</span>
+                                  <span className="asset-vids">{org.videosCount ?? 0} videos</span>
+                                </div>
+                              </td>
+
+                              <td>
+                                <span className={`status-pill ${org.status === "inactive" ? "blocked" : "active"}`}>
+                                  {(org.status || "active").toUpperCase()}
+                                </span>
+                              </td>
+
+                              <td>
+                                <button
+                                  type="button"
+                                  className="btn-view-org-deep"
+                                  onClick={() => {
+                                    setSelectedAccessTenantId(org.tenantId);
+                                    setActiveTab("access");
+                                  }}
+                                  title={`Configure policies & quotas for ${org.orgName}`}
+                                >
+                                  Configure
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
@@ -4339,71 +5075,84 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onE
                 {/* Categorized Feature Flags & Dynamic Modules */}
                 <div className="feature-flags-container">
                   <div className="feature-flags-header-row">
-                    <div>
-                      <h4 className="feature-flags-title">Tenant Enabled Modules & Capabilities</h4>
-                      <p className="feature-flags-sub">Configure exact feature modules for this tenant. Changes only affect this organization with 100% tenant isolation.</p>
+                    <div className="feature-flags-header-left">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="text-primary-blue">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                        <line x1="8" y1="21" x2="16" y2="21" />
+                        <line x1="12" y1="17" x2="12" y2="21" />
+                      </svg>
+                      <div>
+                        <h4 className="feature-flags-title">Tenant Enabled Modules &amp; Capabilities</h4>
+                        <p className="feature-flags-sub">Configure feature modules for this tenant with 100% multi-tenant partition isolation.</p>
+                      </div>
                     </div>
                   </div>
 
                   {/* Section 1: Core Examination & Authoring */}
                   <div className="feature-category-block">
-                    <span className="feature-category-pill pill-blue">Core Examination & AI Engine</span>
+                    <div className="feature-category-pill pill-blue">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                      </svg>
+                      <span>Core Examination &amp; AI Engine</span>
+                    </div>
                     <div className="feature-toggles-grid">
-                      <label className="feature-toggle-card">
+                      <label className={`feature-toggle-card ${orgForm.features?.examCategories ? "card-checked" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(orgForm.features?.examCategories)}
                           onChange={() => handleToggleFeature("examCategories")}
                         />
-                        <div>
+                        <div className="feature-card-text">
                           <strong>Question Bank Categories</strong>
-                          <span>Organize exams into multi-tier stages & topics</span>
+                          <span>Organize exams into multi-tier stages &amp; topics</span>
                         </div>
                       </label>
 
-                      <label className="feature-toggle-card">
+                      <label className={`feature-toggle-card ${orgForm.features?.aiQuestionGenerator ? "card-checked" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(orgForm.features?.aiQuestionGenerator)}
                           onChange={() => handleToggleFeature("aiQuestionGenerator")}
                         />
-                        <div>
+                        <div className="feature-card-text">
                           <strong>AI Question Synthesis</strong>
-                          <span>Auto-generate questions & distractors with Gemini</span>
+                          <span>Auto-generate questions &amp; distractors with Gemini</span>
                         </div>
                       </label>
 
-                      <label className="feature-toggle-card">
+                      <label className={`feature-toggle-card ${orgForm.features?.bilingualQuestions ? "card-checked" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(orgForm.features?.bilingualQuestions)}
                           onChange={() => handleToggleFeature("bilingualQuestions")}
                         />
-                        <div>
+                        <div className="feature-card-text">
                           <strong>Bilingual Exam Switcher</strong>
-                          <span>Dual-language translations (English & Regional)</span>
+                          <span>Dual-language translations (English &amp; Regional)</span>
                         </div>
                       </label>
 
-                      <label className="feature-toggle-card">
+                      <label className={`feature-toggle-card ${orgForm.features?.codingSandbox ? "card-checked" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(orgForm.features?.codingSandbox)}
                           onChange={() => handleToggleFeature("codingSandbox")}
                         />
-                        <div>
+                        <div className="feature-card-text">
                           <strong>Live Coding Sandbox</strong>
                           <span>Embedded compiler for Python, JS, and Java</span>
                         </div>
                       </label>
 
-                      <label className="feature-toggle-card">
+                      <label className={`feature-toggle-card ${orgForm.features?.automatedStudentFeedback ? "card-checked" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(orgForm.features?.automatedStudentFeedback)}
                           onChange={() => handleToggleFeature("automatedStudentFeedback")}
                         />
-                        <div>
+                        <div className="feature-card-text">
                           <strong>Automated AI Feedback</strong>
                           <span>Instant student breakdown and explanations</span>
                         </div>
@@ -4413,53 +5162,59 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onE
 
                   {/* Section 2: LMS & Classroom Experience */}
                   <div className="feature-category-block">
-                    <span className="feature-category-pill pill-purple">Classroom & LMS Experience</span>
+                    <div className="feature-category-pill pill-purple">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <polygon points="23 7 16 12 23 17 23 7" />
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                      </svg>
+                      <span>Classroom &amp; LMS Experience</span>
+                    </div>
                     <div className="feature-toggles-grid">
-                      <label className="feature-toggle-card">
+                      <label className={`feature-toggle-card ${orgForm.features?.videoClasses ? "card-checked" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(orgForm.features?.videoClasses)}
                           onChange={() => handleToggleFeature("videoClasses")}
                         />
-                        <div>
+                        <div className="feature-card-text">
                           <strong>Video Learning Portal</strong>
-                          <span>Host interactive video classes and streaming lectures</span>
+                          <span>Host interactive video classes &amp; lecture modules</span>
                         </div>
                       </label>
 
-                      <label className="feature-toggle-card">
+                      <label className={`feature-toggle-card ${orgForm.features?.learningDocuments ? "card-checked" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(orgForm.features?.learningDocuments)}
                           onChange={() => handleToggleFeature("learningDocuments")}
                         />
-                        <div>
-                          <strong>Documents & PDF Resources</strong>
+                        <div className="feature-card-text">
+                          <strong>Documents &amp; PDF Resources</strong>
                           <span>Downloadable curriculum study materials</span>
                         </div>
                       </label>
 
-                      <label className="feature-toggle-card">
+                      <label className={`feature-toggle-card ${orgForm.features?.certificateGeneration ? "card-checked" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(orgForm.features?.certificateGeneration)}
                           onChange={() => handleToggleFeature("certificateGeneration")}
                         />
-                        <div>
+                        <div className="feature-card-text">
                           <strong>Auto Certificate Generator</strong>
-                          <span>Generate verified PDF certificates with QR code on pass</span>
+                          <span>Generate verified PDF certificates with QR codes</span>
                         </div>
                       </label>
 
-                      <label className="feature-toggle-card">
+                      <label className={`feature-toggle-card ${orgForm.features?.leaderboardGamification ? "card-checked" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(orgForm.features?.leaderboardGamification)}
                           onChange={() => handleToggleFeature("leaderboardGamification")}
                         />
-                        <div>
-                          <strong>Leaderboards & Badges</strong>
-                          <span>Gamified candidate rankings & achievements</span>
+                        <div className="feature-card-text">
+                          <strong>Leaderboards &amp; Badges</strong>
+                          <span>Gamified candidate rankings &amp; achievements</span>
                         </div>
                       </label>
                     </div>
@@ -4467,63 +5222,68 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onE
 
                   {/* Section 3: Anti-Cheat & DRM Security */}
                   <div className="feature-category-block">
-                    <span className="feature-category-pill pill-emerald">Security, DRM & Anti-Cheat</span>
+                    <div className="feature-category-pill pill-emerald">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      </svg>
+                      <span>Security, DRM &amp; Anti-Cheat</span>
+                    </div>
                     <div className="feature-toggles-grid">
-                      <label className="feature-toggle-card">
+                      <label className={`feature-toggle-card ${orgForm.features?.screenProtection ? "card-checked" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(orgForm.features?.screenProtection)}
                           onChange={() => handleToggleFeature("screenProtection")}
                         />
-                        <div>
+                        <div className="feature-card-text">
                           <strong>Anti-Capture Screen Shield</strong>
-                          <span>Hardware DRM & auto-blur on window unfocus</span>
+                          <span>Hardware DRM &amp; auto-blur on window unfocus</span>
                         </div>
                       </label>
 
-                      <label className="feature-toggle-card">
+                      <label className={`feature-toggle-card ${orgForm.features?.customWatermark ? "card-checked" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(orgForm.features?.customWatermark)}
                           onChange={() => handleToggleFeature("customWatermark")}
                         />
-                        <div>
+                        <div className="feature-card-text">
                           <strong>Dynamic Floating Watermark</strong>
                           <span>Overlay student name, IP, and live timestamp</span>
                         </div>
                       </label>
 
-                      <label className="feature-toggle-card">
+                      <label className={`feature-toggle-card ${orgForm.features?.aiProctoring ? "card-checked" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(orgForm.features?.aiProctoring)}
                           onChange={() => handleToggleFeature("aiProctoring")}
                         />
-                        <div>
-                          <strong>AI Proctoring & Webcam</strong>
+                        <div className="feature-card-text">
+                          <strong>AI Proctoring &amp; Webcam</strong>
                           <span>Facial presence and eye tracking proctor</span>
                         </div>
                       </label>
 
-                      <label className="feature-toggle-card">
+                      <label className={`feature-toggle-card ${orgForm.features?.auditLogs ? "card-checked" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(orgForm.features?.auditLogs)}
                           onChange={() => handleToggleFeature("auditLogs")}
                         />
-                        <div>
+                        <div className="feature-card-text">
                           <strong>Forensic Audit Trails</strong>
                           <span>Log all candidate infractions and device fingerprints</span>
                         </div>
                       </label>
 
-                      <label className="feature-toggle-card">
+                      <label className={`feature-toggle-card ${orgForm.features?.strictDeviceLock ? "card-checked" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(orgForm.features?.strictDeviceLock)}
                           onChange={() => handleToggleFeature("strictDeviceLock")}
                         />
-                        <div>
+                        <div className="feature-card-text">
                           <strong>Single Device Session Lock</strong>
                           <span>Block simultaneous duplicate student logins</span>
                         </div>
@@ -4533,39 +5293,44 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onE
 
                   {/* Section 4: Delivery & Resiliency */}
                   <div className="feature-category-block">
-                    <span className="feature-category-pill pill-amber">Advanced Delivery & Resiliency</span>
+                    <div className="feature-category-pill pill-amber">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                      </svg>
+                      <span>Advanced Delivery &amp; Resiliency</span>
+                    </div>
                     <div className="feature-toggles-grid">
-                      <label className="feature-toggle-card">
+                      <label className={`feature-toggle-card ${orgForm.features?.offlineExamSync ? "card-checked" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(orgForm.features?.offlineExamSync)}
                           onChange={() => handleToggleFeature("offlineExamSync")}
                         />
-                        <div>
+                        <div className="feature-card-text">
                           <strong>Offline Response Sync</strong>
                           <span>IndexedDB local cache for spotty connections</span>
                         </div>
                       </label>
 
-                      <label className="feature-toggle-card">
+                      <label className={`feature-toggle-card ${orgForm.features?.biometricVerification ? "card-checked" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(orgForm.features?.biometricVerification)}
                           onChange={() => handleToggleFeature("biometricVerification")}
                         />
-                        <div>
+                        <div className="feature-card-text">
                           <strong>Pre-Exam Biometric ID</strong>
-                          <span>WebID & photo verification prior to test start</span>
+                          <span>WebID &amp; photo verification prior to test start</span>
                         </div>
                       </label>
 
-                      <label className="feature-toggle-card">
+                      <label className={`feature-toggle-card ${orgForm.features?.webhookIntegrations ? "card-checked" : ""}`}>
                         <input
                           type="checkbox"
                           checked={Boolean(orgForm.features?.webhookIntegrations)}
                           onChange={() => handleToggleFeature("webhookIntegrations")}
                         />
-                        <div>
+                        <div className="feature-card-text">
                           <strong>Webhook Event Dispatcher</strong>
                           <span>Real-time API alerts on test submissions</span>
                         </div>
@@ -4575,8 +5340,14 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onE
 
                   {/* Section 5: Future-Proof Dynamic Custom Module Builder */}
                   <div className="feature-category-block custom-module-builder-box">
-                    <span className="feature-category-pill pill-cyan">⚡ Future-Proof Custom Feature Builder</span>
-                    <p className="custom-builder-desc">Super Admin can dynamically provision ANY new or upcoming custom feature module for this tenant:</p>
+                    <div className="feature-category-pill pill-cyan">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <polyline points="16 18 22 12 16 6" />
+                        <polyline points="8 6 2 12 8 18" />
+                      </svg>
+                      <span>Dynamic Custom Feature Module Provisioner</span>
+                    </div>
+                    <p className="custom-builder-desc">Super Admin can dynamically provision custom feature flags and modules for this tenant:</p>
                     
                     {/* List any custom features added */}
                     {Object.keys(orgForm.features || {}).filter(k => ![
@@ -4585,20 +5356,20 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onE
                       "leaderboardGamification", "screenProtection", "customWatermark", "aiProctoring",
                       "auditLogs", "strictDeviceLock", "offlineExamSync", "biometricVerification", "webhookIntegrations"
                     ].includes(k)).length > 0 && (
-                      <div className="feature-toggles-grid custom-toggles-list" style={{ marginBottom: 12 }}>
+                      <div className="feature-toggles-grid custom-toggles-list" style={{ marginBottom: 14 }}>
                         {Object.keys(orgForm.features || {}).filter(k => ![
                           "examCategories", "aiQuestionGenerator", "bilingualQuestions", "codingSandbox",
                           "automatedStudentFeedback", "videoClasses", "learningDocuments", "certificateGeneration",
                           "leaderboardGamification", "screenProtection", "customWatermark", "aiProctoring",
                           "auditLogs", "strictDeviceLock", "offlineExamSync", "biometricVerification", "webhookIntegrations"
                         ].includes(k)).map(customKey => (
-                          <label key={customKey} className="feature-toggle-card custom-active-card">
+                          <label key={customKey} className={`feature-toggle-card custom-active-card ${orgForm.features[customKey] ? "card-checked" : ""}`}>
                             <input
                               type="checkbox"
                               checked={Boolean(orgForm.features[customKey])}
                               onChange={() => handleToggleFeature(customKey)}
                             />
-                            <div>
+                            <div className="feature-card-text">
                               <strong>{customKey.replace(/_/g, " ").toUpperCase()}</strong>
                               <span>Custom dynamic module flag</span>
                             </div>
@@ -4619,7 +5390,11 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onLogout, onE
                         className="btn-add-custom-mod"
                         onClick={handleAddCustomModuleToOrg}
                       >
-                        + Add Custom Module
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <line x1="12" y1="5" x2="12" y2="19" />
+                          <line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
+                        <span>Add Module</span>
                       </button>
                     </div>
                   </div>

@@ -84,6 +84,11 @@ def list_users():
             "id": str(u["_id"]), "name": u.get("name") or u.get("userId"),
             "email": u.get("email", ""), "userId": u.get("userId"),
             "tenantId": u.get("tenantId", DEFAULT_TENANT_ID),
+            "batch": u.get("batch") or "Batch-A",
+            "rollNumber": u.get("rollNumber") or u.get("collegeRollNumber") or "",
+            "mobile": u.get("mobile") or u.get("phone") or "",
+            "section": u.get("section") or "",
+            "gender": u.get("gender") or "",
             "courseStream": u.get("courseStream") or u.get("stream") or u.get("batch") or "Banking PO/Clerk",
             "createdAt": u.get("createdAt"), "lastLoginAt": u.get("lastLoginAt"),
             "isActive": u.get("isActive", True),
@@ -125,6 +130,11 @@ def create_user():
         "password": str(payload["password"]).strip(),  # Stored to match the current Shine Exam login model.
         "role": "answerer",
         "tenantId": tenant_id,
+        "batch": str(payload.get("batch") or "Batch-A").strip(),
+        "rollNumber": str(payload.get("rollNumber") or payload.get("collegeRollNumber") or "").strip(),
+        "mobile": str(payload.get("mobile") or payload.get("phone") or "").strip(),
+        "section": str(payload.get("section") or "").strip(),
+        "gender": str(payload.get("gender") or "").strip(),
         "courseStream": payload.get("courseStream", "Banking PO/Clerk").strip(),
         "createdAt": datetime.utcnow(),
         "lastLoginAt": None,
@@ -140,6 +150,11 @@ def create_user():
             "userId": doc["userId"],
             "role": doc["role"],
             "tenantId": doc["tenantId"],
+            "batch": doc["batch"],
+            "rollNumber": doc["rollNumber"],
+            "mobile": doc["mobile"],
+            "section": doc["section"],
+            "gender": doc["gender"],
             "courseStream": doc["courseStream"],
             "createdAt": doc["createdAt"],
             "isActive": doc["isActive"], 
@@ -275,6 +290,159 @@ def delete_user(user_id: str):
     return jsonify({"message": "Deleted"})
 
 
+@admin_users_bp.route("/batches", methods=["GET"])
+@admin_users_bp.route("/batches/", methods=["GET"])
+def list_batches():
+    """List distinct batches in the active organization/tenant with student counts."""
+    db = get_db()
+    tenant_id = get_request_tenant_id()
+    filter_q = build_tenant_filter(tenant_id)
+
+    students = list(db.users.find({**filter_q, "role": "answerer"}, {"batch": 1, "userId": 1, "name": 1, "isActive": 1}))
+    batch_map = {}
+    for s in students:
+        b_name = (s.get("batch") or "Batch-A").strip()
+        if b_name not in batch_map:
+            batch_map[b_name] = {
+                "name": b_name,
+                "studentCount": 0,
+                "activeCount": 0,
+                "userIds": []
+            }
+        batch_map[b_name]["studentCount"] += 1
+        if s.get("isActive", True):
+            batch_map[b_name]["activeCount"] += 1
+        batch_map[b_name]["userIds"].append(s.get("userId"))
+
+    # Also load explicitly created batches from db.batches
+    try:
+        created_batches = list(db.batches.find(filter_q))
+        for cb in created_batches:
+            b_name = cb.get("name", "").strip()
+            if b_name:
+                if b_name not in batch_map:
+                    batch_map[b_name] = {
+                        "name": b_name,
+                        "studentCount": 0,
+                        "activeCount": 0,
+                        "userIds": []
+                    }
+                if cb.get("courseStream"):
+                    batch_map[b_name]["courseStream"] = cb.get("courseStream")
+                batch_map[b_name]["joiningDate"] = cb.get("joiningDate") or cb.get("startDate") or ""
+                batch_map[b_name]["startDate"] = cb.get("startDate") or cb.get("joiningDate") or ""
+                batch_map[b_name]["endDate"] = cb.get("endDate") or ""
+                batch_map[b_name]["description"] = cb.get("description") or ""
+                if cb.get("createdAt"):
+                    batch_map[b_name]["createdAt"] = cb.get("createdAt").isoformat() if hasattr(cb.get("createdAt"), "isoformat") else str(cb.get("createdAt"))
+    except Exception:
+        pass
+
+    # Ensure default batches exist if empty
+    if not batch_map:
+        batch_map["Batch-A"] = {
+            "name": "Batch-A",
+            "studentCount": 0,
+            "activeCount": 0,
+            "userIds": [],
+            "joiningDate": "",
+            "startDate": "",
+            "endDate": "",
+            "courseStream": "Banking PO/Clerk"
+        }
+
+    batches_list = sorted(list(batch_map.values()), key=lambda x: x["name"])
+    return jsonify({"batches": batches_list})
+
+
+@admin_users_bp.route("/batches", methods=["POST"])
+@admin_users_bp.route("/batches/", methods=["POST"])
+def create_batch():
+    """Explicitly create a new batch in the active organization with joining dates."""
+    payload = request.get_json(silent=True) or {}
+    name = str(payload.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Batch name is required"}), 400
+
+    db = get_db()
+    tenant_id = get_request_tenant_id()
+
+    existing = db.batches.find_one({"tenantId": tenant_id, "name": name})
+    if existing or db.users.find_one({"tenantId": tenant_id, "batch": name}):
+        return jsonify({"error": f"Batch '{name}' already exists"}), 409
+
+    start_date = str(payload.get("startDate") or payload.get("joiningDate") or "").strip()
+    end_date = str(payload.get("endDate") or "").strip()
+
+    doc = {
+        "tenantId": tenant_id,
+        "name": name,
+        "description": str(payload.get("description") or "").strip(),
+        "courseStream": str(payload.get("courseStream") or "").strip(),
+        "startDate": start_date,
+        "joiningDate": start_date,
+        "endDate": end_date,
+        "createdAt": datetime.utcnow()
+    }
+    db.batches.insert_one(doc)
+    return jsonify({
+        "message": f"Batch '{name}' created successfully!",
+        "batch": {
+            "name": name,
+            "studentCount": 0,
+            "activeCount": 0,
+            "userIds": [],
+            "courseStream": doc["courseStream"],
+            "startDate": start_date,
+            "joiningDate": start_date,
+            "endDate": end_date,
+            "createdAt": doc["createdAt"].isoformat()
+        }
+    }), 201
+
+
+@admin_users_bp.route("/assign-batch", methods=["POST"])
+@admin_users_bp.route("/assign-batch/", methods=["POST"])
+def assign_batch():
+    """Assign selected students to a designated batch."""
+    payload = request.get_json(silent=True) or {}
+    user_ids = payload.get("userIds") or []
+    batch_name = str(payload.get("batch") or "").strip()
+
+    if not user_ids:
+        return jsonify({"error": "No students selected"}), 400
+    if not batch_name:
+        return jsonify({"error": "Batch name is required"}), 400
+
+    db = get_db()
+    tenant_id = get_request_tenant_id()
+    filter_q = build_tenant_filter(tenant_id)
+
+    obj_ids = [ObjectId(uid) for uid in user_ids if ObjectId.is_valid(uid)]
+    raw_ids = [uid for uid in user_ids if not ObjectId.is_valid(uid)]
+
+    query = {
+        **filter_q,
+        "role": "answerer",
+        "$or": [
+            {"_id": {"$in": obj_ids}},
+            {"userId": {"$in": raw_ids}}
+        ]
+    }
+
+    result = db.users.update_many(
+        query,
+        {"$set": {"batch": batch_name, "updatedAt": datetime.utcnow()}}
+    )
+
+    return jsonify({
+        "success": True,
+        "batch": batch_name,
+        "updatedCount": result.modified_count,
+        "message": f"Successfully assigned {result.modified_count} student(s) to '{batch_name}'"
+    })
+
+
 @admin_users_bp.route("/<user_id>", methods=["PUT", "PATCH"])
 @admin_users_bp.route("/<user_id>/", methods=["PUT", "PATCH"])
 def update_user(user_id: str):
@@ -289,8 +457,8 @@ def update_user(user_id: str):
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    allowed = ["name", "email", "courseStream"]
-    updates = {k: payload[k] for k in allowed if k in payload}
+    allowed = ["name", "email", "courseStream", "batch", "rollNumber", "mobile", "section", "gender", "notes"]
+    updates = {k: str(payload[k]).strip() for k in allowed if k in payload and payload[k] is not None}
     if "validUntil" in payload:
         try:
             updates["validUntil"] = _parse_valid_until(payload.get("validUntil"))
@@ -303,7 +471,7 @@ def update_user(user_id: str):
     updated = db.users.find_one({"_id": user["_id"]}, {"password": 0})
     return jsonify({"user": to_jsonable({
         "id": str(updated["_id"]),
-        **{k: updated.get(k) for k in ["name", "email", "userId", "courseStream", "createdAt", "lastLoginAt", "isActive", "validUntil"]}
+        **{k: updated.get(k) for k in ["name", "email", "userId", "batch", "rollNumber", "mobile", "section", "gender", "courseStream", "createdAt", "lastLoginAt", "isActive", "validUntil"]}
     })})
 
 
@@ -350,12 +518,15 @@ def bulk_delete_users():
 def download_student_template():
     format_type = request.args.get("format", "xlsx").lower()
     
-    headers = ["Full Name", "Email Address", "Username", "Password", "Valid Until (YYYY-MM-DD)"]
+    headers = [
+        "Full Name", "Email Address", "Username", "Password",
+        "Batch", "Course", "Phone Number", "Valid Until (YYYY-MM-DD)"
+    ]
     default_validity = (datetime.utcnow() + timedelta(days=365)).strftime("%Y-%m-%d")
     
     sample_rows = [
-        ["Aarav Patel", "aarav.patel@example.com", "STU202601", "Shine@2026", default_validity],
-        ["Priya Sharma", "priya.sharma@example.com", "STU202602", "Shine@2026", default_validity],
+        ["Aarav Patel", "aarav.patel@example.com", "STU202601", "Shine@2026", "Batch 2026-A", "Banking PO/Clerk", "+91 9876543210", default_validity],
+        ["Priya Sharma", "priya.sharma@example.com", "STU202602", "Shine@2026", "Batch 2026-B", "SSC CGL/CHSL", "+91 9876543211", default_validity],
     ]
     
     if format_type == "csv":
@@ -398,7 +569,7 @@ def download_student_template():
     for row in sample_rows:
         ws.append(row)
         
-    for row in ws.iter_rows(min_row=2, max_row=len(sample_rows)+1, min_col=1, max_col=5):
+    for row in ws.iter_rows(min_row=2, max_row=len(sample_rows)+1, min_col=1, max_col=len(headers)):
         for cell in row:
             cell.alignment = align_left
             cell.border = thin_border
@@ -406,7 +577,7 @@ def download_student_template():
     for col in ws.columns:
         max_len = max(len(str(cell.value or "")) for cell in col)
         col_letter = get_column_letter(col[0].column)
-        ws.column_dimensions[col_letter].width = max(max_len + 5, 20)
+        ws.column_dimensions[col_letter].width = max(max_len + 5, 18)
         
     output = io.BytesIO()
     wb.save(output)
@@ -478,6 +649,7 @@ def bulk_upload_users():
         return jsonify({"error": "The uploaded spreadsheet contains no data rows"}), 400
         
     db = get_db()
+    tenant_id = get_request_tenant_id()
     now = datetime.utcnow()
     default_validity = datetime.combine((now + timedelta(days=365)).date(), time.max)
     
@@ -492,6 +664,11 @@ def bulk_upload_users():
         email = ""
         user_id = ""
         password = ""
+        batch = "Batch-A"
+        course_stream = "Banking PO/Clerk"
+        roll_number = ""
+        mobile = ""
+        section = ""
         valid_until_str = ""
         
         for k, v in row.items():
@@ -500,10 +677,22 @@ def bulk_upload_users():
                 name = v
             elif key_lower in ["email address", "email", "student email", "college email"]:
                 email = v
-            elif key_lower in ["username", "user id", "userid", "student id", "roll number", "college roll number"]:
+            elif key_lower in ["username", "user id", "userid", "student id", "candidate id"]:
                 user_id = v
             elif key_lower in ["password", "temp password", "temporary password"]:
                 password = v
+            elif key_lower in ["batch", "batch name", "batch id", "cohort"]:
+                if v:
+                    batch = v
+            elif key_lower in ["department / stream", "department", "stream", "course stream", "branch", "course"]:
+                if v:
+                    course_stream = v
+            elif key_lower in ["roll number", "roll no", "college roll number", "reg number", "registration number"]:
+                roll_number = v
+            elif key_lower in ["phone number", "phone", "mobile", "mobile number", "contact", "contact number"]:
+                mobile = v
+            elif key_lower in ["section", "class section", "division"]:
+                section = v
             elif key_lower in ["valid until (yyyy-mm-dd)", "valid until", "valid until date", "validity", "expiry date"]:
                 valid_until_str = v
 
@@ -547,6 +736,12 @@ def bulk_upload_users():
             "userId": user_id.strip(),
             "password": str(pwd).strip(),
             "role": "answerer",
+            "tenantId": tenant_id or DEFAULT_TENANT_ID,
+            "batch": batch.strip(),
+            "courseStream": course_stream.strip(),
+            "rollNumber": roll_number.strip(),
+            "mobile": mobile.strip(),
+            "section": section.strip(),
             "createdAt": now,
             "lastLoginAt": None,
             "isActive": True,
@@ -560,6 +755,11 @@ def bulk_upload_users():
             "email": user_doc["email"],
             "userId": user_doc["userId"],
             "role": user_doc["role"],
+            "batch": user_doc["batch"],
+            "courseStream": user_doc["courseStream"],
+            "rollNumber": user_doc["rollNumber"],
+            "mobile": user_doc["mobile"],
+            "section": user_doc["section"],
             "createdAt": user_doc["createdAt"],
             "isActive": user_doc["isActive"],
             "validUntil": user_doc["validUntil"]

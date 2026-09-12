@@ -581,13 +581,13 @@ def publish_exam(exam_id: str):
 @admin_exams_bp.route("/<exam_id>/assign/", methods=["POST"])
 def assign_exam(exam_id: str):
     payload = request.get_json(silent=True) or {}
-    ok, msg = require_fields(payload, ["userIds"])
-    if not ok:
-        return jsonify({"error": msg}), 400
+    userIds = payload.get("userIds") or []
+    batches = payload.get("batches") or []
 
-    userIds = payload.get("userIds")
-    if not isinstance(userIds, list) or len(userIds) == 0:
-        return jsonify({"error": "userIds must be a non-empty list"}), 400
+    if not isinstance(userIds, list):
+        userIds = []
+    if not isinstance(batches, list):
+        batches = []
 
     db = get_db()
     try:
@@ -599,12 +599,29 @@ def assign_exam(exam_id: str):
     if not exam:
         return jsonify({"error": "Exam not found"}), 404
 
+    tenant_id = get_request_tenant_id()
+    filter_q = build_tenant_filter(tenant_id)
+
+    target_user_ids = set(str(uid).strip() for uid in userIds if str(uid).strip())
+
+    # If batches are provided, resolve all candidate user IDs in those batches
+    if batches:
+        clean_batches = [str(b).strip() for b in batches if str(b).strip()]
+        if clean_batches:
+            batch_users = list(db.users.find(
+                {**filter_q, "role": "answerer", "batch": {"$in": clean_batches}},
+                {"userId": 1}
+            ))
+            for bu in batch_users:
+                if bu.get("userId"):
+                    target_user_ids.add(str(bu["userId"]).strip())
+
+    if not target_user_ids:
+        return jsonify({"error": "No students or batches selected to assign"}), 400
+
     now = datetime.utcnow()
     upserts = 0
-    for uid in userIds:
-        uid = str(uid).strip()
-        if not uid:
-            continue
+    for uid in target_user_ids:
         db.exam_assignments.update_one(
             {"examId": oid, "userId": uid},
             {"$setOnInsert": {"createdAt": now}, "$set": {"status": "assigned", "updatedAt": now}},
@@ -612,4 +629,9 @@ def assign_exam(exam_id: str):
         )
         upserts += 1
 
-    return jsonify({"message": "Assigned", "assigned": upserts})
+    return jsonify({
+        "message": "Assigned successfully",
+        "assigned": upserts,
+        "batches": batches,
+        "totalAssigned": upserts
+    })

@@ -36,6 +36,14 @@ interface StudentUser {
   name: string;
   email?: string;
   isActive?: boolean;
+  batch?: string;
+}
+
+interface VideoBatchItem {
+  name: string;
+  courseStream?: string;
+  joiningDate?: string;
+  studentCount?: number;
 }
 
 const CATEGORY_OPTIONS = [
@@ -86,8 +94,12 @@ const AdminVideos: React.FC = () => {
 
   // Standalone Assign Modal
   const [assigningVideo, setAssigningVideo] = useState<VideoItem | null>(null);
+  const [assignTab, setAssignTab] = useState<"all" | "students" | "batches">("all");
   const [assignSearch, setAssignSearch] = useState<string>("");
+  const [batchSearch, setBatchSearch] = useState<string>("");
+  const [batches, setBatches] = useState<VideoBatchItem[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [selectedBatches, setSelectedBatches] = useState<string[]>([]);
   const [savingAssign, setSavingAssign] = useState<boolean>(false);
 
   // Form Fields
@@ -141,10 +153,14 @@ const AdminVideos: React.FC = () => {
 
   const loadStudents = async () => {
     try {
-      const res = await apiGet<{ users: StudentUser[] }>("/admin/users");
-      setStudents(res.users || []);
+      const [userRes, batchRes] = await Promise.all([
+        apiGet<{ users: StudentUser[] }>("/admin/users"),
+        apiGet<{ batches: VideoBatchItem[] }>("/admin/users/batches").catch(() => ({ batches: [] }))
+      ]);
+      setStudents(userRes.users || []);
+      setBatches(batchRes.batches || []);
     } catch (e) {
-      console.error("Failed to load students:", e);
+      console.error("Failed to load students and batches:", e);
     }
   };
 
@@ -285,22 +301,81 @@ const AdminVideos: React.FC = () => {
   const openAssignModal = (video: VideoItem) => {
     setAssigningVideo(video);
     setAssignSearch("");
+    setBatchSearch("");
     if (video.assignedTo === "all") {
+      setAssignTab("all");
       setSelectedStudentIds([]);
+      setSelectedBatches([]);
     } else {
-      setSelectedStudentIds(Array.isArray(video.assignedTo) ? video.assignedTo : [video.assignedTo].filter(Boolean));
+      const assigned = Array.isArray(video.assignedTo) ? video.assignedTo : [video.assignedTo].filter(Boolean);
+      setSelectedStudentIds(assigned);
+      setAssignTab("students");
+
+      if (batches.length > 0 && assigned.length > 0) {
+        const matchingBatches = batches
+          .filter(b => {
+            const bStudents = students.filter(s => (s.batch || "Batch-A") === b.name);
+            return bStudents.length > 0 && bStudents.every(s => assigned.includes(s.userId));
+          })
+          .map(b => b.name);
+        setSelectedBatches(matchingBatches);
+      } else {
+        setSelectedBatches([]);
+      }
     }
   };
 
-  const saveQuickAssignments = async (mode: "all" | "custom") => {
+  const handleToggleBatch = (batchName: string) => {
+    const batchStudents = students.filter(s => (s.batch || "Batch-A") === batchName);
+    const batchStudentIds = batchStudents.map(s => s.userId);
+    const isChecked = selectedBatches.includes(batchName);
+
+    if (isChecked) {
+      setSelectedBatches(prev => prev.filter(b => b !== batchName));
+      setSelectedStudentIds(prev => prev.filter(id => !batchStudentIds.includes(id)));
+    } else {
+      setSelectedBatches(prev => [...prev, batchName]);
+      setSelectedStudentIds(prev => Array.from(new Set([...prev, ...batchStudentIds])));
+    }
+  };
+
+  const handleSelectAllBatches = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const visibleBatches = batches.filter(b =>
+      `${b.name} ${b.courseStream || ""}`.toLowerCase().includes(batchSearch.toLowerCase())
+    );
+    if (e.target.checked) {
+      const names = visibleBatches.map(b => b.name);
+      setSelectedBatches(Array.from(new Set([...selectedBatches, ...names])));
+      const studentsInBatches = students.filter(s => names.includes(s.batch || "Batch-A")).map(s => s.userId);
+      setSelectedStudentIds(Array.from(new Set([...selectedStudentIds, ...studentsInBatches])));
+    } else {
+      const visibleNames = new Set(visibleBatches.map(b => b.name));
+      setSelectedBatches(selectedBatches.filter(name => !visibleNames.has(name)));
+      const studentsInVisibleBatches = new Set(students.filter(s => visibleNames.has(s.batch || "Batch-A")).map(s => s.userId));
+      setSelectedStudentIds(selectedStudentIds.filter(id => !studentsInVisibleBatches.has(id)));
+    }
+  };
+
+  const saveQuickAssignments = async () => {
     if (!assigningVideo) return;
     setSavingAssign(true);
     try {
-      const assignedValue = mode === "all" ? "all" : selectedStudentIds;
-      await apiPut(`/admin/videos/${assigningVideo.id}`, {
-        assignedTo: assignedValue,
-      });
-      showToast(mode === "all" ? "Assigned to all enrolled students." : `Assigned to ${selectedStudentIds.length} students.`);
+      if (assignTab === "all") {
+        await apiPut(`/admin/videos/${assigningVideo.id}`, {
+          assignedTo: "all",
+        });
+        showToast("Assigned to all enrolled candidates.");
+      } else {
+        await apiPut(`/admin/videos/${assigningVideo.id}`, {
+          assignedTo: selectedStudentIds,
+          batches: selectedBatches,
+        });
+        showToast(
+          selectedBatches.length > 0
+            ? `Assigned to ${selectedStudentIds.length} candidate(s) across ${selectedBatches.length} batch(es).`
+            : `Assigned to ${selectedStudentIds.length} candidate(s).`
+        );
+      }
       setAssigningVideo(null);
       loadVideos();
     } catch (err: any) {
@@ -1230,8 +1305,12 @@ const AdminVideos: React.FC = () => {
               <div className="assign-mode-toggle">
                 <button
                   type="button"
-                  className={`assign-toggle-btn ${selectedStudentIds.length === 0 ? "active" : ""}`}
-                  onClick={() => setSelectedStudentIds([])}
+                  className={`assign-toggle-btn ${assignTab === "all" ? "active" : ""}`}
+                  onClick={() => {
+                    setAssignTab("all");
+                    setSelectedStudentIds([]);
+                    setSelectedBatches([]);
+                  }}
                 >
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>
@@ -1240,8 +1319,9 @@ const AdminVideos: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  className={`assign-toggle-btn ${selectedStudentIds.length > 0 ? "active" : ""}`}
+                  className={`assign-toggle-btn ${assignTab === "students" ? "active" : ""}`}
                   onClick={() => {
+                    setAssignTab("students");
                     if (selectedStudentIds.length === 0 && students.length > 0) {
                       setSelectedStudentIds([students[0].userId]);
                     }
@@ -1252,9 +1332,37 @@ const AdminVideos: React.FC = () => {
                   </svg>
                   Specific Candidates ({selectedStudentIds.length})
                 </button>
+                <button
+                  type="button"
+                  className={`assign-toggle-btn ${assignTab === "batches" ? "active" : ""}`}
+                  onClick={() => {
+                    setAssignTab("batches");
+                  }}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                    <line x1="7" y1="7" x2="7.01" y2="7"/>
+                  </svg>
+                  Assign by Cohort / Batch ({selectedBatches.length})
+                </button>
               </div>
 
-              {selectedStudentIds.length > 0 && (
+              {assignTab === "all" && (
+                <div className="assign-all-banner">
+                  <div className="assign-banner-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                      <path d="m9 12 2 2 4-4"/>
+                    </svg>
+                  </div>
+                  <div className="assign-banner-text">
+                    <strong>Full Portal Access Enabled</strong>
+                    <p>Every candidate registered in the platform can stream this video lecture with DRM playback security.</p>
+                  </div>
+                </div>
+              )}
+
+              {assignTab === "students" && (
                 <div className="form-student-picker-box">
                   <div className="picker-search-wrap">
                     <input
@@ -1321,11 +1429,78 @@ const AdminVideos: React.FC = () => {
                             <div className="student-avatar-mini">{student.name.charAt(0).toUpperCase()}</div>
                             <div className="student-info-col">
                               <strong>{student.name}</strong>
-                              <small>{student.userId} {student.email ? `• ${student.email}` : ""}</small>
+                              <small>{student.userId} {student.email ? `• ${student.email}` : ""} {student.batch ? `• ${student.batch}` : ""}</small>
                             </div>
                           </label>
                         );
                       })}
+                  </div>
+                </div>
+              )}
+
+              {assignTab === "batches" && (
+                <div className="form-student-picker-box">
+                  <div className="picker-search-wrap">
+                    <input
+                      type="text"
+                      placeholder="Search batch or cohort name..."
+                      value={batchSearch}
+                      onChange={(e) => setBatchSearch(e.target.value)}
+                    />
+                  </div>
+
+                  <label className="picker-select-all">
+                    <input
+                      type="checkbox"
+                      checked={
+                        batches.length > 0 &&
+                        batches
+                          .filter((b) =>
+                            `${b.name} ${b.courseStream || ""}`
+                              .toLowerCase()
+                              .includes(batchSearch.toLowerCase())
+                          )
+                          .every((b) => selectedBatches.includes(b.name))
+                      }
+                      onChange={handleSelectAllBatches}
+                    />
+                    <span>Select all visible cohorts / batches ({batches.filter((b) => `${b.name} ${b.courseStream || ""}`.toLowerCase().includes(batchSearch.toLowerCase())).length})</span>
+                  </label>
+
+                  <div className="picker-students-list video-batches-list">
+                    {batches
+                      .filter((b) =>
+                        `${b.name} ${b.courseStream || ""}`
+                          .toLowerCase()
+                          .includes(batchSearch.toLowerCase())
+                      )
+                      .map((b) => {
+                        const isChecked = selectedBatches.includes(b.name);
+                        return (
+                          <label key={b.name} className={`picker-student-item video-batch-item ${isChecked ? "selected" : ""}`}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleToggleBatch(b.name)}
+                            />
+                            <div className="video-batch-info-wrap">
+                              <div className="video-batch-title-row">
+                                <strong className="video-batch-name">{b.name}</strong>
+                                <span className="video-batch-badge">{b.studentCount || 0} candidates</span>
+                              </div>
+                              <div className="video-batch-meta">
+                                <span>Course: {b.courseStream || "Banking PO/Clerk"}</span>
+                                {b.joiningDate && <span> • Joined: {b.joiningDate}</span>}
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    {batches.filter((b) => `${b.name} ${b.courseStream || ""}`.toLowerCase().includes(batchSearch.toLowerCase())).length === 0 && (
+                      <div style={{ textAlign: "center", padding: "24px", color: "#64748b", fontSize: "13px" }}>
+                        No academic batches found.
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1343,10 +1518,14 @@ const AdminVideos: React.FC = () => {
               <button
                 type="button"
                 className="btn-submit"
-                onClick={() => saveQuickAssignments(selectedStudentIds.length === 0 ? "all" : "custom")}
+                onClick={saveQuickAssignments}
                 disabled={savingAssign}
               >
-                {savingAssign ? "Saving..." : selectedStudentIds.length === 0 ? "Assign to All Students" : `Assign to ${selectedStudentIds.length} Students`}
+                {savingAssign
+                  ? "Saving..."
+                  : assignTab === "all"
+                  ? "Assign to All Students"
+                  : `Assign to ${selectedStudentIds.length} Students ${selectedBatches.length > 0 ? `(${selectedBatches.length} batches)` : ""}`}
               </button>
             </div>
           </div>

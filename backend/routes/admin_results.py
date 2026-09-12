@@ -79,7 +79,7 @@ def _find_user_with_profile(db, user_identifier: str) -> Optional[dict]:
     return None
 
 
-def _question_time_benchmarks(db, exam_id, review):
+def _question_time_benchmarks(db, exam_id, review, total_time_spent=0, stored_q_times=None):
     exam_match = [{"examId": exam_id}, {"examId": str(exam_id)}]
     if isinstance(exam_id, str) and ObjectId.is_valid(exam_id):
         exam_match.append({"examId": ObjectId(exam_id)})
@@ -92,6 +92,14 @@ def _question_time_benchmarks(db, exam_id, review):
             seconds = int(item.get("timeSpentSec", 0) or 0)
             if seconds > 0:
                 values.setdefault(str(item.get("questionId")), []).append(seconds)
+
+    stored_q_times = stored_q_times or {}
+    total_review_time = sum(int(it.get("timeSpentSec", 0) or 0) for it in (review or []))
+    fallback_per_q = 0
+    if total_review_time == 0 and total_time_spent > 0 and review:
+        answered_cnt = sum(1 for it in review if it.get("userAnswer"))
+        fallback_per_q = max(1, round(total_time_spent / max(1, answered_cnt or len(review))))
+
     enriched = []
     for source in review or []:
         item = dict(source)
@@ -100,6 +108,14 @@ def _question_time_benchmarks(db, exam_id, review):
         item["avgTimeSec"] = round(sum(times) / len(times)) if times else 0
         item["topperTimeSec"] = topper_times.get(qid, 0)
         item["topperUserId"] = (topper or {}).get("userId", "")
+
+        q_time = int(item.get("timeSpentSec", 0) or 0)
+        if q_time <= 0:
+            q_time = int(stored_q_times.get(qid, 0) or 0)
+        if q_time <= 0 and fallback_per_q > 0:
+            if item.get("userAnswer"):
+                q_time = fallback_per_q
+        item["timeSpentSec"] = max(0, q_time)
         enriched.append(item)
     return enriched
 
@@ -324,7 +340,13 @@ def get_detailed_result(result_id: str):
         "submittedAt": submitted_at,
         "timeSpentSec": int(result.get("timeSpentSec", 0)),
         "sectionWise": result.get("sectionWise", {}),
-        "questionReview": _question_time_benchmarks(db, exam_id, result.get("questionReview", [])),
+        "questionReview": _question_time_benchmarks(
+            db,
+            exam_id,
+            result.get("questionReview", []),
+            total_time_spent=int(result.get("timeSpentSec", 0)),
+            stored_q_times=result.get("questionTimes", {})
+        ),
     }
     
     return jsonify({"result": to_jsonable(detailed)})

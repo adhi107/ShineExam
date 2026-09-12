@@ -493,8 +493,37 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
             </div>
           </div>
           {loading ? <div className="portal-empty"><span className="loader" />Loading your assessments…</div> : visibleTests.length === 0 ? <div className="portal-empty"><span>◇</span><h3>No {testTab} tests</h3><p>There are no assessments in this section right now.</p></div> :
-          <div className={`portal-test-list ${gridView ? "grid" : "list"}`}>{visibleTests.map((test, index) => (
-            <article className={`portal-test-card ${test.attemptStatus === "in_progress" ? "is-in-progress" : ""}`} key={test.id}>
+          <>
+            {tests.some(t => t.attemptStatus === "in_progress") && testTab === "active" && (
+              <div className="active-resume-hero-banner">
+                <div className="resume-hero-left">
+                  <span className="resume-pulse-dot" />
+                  <div>
+                    <span className="resume-hero-badge">ACTION REQUIRED • IN-PROGRESS EXAM</span>
+                    <h4>
+                      {tests.find(t => t.attemptStatus === "in_progress")?.name}
+                    </h4>
+                    <p>
+                      You paused this test at <strong>Question #{(tests.find(t => t.attemptStatus === "in_progress")?.currentQuestionIndex || 0) + 1}</strong>.
+                      All your answers and countdown are safely preserved.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn-resume-hero-action"
+                  disabled={!!startingId}
+                  onClick={() => {
+                    const ipTest = tests.find(t => t.attemptStatus === "in_progress");
+                    if (ipTest) startExam(ipTest.id);
+                  }}
+                >
+                  {startingId ? "Restoring Test…" : "▶ Resume Exam Now"}
+                </button>
+              </div>
+            )}
+            <div className={`portal-test-list ${gridView ? "grid" : "list"}`}>{visibleTests.map((test, index) => (
+              <article className={`portal-test-card ${test.attemptStatus === "in_progress" ? "is-in-progress" : ""}`} key={test.id}>
               <div className={`test-accent accent-${index % 4}`} />
               <button className={`test-bookmark-button ${bookmarks.some(item=>item.type==="test"&&item.testId===test.id)?"saved":""}`} onClick={()=>void toggleTestBookmark(test)} aria-label="Bookmark test" title="Bookmark test">{bookmarks.some(item=>item.type==="test"&&item.testId===test.id)?"★":"☆"}</button>
               <div className="test-card-heading">
@@ -534,7 +563,7 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
                 </button>
               )}
             </article>
-          ))}</div>}
+          ))}</div></>}
 
         </section>}
 

@@ -803,29 +803,34 @@ def get_attempt_by_id(attempt_id: str):
     return jsonify({"attempt": to_jsonable(attempt)})
 
 
-@answerer_bp.put("/attempts/<attempt_id>/save")
-def save_attempt(attempt_id: str):
-    """Save answers while test is in progress.
-
-    Payload: {"answers": [...], "timeSpentSec": 123, "currentQuestionIndex": 4, "currentSection": "General"}
-    """
+@answerer_bp.route("/attempts/<attempt_id>/save", methods=["PUT", "POST"])
+@answerer_bp.route("/attempts/save", methods=["PUT", "POST"])
+def save_attempt(attempt_id: str = None):
+    """Save answers and progress while test is in progress."""
     payload = request.get_json(silent=True) or {}
-    ok, msg = require_fields(payload, ["answers"])
-    if not ok:
-        return jsonify({"error": msg}), 400
-
     db = get_db()
-    try:
-        oid = ObjectId(attempt_id)
-    except Exception:
-        return jsonify({"error": "Invalid attempt id"}), 400
+    
+    attempt = None
+    if attempt_id and attempt_id != "current":
+        try:
+            attempt = db.attempts.find_one({"_id": ObjectId(attempt_id)})
+        except Exception:
+            pass
 
-    attempt = db.attempts.find_one({"_id": oid})
     if not attempt:
-        return jsonify({"error": "Attempt not found"}), 404
-    if attempt.get("status") != "in_progress":
-        return jsonify({"error": "Attempt not in progress"}), 400
+        exam_id_val = payload.get("examId")
+        user_id_val = payload.get("userId")
+        if exam_id_val and user_id_val:
+            try:
+                e_oid = ObjectId(exam_id_val)
+            except Exception:
+                e_oid = exam_id_val
+            attempt = db.attempts.find_one({"examId": e_oid, "userId": user_id_val, "status": "in_progress"})
 
+    if not attempt:
+        return jsonify({"error": "Active in-progress attempt not found"}), 404
+
+    oid = attempt["_id"]
     update = {
         "answers": payload.get("answers") or [],
         "updatedAt": datetime.utcnow(),
@@ -840,7 +845,19 @@ def save_attempt(attempt_id: str):
         update["questionTimes"] = {str(key): max(0, int(value or 0)) for key, value in payload.get("questionTimes", {}).items()}
 
     db.attempts.update_one({"_id": oid}, {"$set": update})
-    return jsonify({"message": "Saved"})
+    return jsonify({"message": "Saved", "attemptId": str(oid)})
+
+
+@answerer_bp.route("/attempts/<attempt_id>/pause", methods=["POST"])
+@answerer_bp.route("/attempts/pause", methods=["POST"])
+def pause_attempt(attempt_id: str = None):
+    """Explicitly checkpoint and pause candidate exam attempt."""
+    save_attempt(attempt_id)
+    return jsonify({
+        "message": "Exam progress paused and saved securely.",
+        "success": True,
+        "isPaused": True
+    })
 
 
 
@@ -874,24 +891,34 @@ def submit_attempt(attempt_id):
         questions = list(db.questions.find({"$or": [{"examId": exam_id}, {"examId": str(exam_id)}, {"examId": ObjectId(exam_id) if isinstance(exam_id, str) and len(exam_id) == 24 else None}]}))
 
         computed = compute_result(questions, answers, passing_percentage)
-        section_wise = {
-            item["section"]: {
-                "total": item["totalMarks"],
-                "scored": item["scoredMarks"],
-            }
-            for item in computed.get("sectionBreakdown", [])
-        }
+        # Ensure question times are properly recorded
+        total_q_time = sum(int(v or 0) for v in question_times.values())
+        if total_q_time == 0 and time_spent > 0:
+            review_items = computed.get("review", [])
+            answered_items = [it for it in review_items if it.get("userAnswer") and (len(it["userAnswer"]) > 0 if isinstance(it["userAnswer"], list) else bool(it["userAnswer"]))]
+            targets = answered_items if answered_items else review_items
+            if targets:
+                avg_per_q = max(1, round(time_spent / len(targets)))
+                for it in targets:
+                    question_times[str(it["questionId"])] = avg_per_q
+
+        q_map = {}
+        for q in questions:
+            for qkey in (q.get("qid"), q.get("id"), q.get("_id")):
+                if qkey is not None:
+                    q_map[str(qkey)] = q
+
         question_review = [
             {
-                "questionId": item["questionId"],
-                "question": item.get("question"),
-                "context": item.get("context", ""),
-                "contextType": item.get("contextType", ""),
-                "type": item.get("type"),
-                "options": item.get("options", []),
+                "questionId": str(item["questionId"]),
+                "question": item.get("question") or (q_map.get(str(item["questionId"])) or {}).get("question", ""),
+                "context": item.get("context", "") or (q_map.get(str(item["questionId"])) or {}).get("context", ""),
+                "contextType": item.get("contextType", "") or (q_map.get(str(item["questionId"])) or {}).get("contextType", ""),
+                "type": item.get("type") or (q_map.get(str(item["questionId"])) or {}).get("type", "single"),
+                "options": item.get("options") or (q_map.get(str(item["questionId"])) or {}).get("options", []),
                 "isCorrect": item["isCorrect"],
                 "userAnswer": item["userAnswer"],
-                "correctAnswer": item["correctAnswer"],
+                "correctAnswer": item["correctAnswer"] or (q_map.get(str(item["questionId"])) or {}).get("correctAnswer"),
                 "marks": item["marks"],
                 "section": item["section"],
                 "timeSpentSec": max(0, int(question_times.get(str(item["questionId"]), 0) or 0)),
@@ -922,14 +949,13 @@ def submit_attempt(attempt_id):
             "questionTimes": question_times,
         }
 
-
         # Store the completed test result in MongoDB.
         insert_result = db.results.insert_one(result_doc)
 
         # Mark the attempt as submitted after the result is stored.
         db.attempts.update_one(
             {"_id": ObjectId(attempt_id)},
-            {"$set": {"status": "submitted"}}
+            {"$set": {"status": "submitted", "questionTimes": question_times, "timeSpentSec": time_spent}}
         )
 
         # Audit log the exam submission
@@ -944,7 +970,7 @@ def submit_attempt(attempt_id):
             },
         )
 
-        # Return JSON-safe identifiers and the candidate score summary.
+        # Return JSON-safe identifiers and the complete candidate score and review summary.
         response_data = {
             "attemptId": str(result_doc["attemptId"]),
             "examId": str(result_doc["examId"]),
@@ -955,7 +981,9 @@ def submit_attempt(attempt_id):
             "passed": result_doc["passed"],
             "percentile": result_doc["percentile"],
             "sectionWise": result_doc["sectionWise"],
-            "questionReview": [],
+            "questionReview": question_review,
+            "timeSpentSec": time_spent,
+            "submittedAt": result_doc["submittedAt"].isoformat() + "Z",
         }
 
         return jsonify({"result": response_data, **response_data})

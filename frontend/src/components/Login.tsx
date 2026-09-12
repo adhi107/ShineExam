@@ -321,7 +321,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, defaultRole = 'answerer' }) => {
               ? `Sign in to ${tenant.name}`
               : selectedRole === "admin"
               ? "Sign In as Admin"
-              : "Login to Shine"}
+              : "Login"}
           </button>
         </form>
 

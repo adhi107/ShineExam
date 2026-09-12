@@ -485,80 +485,248 @@ const CandidateAnalytics = ({ detail, test, onBack, formatTime }: { detail: Resu
   const correct = review.filter(item => item.isCorrect).length;
   const wrong = review.filter(item => !item.isCorrect && answered(item.userAnswer)).length;
   const skipped = Math.max(0, review.length - correct - wrong);
+  const totalAttempted = correct + wrong;
+  const accuracy = totalAttempted > 0 ? ((correct / totalAttempted) * 100).toFixed(1) : "0.0";
+  const safePercentage = Math.max(0, Math.min(100, detail.percentage));
 
   return (
-    <section className="admin-analytics candidate-report">
-      <header className="analytics-head">
-        <div>
-          <button className="analytics-back" onClick={onBack}>← Student results</button>
-          <span>STUDENT PERFORMANCE REPORT</span>
-          <h1>{detail.userName}</h1>
-          <p>{test.name} • {detail.submittedAt ? new Date(detail.submittedAt).toLocaleString("en-IN") : "Completed"}</p>
-        </div>
-        <span className={`report-outcome ${detail.passed ? "pass" : "fail"}`}>
-          {detail.passed ? "Passed" : "Needs improvement"}
-        </span>
-      </header>
-
-      <div className="candidate-report-kpis">
-        <div className="admin-score-ring" style={{ "--score": `${Math.max(0, detail.percentage) * 3.6}deg` } as React.CSSProperties}>
-          <div>
-            <strong>{detail.percentage.toFixed(1)}%</strong>
-            <span>score</span>
+    <section className="admin-analytics candidate-report-container">
+      {/* Header Bar */}
+      <header className="candidate-report-head">
+        <div className="report-head-left">
+          <button className="candidate-back-btn" onClick={onBack} type="button">
+            <span className="back-arrow">←</span> Back to Student Results
+          </button>
+          <div className="report-eyebrow">STUDENT PERFORMANCE REPORT</div>
+          <div className="candidate-profile-row">
+            <div className="candidate-avatar-circle">
+              {detail.userName ? detail.userName.charAt(0).toUpperCase() : "U"}
+            </div>
+            <div className="candidate-info-block">
+              <h1 className="candidate-name-title">{detail.userName}</h1>
+              <div className="candidate-meta-badges">
+                <span className="meta-badge test-tag">📝 {test.name}</span>
+                <span className="meta-badge-dot">•</span>
+                <span className="meta-badge time-tag">
+                  📅 {detail.submittedAt ? new Date(detail.submittedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "Completed"}
+                </span>
+                {detail.percentile !== undefined && (
+                  <>
+                    <span className="meta-badge-dot">•</span>
+                    <span className="meta-badge percentile-tag">🎯 {detail.percentile.toFixed(1)}th Percentile</span>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-        <Metric label="Marks" value={`${detail.scoredMarks} / ${detail.totalMarks}`} />
-        <Metric label="Time spent" value={formatTime(detail.timeSpentSec)} />
-        <Metric label="Correct" value={correct} />
-        <Metric label="Incorrect" value={wrong} />
-        <Metric label="Unattempted" value={skipped} />
+
+        <div className="report-head-right">
+          <div className={`report-status-badge ${detail.passed ? "pass" : "fail"}`}>
+            <span className="status-indicator-dot" />
+            <span className="status-text">{detail.passed ? "Passed Examination" : "Needs Improvement"}</span>
+          </div>
+        </div>
+      </header>
+
+      {/* KPI Metric Cards */}
+      <div className="candidate-kpi-strip">
+        {/* Radial Score Card */}
+        <div className="kpi-score-ring-card">
+          <div
+            className="score-gauge"
+            style={{
+              "--score-deg": `${safePercentage * 3.6}deg`,
+              "--ring-color": detail.percentage >= 60 ? "#10b981" : detail.percentage >= 40 ? "#f59e0b" : "#ef4444"
+            } as React.CSSProperties}
+          >
+            <div className="score-gauge-center">
+              <strong className="gauge-val">{detail.percentage.toFixed(1)}%</strong>
+              <span className="gauge-label">Score</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 5 KPI Metric Cards */}
+        <div className="candidate-kpi-card">
+          <div className="kpi-icon-pill blue">🎯</div>
+          <div className="kpi-content">
+            <span className="kpi-label">Marks Scored</span>
+            <strong className="kpi-num">
+              {detail.scoredMarks} <small className="kpi-denom">/ {detail.totalMarks}</small>
+            </strong>
+          </div>
+        </div>
+
+        <div className="candidate-kpi-card">
+          <div className="kpi-icon-pill purple">⏱️</div>
+          <div className="kpi-content">
+            <span className="kpi-label">Time Spent</span>
+            <strong className="kpi-num">{formatTime(detail.timeSpentSec)}</strong>
+          </div>
+        </div>
+
+        <div className="candidate-kpi-card">
+          <div className="kpi-icon-pill emerald">✅</div>
+          <div className="kpi-content">
+            <span className="kpi-label">Correct</span>
+            <strong className="kpi-num text-emerald">{correct}</strong>
+          </div>
+        </div>
+
+        <div className="candidate-kpi-card">
+          <div className="kpi-icon-pill rose">❌</div>
+          <div className="kpi-content">
+            <span className="kpi-label">Incorrect</span>
+            <strong className="kpi-num text-rose">{wrong}</strong>
+          </div>
+        </div>
+
+        <div className="candidate-kpi-card">
+          <div className="kpi-icon-pill amber">⚪</div>
+          <div className="kpi-content">
+            <span className="kpi-label">Unattempted</span>
+            <strong className="kpi-num text-amber">{skipped}</strong>
+          </div>
+        </div>
       </div>
 
-      <div className="candidate-report-grid">
-        <article className="analytics-card section-performance">
-          <h3>Section performance</h3>
-          {Object.entries(detail.sectionWise || {}).map(([section, data]) => {
-            const percent = data.total ? data.scored / data.total * 100 : 0;
+      {/* 2-Column Section & Benchmark Analysis */}
+      <div className="candidate-analysis-grid">
+        {/* Section Performance */}
+        <article className="candidate-panel-card section-breakdown-card">
+          <div className="panel-card-head">
+            <div className="head-icon blue">📚</div>
+            <div>
+              <h3>Section Performance</h3>
+              <p>Module-wise marks and qualification ratio</p>
+            </div>
+          </div>
+
+          <div className="section-breakdown-content">
+            {Object.entries(detail.sectionWise || {}).length > 0 ? (
+              Object.entries(detail.sectionWise || {}).map(([section, data]) => {
+                const percent = data.total ? (data.scored / data.total) * 100 : 0;
+                const safeSecPercent = Math.max(0, Math.min(100, percent));
+                const tierClass = percent >= 60 ? "high" : percent >= 40 ? "mid" : "low";
+
+                return (
+                  <div className="candidate-section-item" key={section}>
+                    <div className="sec-item-header">
+                      <strong className="sec-item-name">{section}</strong>
+                      <span className="sec-item-score">
+                        {data.scored} <small>/ {data.total} marks</small>
+                      </span>
+                    </div>
+                    <div className="sec-item-bar-row">
+                      <div className="sec-progress-track">
+                        <div
+                          className={`sec-progress-fill ${tierClass}`}
+                          style={{ width: `${safeSecPercent}%` }}
+                        />
+                      </div>
+                      <span className={`sec-badge ${tierClass}`}>
+                        {percent.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="candidate-empty-note">No sectional breakdown available.</div>
+            )}
+          </div>
+        </article>
+
+        {/* Benchmark & Cohort Comparison */}
+        <article className="candidate-panel-card benchmark-comparison-card">
+          <div className="panel-card-head">
+            <div className="head-icon cyan">📊</div>
+            <div>
+              <h3>Performance Comparison</h3>
+              <p>Relative positioning against cohort statistics</p>
+            </div>
+          </div>
+
+          <div className="benchmark-card-content">
+            <div className="benchmark-bar-list">
+              <Compare label="Candidate Score" value={detail.percentage} color="#2563eb" tag="Student" />
+              <Compare label="Test Cohort Average" value={test.avgScore} color="#06b6d4" tag="Average" />
+              <Compare label="Passing Target" value={70} color="#10b981" tag="Target" />
+            </div>
+
+            <div className={`benchmark-note-banner ${detail.percentage >= test.avgScore ? "positive" : "alert"}`}>
+              <div className="note-icon-circle">
+                {detail.percentage >= test.avgScore ? "🎉" : "📉"}
+              </div>
+              <div className="note-content">
+                <strong>{detail.percentage >= test.avgScore ? "Above Cohort Average" : "Below Cohort Average"}</strong>
+                <p>
+                  Scored {Math.abs(detail.percentage - test.avgScore).toFixed(1)} percentage points{" "}
+                  {detail.percentage >= test.avgScore ? "above" : "below"} the overall examination average.
+                </p>
+              </div>
+            </div>
+
+            <div className="accuracy-summary-pill">
+              <div className="acc-left">
+                <span className="acc-title">Attempt Accuracy</span>
+                <span className="acc-desc">{correct} correct out of {totalAttempted} attempted questions</span>
+              </div>
+              <div className="acc-badge">{accuracy}%</div>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      {/* Question Analysis Grid */}
+      <article className="candidate-panel-card question-matrix-card">
+        <div className="panel-card-head question-matrix-head">
+          <div className="head-title-wrap">
+            <div className="head-icon amber">🧩</div>
+            <div>
+              <h3>Question Analysis Matrix</h3>
+              <p>Granular outcome for all {review.length} examination questions</p>
+            </div>
+          </div>
+
+          <div className="question-matrix-pills">
+            <span className="q-pill correct">✓ {correct} Correct</span>
+            <span className="q-pill wrong">✗ {wrong} Incorrect</span>
+            <span className="q-pill empty">⚪ {skipped} Unattempted</span>
+          </div>
+        </div>
+
+        <div className="question-tiles-grid">
+          {review.map((item, index) => {
+            const isAns = answered(item.userAnswer);
+            const statusClass = item.isCorrect ? "correct" : isAns ? "wrong" : "empty";
             return (
-              <div className="section-performance-row" key={section}>
-                <div>
-                  <strong>{section}</strong>
-                  <span>{data.scored} / {data.total}</span>
-                </div>
-                <div>
-                  <i style={{ width: `${Math.max(0, Math.min(100, percent))}%` }} />
-                </div>
-                <b>{percent.toFixed(1)}%</b>
+              <div
+                key={item.questionId || index}
+                className={`q-tile ${statusClass}`}
+                title={`Question ${index + 1}: ${item.isCorrect ? "Correct (+marks)" : isAns ? "Incorrect (negative marking)" : "Unattempted"} • Section: ${item.section || "General"}`}
+              >
+                <span className="q-tile-num">{index + 1}</span>
+                <span className="q-tile-icon">{item.isCorrect ? "✓" : isAns ? "✗" : "—"}</span>
               </div>
             );
           })}
-        </article>
-
-        <article className="analytics-card benchmark">
-          <h3>Performance comparison</h3>
-          <Compare label="Student" value={detail.percentage} color="#2f6fed" />
-          <Compare label="Test average" value={test.avgScore} color="#24afd0" />
-          <Compare label="Target" value={70} color="#27b487" />
-          <div className="performance-note">
-            <strong>{detail.percentage >= test.avgScore ? "Above test average" : "Below test average"}</strong>
-            <p>{Math.abs(detail.percentage - test.avgScore).toFixed(1)} percentage points {detail.percentage >= test.avgScore ? "above" : "below"} the cohort average.</p>
-          </div>
-        </article>
-      </div>
-
-      <article className="analytics-card question-analysis">
-        <h3>Question analysis</h3>
-        <div className="question-matrix">
-          {review.map((item, index) => (
-            <span key={item.questionId || index} className={item.isCorrect ? "correct" : answered(item.userAnswer) ? "wrong" : "empty"} title={`Question ${index + 1}`}>
-              {index + 1}
-            </span>
-          ))}
         </div>
-        <div className="matrix-legend">
-          <span><i className="correct" />Correct ({correct})</span>
-          <span><i className="wrong" />Incorrect ({wrong})</span>
-          <span><i className="empty" />Unattempted ({skipped})</span>
+
+        <div className="matrix-legend-footer">
+          <div className="legend-entry">
+            <span className="legend-swatch correct" />
+            <span>Correct Answer ({correct})</span>
+          </div>
+          <div className="legend-entry">
+            <span className="legend-swatch wrong" />
+            <span>Incorrect Response ({wrong})</span>
+          </div>
+          <div className="legend-entry">
+            <span className="legend-swatch empty" />
+            <span>Unattempted Question ({skipped})</span>
+          </div>
         </div>
       </article>
     </section>
@@ -577,14 +745,20 @@ const Empty = ({ text }: { text: string }) => (
   <div className="analytics-empty">{text}</div>
 );
 
-const Compare = ({ label, value, color }: { label: string; value: number; color: string }) => (
-  <div className="compare-row">
-    <div>
-      <span>{label}</span>
-      <b>{value.toFixed(1)}%</b>
+const Compare = ({ label, value, color, tag }: { label: string; value: number; color: string; tag?: string }) => (
+  <div className="candidate-compare-row">
+    <div className="compare-label-line">
+      <span className="compare-name">{label}</span>
+      <div className="compare-val-wrap">
+        {tag && <span className="compare-tag-pill" style={{ color, borderColor: `${color}40`, backgroundColor: `${color}12` }}>{tag}</span>}
+        <strong className="compare-percentage">{value.toFixed(1)}%</strong>
+      </div>
     </div>
-    <div>
-      <i style={{ width: `${Math.max(0, Math.min(100, value))}%`, background: color }} />
+    <div className="compare-bar-track">
+      <div
+        className="compare-bar-fill"
+        style={{ width: `${Math.max(0, Math.min(100, value))}%`, background: color }}
+      />
     </div>
   </div>
 );

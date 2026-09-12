@@ -1371,6 +1371,380 @@ def toggle_emergency_lockdown():
     })
 
 
+# ─────────────────────────────────────────────────────────────
+# Student Onboarding Telemetry & Batch Tracking (Day-wise, Batch-wise, Org-wise)
+# ─────────────────────────────────────────────────────────────
+@super_admin_bp.get("/analytics/student-onboarding")
+def get_student_onboarding_analytics():
+    """
+    Comprehensive student registration and onboarding telemetry:
+    - Day-wise student additions (last 7, 14, 30 days or all)
+    - Batch-wise student distribution across tenants
+    - Organization-wise student aggregation
+    - Cross-filtering by tenantId, batch, and date range
+    """
+    db = get_db()
+    tenant_id = request.args.get("tenantId", "").strip()
+    batch_filter = request.args.get("batch", "").strip()
+    days_param = request.args.get("days", "14").strip()
+
+    try:
+        days_count = int(days_param) if days_param != "all" else 90
+    except ValueError:
+        days_count = 14
+
+    query = {"role": "answerer"}
+    if tenant_id and tenant_id != "all":
+        query["tenantId"] = tenant_id
+    if batch_filter and batch_filter != "all":
+        query["batch"] = batch_filter
+
+    students = list(db.users.find(query, {
+        "password": 0
+    }).sort("createdAt", -1))
+
+    now = datetime.utcnow()
+    cutoff = now - timedelta(days=days_count) if days_param != "all" else datetime(2020, 1, 1)
+
+    # Fetch organizations lookup
+    org_docs = {
+        (o.get("tenantId") or DEFAULT_TENANT_ID): o
+        for o in db.organizations.find({})
+    }
+    orgs = {
+        tid: o.get("name", "Default Organization")
+        for tid, o in org_docs.items()
+    }
+    orgs[DEFAULT_TENANT_ID] = orgs.get(DEFAULT_TENANT_ID, DEFAULT_ORG_NAME)
+
+    # 1. Day-wise tracking
+    day_map = {}
+    # Pre-populate continuous days
+    for i in range(days_count if days_param != "all" else 30):
+        d_str = (now - timedelta(days=i)).strftime("%Y-%m-%d")
+        day_map[d_str] = {
+            "date": d_str,
+            "displayDate": (now - timedelta(days=i)).strftime("%d %b"),
+            "count": 0,
+            "batches": {},
+            "orgs": {}
+        }
+
+    total_candidates_all_time = len(students)
+    added_in_window = 0
+
+    # 2. Batch-wise tracking
+    batch_map = {}
+    # 3. Organization-wise tracking
+    org_map = {}
+
+    for s in students:
+        created_at = s.get("createdAt")
+        t_id = s.get("tenantId") or DEFAULT_TENANT_ID
+        org_name = orgs.get(t_id, f"Org ({t_id})")
+        b_name = (s.get("batch") or "Batch-A").strip()
+        is_active = bool(s.get("isActive", True))
+
+        # Organization tracking
+        if t_id not in org_map:
+            org_map[t_id] = {
+                "tenantId": t_id,
+                "orgName": org_name,
+                "totalStudents": 0,
+                "activeStudents": 0,
+                "batches": set(),
+                "addedInWindow": 0,
+                "recentAdditions": 0
+            }
+        org_map[t_id]["totalStudents"] += 1
+        if is_active:
+            org_map[t_id]["activeStudents"] += 1
+        org_map[t_id]["batches"].add(b_name)
+
+        # Batch tracking
+        b_key = f"{t_id}::{b_name}"
+        if b_key not in batch_map:
+            batch_map[b_key] = {
+                "key": b_key,
+                "batchName": b_name,
+                "tenantId": t_id,
+                "orgName": org_name,
+                "totalStudents": 0,
+                "activeStudents": 0,
+                "addedInWindow": 0
+            }
+        batch_map[b_key]["totalStudents"] += 1
+        if is_active:
+            batch_map[b_key]["activeStudents"] += 1
+
+        if created_at and isinstance(created_at, datetime):
+            if created_at >= cutoff:
+                added_in_window += 1
+                org_map[t_id]["addedInWindow"] += 1
+                batch_map[b_key]["addedInWindow"] += 1
+
+            d_str = created_at.strftime("%Y-%m-%d")
+            if d_str in day_map:
+                day_map[d_str]["count"] += 1
+                day_map[d_str]["batches"][b_name] = day_map[d_str]["batches"].get(b_name, 0) + 1
+                day_map[d_str]["orgs"][org_name] = day_map[d_str]["orgs"].get(org_name, 0) + 1
+
+    # Format day-wise trend in chronological order
+    day_series = sorted(list(day_map.values()), key=lambda x: x["date"])
+
+    # Format batch list
+    batch_list = []
+    for b in batch_map.values():
+        batch_list.append(b)
+    batch_list.sort(key=lambda x: x["totalStudents"], reverse=True)
+
+    # Ensure all registered organizations appear in org_list even if 0 members
+    for t_id, o_doc in org_docs.items():
+        if t_id not in org_map:
+            org_map[t_id] = {
+                "tenantId": t_id,
+                "orgName": o_doc.get("name", f"Org ({t_id})"),
+                "totalStudents": 0,
+                "activeStudents": 0,
+                "batches": set(),
+                "addedInWindow": 0,
+                "recentAdditions": 0
+            }
+
+    # Format org list with rich organizational telemetry metrics (Zero Student PII)
+    org_list = []
+    for o in org_map.values():
+        o_copy = dict(o)
+        o_copy["batchCount"] = len(o_copy["batches"])
+        o_copy["batches"] = sorted(list(o_copy["batches"]))
+        t_id = o_copy["tenantId"]
+        o_doc = org_docs.get(t_id, {})
+
+        # Capacity & Quotas
+        max_cands = int(o_doc.get("allowedMaxCandidates", 1000) or 1000)
+        max_exams = int(o_doc.get("allowedMaxExams", 50) or 50)
+        max_admins = int(o_doc.get("allowedMaxAdmins", 10) or 10)
+        quota_pct = round((o_copy["totalStudents"] / max(1, max_cands)) * 100, 1)
+
+        # Aggregate organizational metrics
+        exams_cnt = db.exams.count_documents({"tenantId": t_id})
+        attempts_cnt = db.attempts.count_documents({"tenantId": t_id})
+        try:
+            violations_cnt = db.security_violations.count_documents({"tenantId": t_id})
+        except Exception:
+            violations_cnt = 0
+        try:
+            passed_cnt = db.attempts.count_documents({"tenantId": t_id, "score": {"$gte": 50}})
+            pass_rate = round((passed_cnt / max(1, attempts_cnt)) * 100, 1) if attempts_cnt > 0 else 0.0
+        except Exception:
+            pass_rate = 0.0
+
+        try:
+            docs_cnt = db.documents.count_documents({"tenantId": t_id})
+            videos_cnt = db.videos.count_documents({"tenantId": t_id})
+            admins_cnt = db.users.count_documents({"tenantId": t_id, "role": {"$in": ["admin", "super_admin"]}})
+        except Exception:
+            docs_cnt = 0
+            videos_cnt = 0
+            admins_cnt = 0
+
+        o_copy["allowedMaxCandidates"] = max_cands
+        o_copy["allowedMaxExams"] = max_exams
+        o_copy["allowedMaxAdmins"] = max_admins
+        o_copy["quotaUsagePct"] = quota_pct
+        o_copy["capacityStatus"] = "critical" if quota_pct >= 95 else "warning" if quota_pct >= 80 else "normal"
+        o_copy["status"] = o_doc.get("status", "active")
+        o_copy["brandTitle"] = o_doc.get("brandTitle", "")
+        o_copy["examsCount"] = exams_cnt
+        o_copy["attemptsCount"] = attempts_cnt
+        o_copy["violationsCount"] = violations_cnt
+        o_copy["documentsCount"] = docs_cnt
+        o_copy["videosCount"] = videos_cnt
+        o_copy["adminsCount"] = admins_cnt
+        o_copy["passRate"] = pass_rate
+        o_copy["activeRatio"] = round((o_copy["activeStudents"] / max(1, o_copy["totalStudents"])) * 100, 1) if o_copy["totalStudents"] > 0 else 100.0
+
+        org_list.append(o_copy)
+    org_list.sort(key=lambda x: x["totalStudents"], reverse=True)
+
+    available_batches = sorted(list(set([b["batchName"] for b in batch_list])))
+
+    # Summary metrics
+    peak_day = max(day_series, key=lambda x: x["count"]) if day_series else {"date": "—", "count": 0}
+    avg_per_day = round(added_in_window / max(1, len(day_series)), 1)
+
+    return jsonify({
+        "timeframe": {
+            "days": days_count,
+            "filterTenantId": tenant_id or "all",
+            "filterBatch": batch_filter or "all"
+        },
+        "summary": {
+            "totalCandidates": total_candidates_all_time,
+            "addedInWindow": added_in_window,
+            "dailyAverage": avg_per_day,
+            "peakDay": peak_day.get("date", "—"),
+            "peakDayCount": peak_day.get("count", 0),
+            "totalBatches": len(batch_list),
+            "totalOrganizations": len(org_list)
+        },
+        "dayWiseTrend": day_series,
+        "dayWise": day_series,
+        "batchWiseBreakdown": batch_list,
+        "batchWise": batch_list,
+        "organizationWiseBreakdown": org_list,
+        "orgWise": org_list,
+        "availableBatches": available_batches,
+    })
+
+
+# ─────────────────────────────────────────────────────────────
+# Organization-Level Securities Tracking & Telemetry
+# ─────────────────────────────────────────────────────────────
+@super_admin_bp.get("/security/organizations-status")
+def get_organizations_security_status():
+    """
+    Live security posture and anti-cheat tracking per organization:
+    - Active sessions & device lockdown compliance
+    - Violation incident breakdowns (screenshot, tab switch, DevTools, screen record)
+    - Security policy enforcement matrix
+    - Threat index & lockdown controls
+    """
+    db = get_db()
+    orgs = list(db.organizations.find({}))
+    now = datetime.utcnow()
+
+    # Pre-aggregate violations by tenant
+    violations_by_tenant = {}
+    for v in db.security_violations.find({}):
+        tid = v.get("tenantId") or DEFAULT_TENANT_ID
+        v_type = (v.get("violationType") or v.get("type") or "other").lower()
+        if tid not in violations_by_tenant:
+            violations_by_tenant[tid] = {
+                "total": 0,
+                "screenshot": 0,
+                "screenRecord": 0,
+                "tabSwitch": 0,
+                "devTools": 0,
+                "multipleDisplays": 0,
+                "other": 0,
+                "lastViolation": None
+            }
+        v_entry = violations_by_tenant[tid]
+        v_entry["total"] += 1
+        if "screenshot" in v_type:
+            v_entry["screenshot"] += 1
+        elif "record" in v_type or "share" in v_type:
+            v_entry["screenRecord"] += 1
+        elif "tab" in v_type or "blur" in v_type or "window" in v_type:
+            v_entry["tabSwitch"] += 1
+        elif "devtools" in v_type or "inspect" in v_type:
+            v_entry["devTools"] += 1
+        elif "display" in v_type or "screen" in v_type:
+            v_entry["multipleDisplays"] += 1
+        else:
+            v_entry["other"] += 1
+
+        v_time = v.get("timestamp") or v.get("createdAt")
+        if v_time and (not v_entry["lastViolation"] or v_time > v_entry["lastViolation"]):
+            v_entry["lastViolation"] = v_time
+
+    org_security_reports = []
+    for org in orgs:
+        tid = org.get("tenantId", DEFAULT_TENANT_ID)
+        filter_q = build_tenant_filter(tid)
+
+        sec_policy = org.get("securityPolicy") or {}
+        features = org.get("features") or {}
+
+        # Violation stats
+        v_stats = violations_by_tenant.get(tid, {
+            "total": 0, "screenshot": 0, "screenRecord": 0,
+            "tabSwitch": 0, "devTools": 0, "multipleDisplays": 0, "other": 0,
+            "lastViolation": None
+        })
+
+        # Calculate threat score
+        threat_score = min(100, v_stats["screenshot"] * 25 + v_stats["screenRecord"] * 30 + v_stats["tabSwitch"] * 10 + v_stats["devTools"] * 20)
+        threat_level = "CRITICAL" if threat_score >= 70 else ("HIGH" if threat_score >= 40 else ("ELEVATED" if threat_score >= 15 else "SECURE"))
+
+        total_candidates = db.users.count_documents({**filter_q, "role": "answerer"})
+        active_candidates = db.users.count_documents({**filter_q, "role": "answerer", "isActive": True})
+        blocked_candidates = db.users.count_documents({**filter_q, "role": "answerer", "isActive": False})
+
+        org_security_reports.append({
+            "id": str(org["_id"]),
+            "tenantId": tid,
+            "name": org.get("name", "Organization"),
+            "brandTitle": org.get("brandTitle", org.get("name", "")),
+            "status": org.get("status", "active"),
+            "isLockdown": org.get("isLockdown", False),
+            "threatScore": threat_score,
+            "threatLevel": threat_level,
+            "totalCandidates": total_candidates,
+            "activeCandidates": active_candidates,
+            "blockedCandidates": blocked_candidates,
+            "violations": v_stats,
+            "policy": {
+                "enforceScreenShield": bool(sec_policy.get("enforceScreenShield", True)),
+                "enforceWatermark": bool(sec_policy.get("enforceWatermark", True)),
+                "blockOnScreenshot": bool(sec_policy.get("blockOnScreenshot", True)),
+                "blockOnScreenRecord": bool(sec_policy.get("blockOnScreenRecord", True)),
+                "maxConcurrentSessions": int(sec_policy.get("maxConcurrentSessions", 1)),
+                "sessionTimeoutMinutes": int(sec_policy.get("sessionTimeoutMinutes", 45)),
+                "aiProctoring": bool(features.get("aiProctoring", False)),
+                "strictDeviceLock": bool(features.get("strictDeviceLock", True)),
+                "auditLogs": bool(features.get("auditLogs", True)),
+            }
+        })
+
+    # Recent security audit trail for superadmin
+    recent_audits = list(db.audit_logs.find({}).sort("timestamp", -1).limit(20))
+
+    return jsonify({
+        "organizations": org_security_reports,
+        "totalOrganizationsChecked": len(org_security_reports),
+        "systemThreatOverview": {
+            "secureCount": sum(1 for o in org_security_reports if o["threatLevel"] == "SECURE"),
+            "elevatedCount": sum(1 for o in org_security_reports if o["threatLevel"] == "ELEVATED"),
+            "highCount": sum(1 for o in org_security_reports if o["threatLevel"] == "HIGH"),
+            "criticalCount": sum(1 for o in org_security_reports if o["threatLevel"] == "CRITICAL"),
+        },
+        "recentAuditTrail": to_jsonable(recent_audits)
+    })
+
+
+@super_admin_bp.post("/security/organizations/<tenant_id>/toggle-lockdown")
+def toggle_organization_lockdown(tenant_id):
+    """Quarantine or release an organization for emergency security lockdown."""
+    db = get_db()
+    payload = request.get_json(silent=True) or {}
+    enable_lockdown = payload.get("lockdown", True)
+
+    org = db.organizations.find_one({"$or": [{"tenantId": tenant_id}, {"slug": tenant_id}]})
+    if not org:
+        return jsonify({"error": "Organization not found"}), 404
+
+    db.organizations.update_one(
+        {"_id": org["_id"]},
+        {"$set": {"isLockdown": enable_lockdown, "lockdownUpdatedAt": datetime.utcnow()}}
+    )
+
+    audit_log(
+        action="TENANT_LOCKDOWN_TRIGGERED" if enable_lockdown else "TENANT_LOCKDOWN_RELEASED",
+        user_id="superadmin",
+        details={"tenantId": tenant_id, "lockdown": enable_lockdown},
+        severity="error" if enable_lockdown else "info",
+    )
+
+    return jsonify({
+        "success": True,
+        "tenantId": tenant_id,
+        "isLockdown": enable_lockdown,
+        "message": f"Security lockdown {'activated' if enable_lockdown else 'released'} for {org.get('name')}."
+    })
+
+
 
 
 

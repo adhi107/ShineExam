@@ -1235,30 +1235,31 @@
 
 /* ── Standalone Assign Modal ── */
 .assign-modal {
-  max-width: 540px;
+  width: min(620px, 95vw);
+  max-width: 620px;
 }
 
 .assign-modal-body {
-  padding: 18px 24px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-height: 60vh;
+  max-height: 65vh;
   overflow-y: auto;
 }
 
 .assign-mode-toggle {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
 
 .assign-toggle-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px;
+  gap: 6px;
+  padding: 10px 8px;
   border-radius: 10px;
   border: 1.5px solid #cbd5e1;
   background: #ffffff;
@@ -1267,18 +1268,112 @@
   color: #475569;
   cursor: pointer;
   transition: all 0.15s ease;
+  text-align: center;
+}
+
+.assign-toggle-btn:hover {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: #94a3b8;
 }
 
 .assign-toggle-btn.active {
   background: #eff6ff;
   border-color: #2563eb;
   color: #2563eb;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+}
+
+/* Full access banner */
+.assign-all-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border: 1.5px solid #bfdbfe;
+}
+
+.assign-banner-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: #ffffff;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.15);
+}
+
+.assign-banner-text strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #1e3a8a;
+  margin-bottom: 2px;
+}
+
+.assign-banner-text p {
+  margin: 0;
+  font-size: 12px;
+  color: #3b82f6;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* Batch Card Items in Video Assign */
+.video-batch-item {
+  padding: 12px 14px !important;
+}
+
+.video-batch-info-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.video-batch-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.video-batch-name {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.video-batch-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.video-batch-meta {
+  font-size: 11.5px;
+  color: #64748b;
+  font-weight: 500;
 }
 
 .btn-card-action.assign:hover {
   background: #f0fdf4;
   border-color: #86efac;
   color: #16a34a;
+}
+
+@media (max-width: 640px) {
+  .assign-mode-toggle {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════

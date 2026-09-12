@@ -227,13 +227,35 @@ def delete_announcement(announcement_id):
 
 @admin_announcements_bp.post("/<announcement_id>/assign")
 def assign_announcement(announcement_id):
-    db=get_db();payload=request.get_json(silent=True) or {};user_ids=[str(value) for value in payload.get("userIds") or []]
-    try:oid=ObjectId(announcement_id)
-    except Exception:return jsonify({"error":"Invalid announcement id"}),400
-    if not db.announcements.find_one({"_id":oid}):return jsonify({"error":"Announcement not found"}),404
-    valid={row["userId"] for row in db.users.find({"role":"answerer","userId":{"$in":user_ids}},{"userId":1})};db.announcement_assignments.delete_many({"announcementId":oid});now=datetime.utcnow()
-    if valid:db.announcement_assignments.insert_many([{"announcementId":oid,"userId":uid,"createdAt":now} for uid in valid])
-    return jsonify({"message":"Announcement assigned","assigned":len(valid)})
+    db = get_db()
+    payload = request.get_json(silent=True) or {}
+    user_ids = [str(value).strip() for value in payload.get("userIds") or [] if str(value).strip()]
+    batches = [str(b).strip() for b in payload.get("batches") or [] if str(b).strip()]
+    try:
+        oid = ObjectId(announcement_id)
+    except Exception:
+        return jsonify({"error": "Invalid announcement id"}), 400
+    if not db.announcements.find_one({"_id": oid}):
+        return jsonify({"error": "Announcement not found"}), 404
+
+    target_user_ids = set(user_ids)
+    if batches:
+        tenant_id = get_request_tenant_id()
+        filter_q = build_tenant_filter(tenant_id)
+        batch_users = list(db.users.find(
+            {**filter_q, "role": "answerer", "batch": {"$in": batches}},
+            {"userId": 1}
+        ))
+        for bu in batch_users:
+            if bu.get("userId"):
+                target_user_ids.add(str(bu["userId"]).strip())
+
+    valid = {row["userId"] for row in db.users.find({"role": "answerer", "userId": {"$in": list(target_user_ids)}}, {"userId": 1})}
+    db.announcement_assignments.delete_many({"announcementId": oid})
+    now = datetime.utcnow()
+    if valid:
+        db.announcement_assignments.insert_many([{"announcementId": oid, "userId": uid, "createdAt": now} for uid in valid])
+    return jsonify({"message": "Announcement assigned", "assigned": len(valid)})
 
 
 @answerer_resources_bp.get("/announcements")

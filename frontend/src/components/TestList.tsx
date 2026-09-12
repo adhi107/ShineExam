@@ -59,8 +59,12 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
   const [selectedTest, setSelectedTest] = useState<Test | null>(null);
   const [loading, setLoading] = useState(false);
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [batches, setBatches] = useState<{ name: string; count: number }[]>([]);
   const [assigningTest, setAssigningTest] = useState<Test | null>(null);
+  const [assignMode, setAssignMode] = useState<"students" | "batches">("students");
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [selectedBatches, setSelectedBatches] = useState<string[]>([]);
+  const [batchSearch, setBatchSearch] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
   const [testSearch, setTestSearch] = useState("");
@@ -110,9 +114,21 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
     }
   };
 
+  const loadBatches = async () => {
+    try {
+      const res = await apiGet<any>("/admin/users/batches");
+      if (res && Array.isArray(res.batches)) {
+        setBatches(res.batches);
+      }
+    } catch (e) {
+      console.error("Failed to load batches", e);
+    }
+  };
+
   useEffect(() => {
     loadTests();
     loadUsers();
+    loadBatches();
   }, []);
 
   const testSearchOptions = useMemo<ValueHelpOption[]>(() => {
@@ -224,6 +240,23 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
     setSelectedUserIds((prev) => {
       if (allSelected) return prev.filter((userId) => !filteredUserIds.includes(userId));
       return Array.from(new Set([...prev, ...filteredUserIds]));
+    });
+  };
+
+  const filteredBatches = useMemo(() => {
+    if (!batchSearch.trim()) return batches;
+    const q = batchSearch.toLowerCase();
+    return batches.filter((b) => b.name.toLowerCase().includes(q));
+  }, [batches, batchSearch]);
+
+  const allBatchesSelected = filteredBatches.length > 0 && filteredBatches.every((b) => selectedBatches.includes(b.name));
+  const someBatchesSelected = filteredBatches.some((b) => selectedBatches.includes(b.name)) && !allBatchesSelected;
+
+  const handleSelectAllBatches = () => {
+    const names = filteredBatches.map((b) => b.name);
+    setSelectedBatches((prev) => {
+      if (allBatchesSelected) return prev.filter((name) => !names.includes(name));
+      return Array.from(new Set([...prev, ...names]));
     });
   };
 
@@ -339,7 +372,21 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
             <div className="test-card-actions">
               <button className="action-btn view-btn" onClick={() => setSelectedTest(test)}>View Details</button>
               <button className="action-btn edit-btn" onClick={() => handleEdit(test.id)}>Edit</button>
-              <button className="action-btn edit-btn" onClick={() => { setAssigningTest(test); setSelectedUserIds([]); setStudentSearch(""); setStatusFilter("active"); }}>Assign</button>
+              <button
+                className="action-btn edit-btn"
+                onClick={() => {
+                  setAssigningTest(test);
+                  setAssignMode("students");
+                  setSelectedUserIds([]);
+                  setSelectedBatches([]);
+                  setStudentSearch("");
+                  setBatchSearch("");
+                  setStatusFilter("active");
+                  loadBatches();
+                }}
+              >
+                Assign
+              </button>
               <button className="action-btn delete-btn" onClick={() => deleteTest(test.id)}>Delete</button>
             </div>
           </div>
@@ -397,65 +444,195 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
 
       {assigningTest && (
         <div className="modal-overlay" onClick={() => setAssigningTest(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content assign-modal-content" style={{ width: "min(640px, 95vw)", maxWidth: "640px" }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Assign Test: {assigningTest.name}</h2>
-              <button className="close-btn" onClick={() => setAssigningTest(null)}>x</button>
+              <h2>Assign Assessment: {assigningTest.name}</h2>
+              <button className="close-btn" onClick={() => setAssigningTest(null)} aria-label="Close">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
             </div>
-            <div className="modal-body">
-              {allUsers.length === 0 && <p style={{ color: "#6a6d70" }}>No users available</p>}
-              {allUsers.length > 0 && (
-                <div className="assign-filter-wrap">
-                  <div className="assign-filter-grid">
-                    <ValueHelpField label="Search Students" placeholder="Search by name, username or email" value={studentSearch} options={studentSearchOptions} onChange={setStudentSearch} allowFreeText />
-                    <ValueHelpField label="Status" placeholder="Active Only" value={statusFilter} options={studentStatusOptions} onChange={(value) => setStatusFilter(value as "active" | "inactive" | "all")} />
-                  </div>
-                  <div className="assign-selection-meta">
-                    <span>{filteredUsers.length} students shown</span>
-                  </div>
-                  <label className="assign-select-all">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      ref={(input) => { if (input) input.indeterminate = someSelected; }}
-                      onChange={handleSelectAll}
-                    />
-                    <span className="assign-select-all-text">
-                      {allSelected ? "Deselect All" : "Select All"}
-                      {selectedUserIds.length > 0 && ` (${selectedUserIds.length} selected)`}
-                    </span>
-                  </label>
-                </div>
-              )}
 
-              <div className="assign-user-list">
-                {filteredUsers.map((user) => (
-                  <label key={user.userId} className="assign-user-row">
-                    <input
-                      type="checkbox"
-                      checked={selectedUserIds.includes(user.userId)}
-                      onChange={(e) => {
-                        if (e.target.checked) setSelectedUserIds((prev) => [...prev, user.userId]);
-                        else setSelectedUserIds((prev) => prev.filter((id) => id !== user.userId));
-                      }}
-                    />
-                    <div className="assign-user-copy">
-                      <span>{user.name} ({user.userId})</span>
-                      <small>{user.email || "No email address"}</small>
+            {/* Mode Switcher Tabs */}
+            <div className="assign-tab-nav">
+              <button
+                type="button"
+                className={`assign-tab-btn ${assignMode === "students" ? "active" : ""}`}
+                onClick={() => setAssignMode("students")}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px', verticalAlign: '-2px' }}>
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                Individual Students {selectedUserIds.length > 0 && `(${selectedUserIds.length})`}
+              </button>
+              <button
+                type="button"
+                className={`assign-tab-btn ${assignMode === "batches" ? "active" : ""}`}
+                onClick={() => setAssignMode("batches")}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px', verticalAlign: '-2px' }}>
+                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                  <line x1="7" y1="7" x2="7.01" y2="7"/>
+                </svg>
+                Batch Wise {selectedBatches.length > 0 && `(${selectedBatches.length})`}
+              </button>
+            </div>
+
+            <div className="modal-body">
+              {assignMode === "students" ? (
+                <>
+                  {allUsers.length === 0 && <p style={{ color: "#6a6d70" }}>No users available</p>}
+                  {allUsers.length > 0 && (
+                    <div className="assign-filter-wrap">
+                      <div className="assign-filter-grid">
+                        <ValueHelpField label="Search Students" placeholder="Search by name, username or email" value={studentSearch} options={studentSearchOptions} onChange={setStudentSearch} allowFreeText />
+                        <ValueHelpField label="Status" placeholder="Active Only" value={statusFilter} options={studentStatusOptions} onChange={(value) => setStatusFilter(value as "active" | "inactive" | "all")} />
+                      </div>
+                      <div className="assign-selection-meta">
+                        <span>{filteredUsers.length} students shown</span>
+                      </div>
+                      <label className="assign-select-all">
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          ref={(input) => { if (input) input.indeterminate = someSelected; }}
+                          onChange={handleSelectAll}
+                        />
+                        <span className="assign-select-all-text">
+                          {allSelected ? "Deselect All" : "Select All"}
+                          {selectedUserIds.length > 0 && ` (${selectedUserIds.length} selected)`}
+                        </span>
+                      </label>
                     </div>
-                  </label>
-                ))}
-                {filteredUsers.length === 0 && <p className="assign-empty-state">No students match the current filters.</p>}
-              </div>
+                  )}
+
+                  <div className="assign-user-list">
+                    {filteredUsers.map((user) => (
+                      <label key={user.userId} className="assign-user-row">
+                        <input
+                          type="checkbox"
+                          checked={selectedUserIds.includes(user.userId)}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedUserIds((prev) => [...prev, user.userId]);
+                            else setSelectedUserIds((prev) => prev.filter((id) => id !== user.userId));
+                          }}
+                        />
+                        <div className="assign-user-copy">
+                          <span>{user.name} ({user.userId})</span>
+                          <small>{user.email || "No email address"}</small>
+                        </div>
+                      </label>
+                    ))}
+                    {filteredUsers.length === 0 && <p className="assign-empty-state">No students match the current filters.</p>}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="assign-filter-wrap">
+                    <div style={{ marginBottom: "10px" }}>
+                      <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#475569", marginBottom: "6px", textTransform: "uppercase" }}>
+                        Search Batches
+                      </label>
+                      <input
+                        type="text"
+                        className="batch-assign-search-input"
+                        placeholder="Search batches by name..."
+                        value={batchSearch}
+                        onChange={(e) => setBatchSearch(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "10px 14px",
+                          borderRadius: "10px",
+                          border: "1.5px solid #cbd5e1",
+                          fontSize: "13.5px",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                    <div className="assign-selection-meta">
+                      <span>{filteredBatches.length} batch(es) available</span>
+                    </div>
+                    <label className="assign-select-all">
+                      <input
+                        type="checkbox"
+                        checked={allBatchesSelected}
+                        ref={(input) => { if (input) input.indeterminate = someBatchesSelected; }}
+                        onChange={handleSelectAllBatches}
+                      />
+                      <span className="assign-select-all-text">
+                        {allBatchesSelected ? "Deselect All Batches" : "Select All Batches"}
+                        {selectedBatches.length > 0 && ` (${selectedBatches.length} selected)`}
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="assign-user-list">
+                    {filteredBatches.map((b) => (
+                      <label key={b.name} className="assign-user-row">
+                        <input
+                          type="checkbox"
+                          checked={selectedBatches.includes(b.name)}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedBatches((prev) => [...prev, b.name]);
+                            else setSelectedBatches((prev) => prev.filter((name) => name !== b.name));
+                          }}
+                        />
+                        <div className="assign-user-copy" style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: "14px", fontWeight: 700, color: "#1e293b", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                              <line x1="7" y1="7" x2="7.01" y2="7"/>
+                            </svg>
+                            {b.name}
+                          </span>
+                          <span style={{
+                            fontSize: "11.5px",
+                            fontWeight: 700,
+                            padding: "3px 9px",
+                            borderRadius: "12px",
+                            background: "#e0f2fe",
+                            color: "#0369a1",
+                            border: "1px solid #bae6fd",
+                          }}>
+                            {b.count} {b.count === 1 ? "student" : "students"}
+                          </span>
+                        </div>
+                      </label>
+                    ))}
+                    {filteredBatches.length === 0 && (
+                      <p className="assign-empty-state">
+                        {batches.length === 0 ? "No batches created yet. Assign batches to students under Candidates first." : "No batches match search."}
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
             <div className="modal-footer">
               <button
+                className="secondary-btn"
+                style={{ padding: "0.6rem 1.2rem", borderRadius: "10px", border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer", fontWeight: 600 }}
+                onClick={() => setAssigningTest(null)}
+              >
+                Cancel
+              </button>
+              <button
                 className="primary-btn"
-                disabled={selectedUserIds.length === 0}
+                disabled={assignMode === "students" ? selectedUserIds.length === 0 : selectedBatches.length === 0}
                 onClick={async () => {
                   try {
-                    await apiPost(`/admin/exams/${assigningTest.id}/assign`, { userIds: selectedUserIds });
-                    alert("Test assigned successfully");
+                    if (assignMode === "batches") {
+                      const res = await apiPost<any>(`/admin/exams/${assigningTest.id}/assign`, { batches: selectedBatches });
+                      alert(res.message || `Test assigned successfully to ${selectedBatches.length} batch(es)!`);
+                    } else {
+                      const res = await apiPost<any>(`/admin/exams/${assigningTest.id}/assign`, { userIds: selectedUserIds });
+                      alert(res.message || `Test assigned successfully to ${selectedUserIds.length} student(s)!`);
+                    }
                     setAssigningTest(null);
                     loadTests();
                   } catch (err) {
@@ -464,7 +641,9 @@ const TestList: React.FC<TestListProps> = ({ onCreateNew, onEditTest }) => {
                   }
                 }}
               >
-                Assign Test
+                {assignMode === "batches"
+                  ? `Assign to ${selectedBatches.length} Batch(es)`
+                  : `Assign to ${selectedUserIds.length} Student(s)`}
               </button>
             </div>
           </div>
