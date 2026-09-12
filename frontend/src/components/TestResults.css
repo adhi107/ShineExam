@@ -1049,6 +1049,181 @@
   .test-comparison { grid-column: span 2; }
 }
 
+@media (max-width: 960px) {
+  .admin-analytics {
+    padding: 20px 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-analytics {
+    padding: 16px 12px;
+  }
+
+  .analytics-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+
+  .analytics-head h1 {
+    font-size: 22px;
+  }
+
+  .analytics-value-help {
+    width: 100%;
+  }
+
+  .analytics-kpis,
+  .analytics-kpis.overview {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .analytics-metric {
+    padding: 14px 16px;
+  }
+
+  .analytics-metric strong {
+    font-size: 20px;
+  }
+
+  .analytics-section-title {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 24px 0 12px;
+  }
+
+  .test-analytics-filter-card {
+    padding: 14px 14px;
+    gap: 10px;
+  }
+
+  .test-analytics-filter-card .test-filter-group {
+    width: calc(50% - 5px);
+    flex: 1 1 calc(50% - 5px);
+  }
+
+  .test-analytics-filter-card .test-filter-group.search-group {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+
+  .test-filter-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .clear-test-filters-btn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .analytics-test-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .analytics-test-card {
+    padding: 16px 16px 14px;
+  }
+
+  .analytics-test-card h3 {
+    min-height: auto;
+    margin: 10px 0 6px;
+    font-size: 15px;
+  }
+
+  .test-analytics-values strong {
+    font-size: 14px;
+  }
+
+  .overview-visuals {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .overview-visuals .analytics-card {
+    min-height: auto;
+    padding: 18px 16px;
+  }
+
+  .test-comparison,
+  .topper-leaderboard {
+    grid-column: span 1;
+  }
+
+  .analytics-split {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .candidate-results-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 14px 16px;
+  }
+}
+
+@media (max-width: 520px) {
+  .test-analytics-filter-card .test-filter-group {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+
+  .analytics-kpis,
+  .analytics-kpis.overview {
+    grid-template-columns: 1fr;
+  }
+
+  .distribution {
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
+  }
+
+  .paper-details {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .test-comparison > button {
+    grid-template-columns: minmax(80px, 1fr) 1.2fr 30px;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .test-comparison > button > span {
+    font-size: 12px;
+  }
+
+  .trend-bars {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+
+  .trend-bars button {
+    min-width: 38px;
+  }
+
+  .vertical-chart {
+    gap: 6px;
+  }
+
+  .vertical-chart strong {
+    font-size: 10px;
+  }
+
+  .vertical-chart small {
+    font-size: 9px;
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────
    Candidate Performance Report (Ultra Modern Aesthetics)
    ───────────────────────────────────────────────────────────── */
@@ -1794,22 +1969,110 @@
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .candidate-report-container {
-    padding: 16px 14px 40px !important;
+    padding: 18px 16px 45px !important;
   }
   .candidate-report-head {
     flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .report-head-right {
+    align-self: flex-start;
+  }
+  .candidate-profile-row {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+  .candidate-name-title {
+    font-size: 22px;
+  }
+  .candidate-panel-card {
+    padding: 18px 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .candidate-report-container {
+    padding: 14px 12px 40px !important;
+  }
+  .candidate-profile-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
   }
   .candidate-kpi-strip {
     grid-template-columns: 1fr 1fr;
+    gap: 10px;
   }
   .kpi-score-ring-card {
     grid-column: span 2;
+    padding: 12px;
+  }
+  .candidate-kpi-card {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+  .kpi-icon-pill {
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
+    border-radius: 10px;
+  }
+  .kpi-num {
+    font-size: 19px;
+  }
+  .kpi-label {
+    font-size: 10px;
+  }
+  .question-matrix-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .question-matrix-pills {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .question-tiles-grid {
+    grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+    gap: 6px;
+  }
+  .q-tile {
+    height: 42px;
   }
   .matrix-legend-footer {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
+  }
+  .accuracy-summary-pill {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 440px) {
+  .candidate-kpi-strip {
+    grid-template-columns: 1fr;
+  }
+  .kpi-score-ring-card {
+    grid-column: span 1;
+  }
+  .candidate-meta-badges {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .meta-badge-dot {
+    display: none;
+  }
+  .sec-item-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
   }
 }

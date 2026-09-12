@@ -870,25 +870,43 @@ def submit_attempt(attempt_id):
 
     db = get_db()
 
-    attempt = db.attempts.find_one({"_id": ObjectId(attempt_id)})
+    attempt = None
+    if ObjectId.is_valid(str(attempt_id)):
+        attempt = db.attempts.find_one({"_id": ObjectId(str(attempt_id))})
+    if not attempt:
+        attempt = db.attempts.find_one({"_id": attempt_id})
+    if not attempt:
+        attempt = db.attempts.find_one({"_id": str(attempt_id)})
     if not attempt:
         return jsonify({"error": "Attempt not found"}), 404
+
     question_times = payload.get("questionTimes") if isinstance(payload.get("questionTimes"), dict) else (attempt.get("questionTimes") or {})
 
-    # Reject duplicate submissions for the same attempt.
+    # If attempt is already submitted, return the stored result doc if available
     if attempt.get("status") == "submitted":
+        existing_result = db.results.find_one({"$or": [{"attemptId": str(attempt["_id"])}, {"attemptId": str(attempt_id)}]})
+        if existing_result:
+            json_res = to_jsonable(existing_result)
+            return jsonify({"result": json_res, **json_res}), 200
         return jsonify({"error": "Attempt already submitted"}), 409
 
     try:
         exam_id = attempt["examId"]
-        exam = db.exams.find_one({"$or": [{"_id": exam_id}, {"_id": ObjectId(exam_id) if isinstance(exam_id, str) and len(exam_id) == 24 else None}]})
+        exam = None
+        if ObjectId.is_valid(str(exam_id)):
+            exam = db.exams.find_one({"_id": ObjectId(str(exam_id))})
         if not exam:
             exam = db.exams.find_one({"_id": exam_id})
+        if not exam:
+            exam = db.exams.find_one({"_id": str(exam_id)})
         if not exam:
             return jsonify({"error": "Exam not found"}), 404
         passing_percentage = float(exam.get("passingPercentage", 40))
 
-        questions = list(db.questions.find({"$or": [{"examId": exam_id}, {"examId": str(exam_id)}, {"examId": ObjectId(exam_id) if isinstance(exam_id, str) and len(exam_id) == 24 else None}]}))
+        q_match = [{"examId": exam_id}, {"examId": str(exam_id)}]
+        if ObjectId.is_valid(str(exam_id)):
+            q_match.append({"examId": ObjectId(str(exam_id))})
+        questions = list(db.questions.find({"$or": q_match}))
 
         computed = compute_result(questions, answers, passing_percentage)
         # Ensure question times are properly recorded
@@ -926,15 +944,25 @@ def submit_attempt(attempt_id):
             for item in computed.get("review", [])
         ]
 
+        section_wise = {
+            item["section"]: {
+                "total": item["totalMarks"],
+                "scored": item["scoredMarks"],
+                "percentage": item.get("percentage", 0),
+            }
+            for item in computed.get("sectionBreakdown", [])
+        }
+
         res_tenant_id = (
             attempt.get("tenantId")
             or (exam.get("tenantId") if exam else None)
             or DEFAULT_TENANT_ID
         )
 
+        now_utc = datetime.utcnow()
         result_doc = {
-            "attemptId": str(attempt_id),
-            "examId": str(exam_id),
+            "attemptId": str(attempt["_id"]),
+            "examId": str(exam["_id"]),
             "userId": str(attempt.get("userId", user_id)),
             "tenantId": str(res_tenant_id),
             "totalMarks": computed.get("totalMarks", 0),
@@ -944,7 +972,7 @@ def submit_attempt(attempt_id):
             "percentile": 0,
             "sectionWise": section_wise,
             "questionReview": question_review,
-            "submittedAt": datetime.utcnow(),
+            "submittedAt": now_utc,
             "timeSpentSec": time_spent,
             "questionTimes": question_times,
         }
@@ -954,8 +982,8 @@ def submit_attempt(attempt_id):
 
         # Mark the attempt as submitted after the result is stored.
         db.attempts.update_one(
-            {"_id": ObjectId(attempt_id)},
-            {"$set": {"status": "submitted", "questionTimes": question_times, "timeSpentSec": time_spent}}
+            {"_id": attempt["_id"]},
+            {"$set": {"status": "submitted", "questionTimes": question_times, "timeSpentSec": time_spent, "submittedAt": now_utc}}
         )
 
         # Audit log the exam submission
@@ -963,8 +991,8 @@ def submit_attempt(attempt_id):
             "EXAM_SUBMITTED",
             user_id=str(result_doc.get("userId", user_id)),
             details={
-                "attemptId": str(attempt_id),
-                "examId": str(exam_id),
+                "attemptId": str(attempt["_id"]),
+                "examId": str(exam["_id"]),
                 "percentage": computed.get("percentage", 0),
                 "passed": computed.get("passed", False),
             },
@@ -1003,21 +1031,27 @@ def submit_attempt_generic():
     if not user_id or not exam_id_str:
         return jsonify({"error": "userId and examId are required"}), 400
 
-    try:
-        exam_oid = ObjectId(exam_id_str)
-    except Exception:
-        return jsonify({"error": "Invalid examId"}), 400
+    exam_matches = [exam_id_str]
+    if ObjectId.is_valid(exam_id_str):
+        exam_matches.append(ObjectId(exam_id_str))
 
     attempt = db.attempts.find_one({
-        "examId": exam_oid,
+        "examId": {"$in": exam_matches},
         "userId": user_id,
         "status": "in_progress"
     })
 
     if not attempt:
+        attempt = db.attempts.find_one({
+            "examId": {"$in": exam_matches},
+            "userId": user_id,
+        }, sort=[("startedAt", -1)])
+
+    if not attempt or attempt.get("status") == "submitted":
         now = datetime.utcnow()
+        exam_val = ObjectId(exam_id_str) if ObjectId.is_valid(exam_id_str) else exam_id_str
         attempt_doc = {
-            "examId": exam_oid,
+            "examId": exam_val,
             "userId": user_id,
             "status": "in_progress",
             "answers": payload.get("answers", []),
@@ -1027,7 +1061,7 @@ def submit_attempt_generic():
             "timeSpentSec": int(payload.get("timeSpentSec", 0)),
             "currentQuestionIndex": 0,
             "currentSection": "",
-            "questionTimes": {},
+            "questionTimes": payload.get("questionTimes") or {},
         }
         res = db.attempts.insert_one(attempt_doc)
         attempt_id = str(res.inserted_id)
