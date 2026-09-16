@@ -684,6 +684,65 @@
   display: block;
 }
 
+/* Iframe fade-in when loaded */
+.student-iframe-element.iframe-loading {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.student-iframe-element.iframe-ready {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+/* Video loading skeleton */
+.video-loading-skeleton {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0a1628 0%, #0d2144 100%);
+  z-index: 2;
+}
+
+.video-skeleton-pulse {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  animation: skeletonFadeIn 0.4s ease;
+}
+
+.skeleton-play-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+  border: 2px solid rgba(255,255,255,0.12);
+  display: grid;
+  place-items: center;
+  animation: skeletonPulse 1.6s ease-in-out infinite;
+}
+
+.video-skeleton-pulse p {
+  color: rgba(255,255,255,0.4);
+  font-size: 13px;
+  font-weight: 500;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+@keyframes skeletonFadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+
 .student-player-footer {
   padding: 16px 22px;
   background: #0d1527;

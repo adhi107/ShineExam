@@ -1,17 +1,50 @@
-# Web Framework & Networking
+# ═══════════════════════════════════════════════════════════════
+#  Shine Exam Platform — Backend Dependencies
+#  All existing packages preserved + new ones added for
+#  production-grade performance, security, and reliability.
+# ═══════════════════════════════════════════════════════════════
+
+# ── Web Framework & Networking ──────────────────────────────────
 Flask==3.0.3
 flask-cors==4.0.1
 Werkzeug==3.0.3
 requests>=2.31.0
 gunicorn>=21.2.0
+eventlet>=0.35.0              # Async worker for gunicorn (WebSocket support)
+gevent>=24.2.1                # Alternative high-concurrency worker for gunicorn
+flask-compress>=1.14          # Gzip/Brotli response compression (faster page loads)
+flask-limiter>=3.8.0          # Rate limiting per IP / per user
+flask-talisman>=1.1.0         # HTTP security headers (HSTS, CSP, X-Frame-Options)
 
-# Database, Connection Pooling & High-Throughput Driver
+# ── Database, Connection Pooling & High-Throughput Driver ───────
 pymongo==4.8.0
 dnspython>=2.6.1
 certifi>=2024.7.4
 python-dotenv==1.0.1
+motor>=3.5.0                  # Async MongoDB driver (non-blocking DB ops)
+pymongo-stubs>=0.0.2          # Type stubs for pymongo IDE support
+redis>=5.0.7                  # Redis client for caching, sessions & pub/sub
+hiredis>=3.0.0                # C extension for fast Redis protocol parsing
+flask-caching>=2.3.0          # Response & query caching (Redis/filesystem backends)
 
-# Multimodal Document Parsing, OCR & Visual Pipeline
+# ── Authentication, Authorization & Cryptography ───────────────
+PyJWT>=2.9.0                  # JWT token generation & validation
+bcrypt>=4.2.0                 # Password hashing (bcrypt, industry standard)
+cryptography>=43.0.0          # AES/RSA encryption for DRM key management
+itsdangerous>=2.2.0           # URL-safe token signing (email verify, reset links)
+passlib[bcrypt]>=1.7.4        # Multi-scheme password hashing library
+pyotp>=2.9.0                  # TOTP/HOTP for 2FA support
+qrcode[pil]>=7.4.0            # QR code generation for 2FA setup screens
+
+# ── Email, Notifications & Messaging ───────────────────────────
+Flask-Mail>=0.10.0            # SMTP email sending (exam results, alerts, OTP)
+sendgrid>=6.11.0              # SendGrid API for transactional email delivery
+twilio>=9.2.0                 # SMS/WhatsApp notifications for exam alerts
+firebase-admin>=6.5.0         # Firebase Cloud Messaging for push notifications
+celery>=5.4.0                 # Distributed task queue (async email, reports)
+kombu>=5.3.4                  # Messaging library used by Celery
+
+# ── Multimodal Document Parsing, OCR & Visual Pipeline ─────────
 PyMuPDF>=1.24.9
 pdfplumber>=0.11.4
 pypdf>=4.0.0
@@ -23,12 +56,69 @@ pytesseract>=0.3.10
 opencv-python-headless>=4.8.0.76
 striprtf>=0.0.26
 filetype>=1.2.0
+camelot-py[cv]>=0.11.0        # Advanced table extraction from PDFs
+pdfminer.six>=20221105        # Text extraction fallback for complex PDFs
+python-pptx>=1.0.0            # PowerPoint (PPTX) parsing for study materials
+xlrd>=2.0.1                   # Legacy XLS file reading support
+xlwt>=1.3.0                   # XLS writing for result export
+pyheif>=0.8.0                 # HEIC/HEIF image support (iPhone uploads)
+imagehash>=4.3.1              # Perceptual image hashing for duplicate detection
 
-# Data Processing, Validation & Scheduling
+# ── Data Processing, Validation & Scheduling ───────────────────
 pandas>=2.2.2
 numpy>=1.26.0
 pydantic>=2.7.0
 tabulate>=0.9.0
 APScheduler>=3.10.4
 python-dateutil>=2.8.2
+marshmallow>=3.22.0           # Object serialization/deserialization & validation
+cerberus>=1.3.5               # Lightweight schema validation for API payloads
+ujson>=5.10.0                 # Ultra-fast JSON parsing (replaces stdlib json)
+orjson>=3.10.0                # Fastest JSON library (Rust-based, for exports)
+arrow>=1.3.0                  # Better datetime handling with timezone support
+pytz>=2024.1                  # Timezone definitions (IST, UTC conversions)
 
+# ── Performance, Monitoring & Observability ─────────────────────
+prometheus-client>=0.21.0     # Metrics export (request count, latency histograms)
+opentelemetry-api>=1.27.0     # Distributed tracing API
+opentelemetry-sdk>=1.27.0     # OpenTelemetry SDK for trace collection
+sentry-sdk[flask]>=2.14.0    # Error tracking & performance monitoring (Sentry)
+psutil>=6.0.0                 # System resource monitoring (CPU, RAM, disk)
+py-cpuinfo>=9.0.0             # CPU information for health-check endpoints
+structlog>=24.4.0             # Structured JSON logging for production log parsing
+colorlog>=6.8.2               # Colored log output for development readability
+
+# ── Security, Scanning & Anti-Cheat ─────────────────────────────
+python-magic>=0.4.27          # MIME type detection for upload validation
+bandit>=1.7.10                # Static security analysis (CI pipeline)
+bleach>=6.1.0                 # HTML sanitization for rich text fields
+pyhanko>=0.21.0               # PDF digital signatures & watermarking
+Pillow>=10.4.0                # (already listed) — image watermark generation
+Faker>=26.0.0                 # Synthetic data generation for test seeding
+ua-parser>=0.18.0             # User-Agent parsing for device analytics
+
+# ── File Storage & Cloud Integrations ──────────────────────────
+boto3>=1.34.0                 # AWS S3 / S3-compatible object storage (MinIO)
+botocore>=1.34.0              # Low-level AWS service client
+google-cloud-storage>=2.18.0  # Google Cloud Storage integration
+azure-storage-blob>=12.22.0   # Azure Blob Storage for media uploads
+cloudinary>=1.40.0            # Cloudinary CDN for image/video transformations
+
+# ── API Utilities & Response Quality ───────────────────────────
+flask-restful>=0.3.10         # RESTful API resource routing
+flask-marshmallow>=1.2.1      # Flask + Marshmallow integration
+apispec>=6.7.0                # OpenAPI spec generation
+flask-smorest>=0.44.0         # OpenAPI 3 docs with Swagger UI auto-generation
+httpx>=0.27.0                 # Modern async HTTP client (replaces requests for async)
+tenacity>=9.0.0               # Retry logic with exponential backoff
+
+# ── Testing & Quality Assurance ────────────────────────────────
+pytest>=8.3.0                 # Testing framework
+pytest-flask>=1.3.0           # Flask-specific test utilities
+pytest-cov>=5.0.0             # Code coverage reporting
+pytest-asyncio>=0.24.0        # Async test support
+pytest-mock>=3.14.0           # Mock patching for unit tests
+factory-boy>=3.3.1            # Test fixture factories
+hypothesis>=6.112.0           # Property-based testing for edge cases
+responses>=0.25.3             # HTTP request mocking in tests
+freezegun>=1.5.1              # Time freezing for timer-related tests

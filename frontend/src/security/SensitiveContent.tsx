@@ -400,9 +400,10 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
         </div>
       )}
 
-      {/* ── Dynamic watermark (rendered if enabled) ── */}
+      {/* ── Dynamic watermark (rendered if enabled; DynamicWatermark checks admin config) ── */}
       {showWatermark && (
         <DynamicWatermark
+          module={module as any}
           userId={userId}
           color={watermarkColor}
           customText={watermarkCustomText}

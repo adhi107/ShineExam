@@ -14,9 +14,16 @@ build/
 
 # OS
 .DS_Store
+Thumbs.db
 
 # IDE
 .vscode/
+.idea/
+*.swp
+*.swo
+
+# Mobile & Android
+mobile/
 
 # Uploads & Media
 backend/uploads/

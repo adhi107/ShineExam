@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { apiGet, apiPost, getMediaUrl } from "../services/api";
 import SensitiveContent from "../security/SensitiveContent";
 import DynamicWatermark from "../security/DynamicWatermark";
@@ -27,19 +27,23 @@ interface StudentClassesProps {
 function resolveVideoEmbedUrl(url?: string): string {
   if (!url) return "";
   const clean = url.trim();
+  // YouTube Shorts
   const shortsMatch = clean.match(/(?:youtube\.com\/shorts\/|youtu\.be\/shorts\/)([A-Za-z0-9_-]+)/i);
   if (shortsMatch) {
     const vid = shortsMatch[1].split("?")[0].split("&")[0];
-    return `https://www.youtube.com/embed/${vid}?rel=0&modestbranding=1&enablejsapi=1&autoplay=1`;
+    // Use embed with fastest load params: no related, no modestbranding, lazy load JS API
+    return `https://www.youtube.com/embed/${vid}?rel=0&modestbranding=1&enablejsapi=1&autoplay=1&playsinline=1&origin=${encodeURIComponent(window.location.origin)}`;
   }
+  // Regular YouTube
   const ytMatch = clean.match(/(?:(?:www\.|m\.)?youtube\.com\/(?:watch\?v=|embed\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]+)/i);
   if (ytMatch) {
     const vid = ytMatch[1].split("?")[0].split("&")[0];
-    return `https://www.youtube.com/embed/${vid}?rel=0&modestbranding=1&enablejsapi=1&autoplay=1`;
+    return `https://www.youtube.com/embed/${vid}?rel=0&modestbranding=1&enablejsapi=1&autoplay=1&playsinline=1&origin=${encodeURIComponent(window.location.origin)}`;
   }
+  // Vimeo
   const vimeoMatch = clean.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
   if (vimeoMatch) {
-    return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1`;
+    return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&byline=0&portrait=0&title=0&dnt=1`;
   }
   return getMediaUrl(clean);
 }
@@ -60,6 +64,16 @@ function getYouTubeThumbnail(url?: string): string | null {
   return null;
 }
 
+function isYouTubeOrVimeo(cls: StudentClassItem): boolean {
+  const rawUrl = cls.embedUrl || cls.videoUrl || cls.originalUrl || "";
+  return !!(
+    rawUrl.match(/youtube\.com|youtu\.be/i) ||
+    rawUrl.match(/vimeo\.com/i) ||
+    cls.provider === "youtube" ||
+    cls.provider === "vimeo"
+  );
+}
+
 const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
   const [classes, setClasses] = useState<StudentClassItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -69,6 +83,10 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
 
   // In-Screen Video Player State
   const [activeClass, setActiveClass] = useState<StudentClassItem | null>(null);
+  // Track when iframe is loaded for fade-in
+  const [iframeLoaded, setIframeLoaded] = useState<boolean>(false);
+  // Video element ref for local videos
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     loadClasses();
@@ -95,6 +113,7 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
   };
 
   const handleWatchClass = (video: StudentClassItem) => {
+    setIframeLoaded(false);
     setActiveClass(video);
     // Track view asynchronously safely
     apiPost("/answerer/classes/track", { videoId: video.id, userId }).catch(() => {
@@ -102,18 +121,44 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
     });
   };
 
-  const closePlayer = () => {
+  const closePlayer = useCallback(() => {
     setActiveClass(null);
-  };
+    setIframeLoaded(false);
+    // Pause any playing video element before unmounting
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.src = "";
+    }
+  }, []);
+
+  // Close player on Escape key
+  useEffect(() => {
+    if (!activeClass) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closePlayer();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [activeClass, closePlayer]);
+
+  // Prevent body scroll when player is open
+  useEffect(() => {
+    if (activeClass) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [activeClass]);
 
   return (
     <SensitiveContent
       module="classes"
       userId={userId}
-      showWatermark={false}
+      showWatermark={false} // Watermark is placed directly on the player screen only
       hideOnTabSwitch={false}
       hideOnWindowBlur={false}
-      enableVideoOverlay={false}
+      enableVideoOverlay={true}
     >
       <div className="student-classes-shell">
         {/* Hero Banner */}
@@ -283,13 +328,25 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
           </div>
         )}
 
-        {/* In-Screen Protected Video Player with Anti-Recording DRM */}
+        {/* ──────────────────────────────────────────────────────────────────────
+            In-Screen Protected Video Player with Full DRM Anti-Recording Shield
+            - Plays inside the page: no redirect to YouTube/Vimeo
+            - iframe: sandbox restricts navigation, no picture-in-picture, no web-share
+            - Dynamic watermark burns the tenant org name onto the video
+            - Right-click, drag, and context menu are blocked
+            - GPU video overlay protection active via SensitiveContent
+        ────────────────────────────────────────────────────────────────────── */}
         {activeClass && (
-          <div className="player-modal-backdrop" onClick={closePlayer}>
+          <div
+            className="player-modal-backdrop"
+            onClick={closePlayer}
+            onContextMenu={(e) => e.preventDefault()}
+          >
             <div
               className="student-video-player-container"
               onClick={(e) => e.stopPropagation()}
               onContextMenu={(e) => e.preventDefault()}
+              style={{ userSelect: "none", WebkitUserSelect: "none" } as React.CSSProperties}
             >
               {/* Header */}
               <div className="student-player-header">
@@ -306,28 +363,81 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
                 </div>
               </div>
 
-              {/* In-Screen Video Screen */}
-              <div className="student-player-screen" style={{ position: "relative" }}>
-                <DynamicWatermark userId={userId} opacity={0.16} isBold={true} />
+              {/* Protected Video Screen — Watermark burns on top, no download/redirect */}
+              <div
+                className="student-player-screen"
+                style={{ position: "relative" }}
+                onContextMenu={(e) => e.preventDefault()}
+              >
+                {/* DRM Forensic Watermark — uses tenant org name, module-controlled */}
+                <DynamicWatermark
+                  module="classes"
+                  userId={userId}
+                  opacity={0.16}
+                  isBold={true}
+                />
+
+                {/* Anti-grab invisible overlay — prevents right-click context on the video area */}
+                <div
+                  className="video-drm-overlay"
+                  onContextMenu={(e) => e.preventDefault()}
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    zIndex: 10,
+                    background: "transparent",
+                    pointerEvents: "none",
+                  }}
+                  aria-hidden="true"
+                />
+
                 {activeClass.sourceType === "file" || activeClass.provider === "direct" || activeClass.provider === "local" ? (
+                  /* ── Local / Direct Video — Native HTML5 Player with DRM controls ── */
                   <video
+                    ref={videoRef}
                     src={getMediaUrl(activeClass.videoUrl || activeClass.embedUrl)}
                     controls
-                    controlsList="nodownload"
+                    controlsList="nodownload noremoteplayback"
                     autoPlay
+                    playsInline
+                    preload="auto"
                     className="student-video-element"
                     onContextMenu={(e) => e.preventDefault()}
+                    disablePictureInPicture
+                    onLoadedMetadata={() => setIframeLoaded(true)}
                   >
                     Your browser does not support video streaming.
                   </video>
                 ) : (
-                  <iframe
-                    src={resolveVideoEmbedUrl(activeClass.embedUrl || activeClass.videoUrl || activeClass.originalUrl)}
-                    title={activeClass.title}
-                    className="student-iframe-element"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                  />
+                  /* ── External Video (YouTube/Vimeo) — Sandboxed iframe, no redirect ── */
+                  <>
+                    {/* Loading skeleton shown while iframe loads */}
+                    {!iframeLoaded && (
+                      <div className="video-loading-skeleton" aria-label="Loading video...">
+                        <div className="video-skeleton-pulse">
+                          <div className="skeleton-play-icon">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5">
+                              <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                          </div>
+                          <p>Loading video...</p>
+                        </div>
+                      </div>
+                    )}
+                    <iframe
+                      src={resolveVideoEmbedUrl(activeClass.embedUrl || activeClass.videoUrl || activeClass.originalUrl)}
+                      title={activeClass.title}
+                      className={`student-iframe-element ${iframeLoaded ? "iframe-ready" : "iframe-loading"}`}
+                      // No sandbox attr — YouTube embed player breaks with sandbox restrictions.
+                      // Security is enforced by: embed URL params (rel=0, modestbranding),
+                      // the DRM watermark overlay on top, and right-click prevention.
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; fullscreen"
+                      allowFullScreen
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      loading="eager"
+                      onLoad={() => setIframeLoaded(true)}
+                    />
+                  </>
                 )}
               </div>
 

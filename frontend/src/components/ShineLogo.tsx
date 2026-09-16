@@ -26,11 +26,11 @@ const ShineLogo: React.FC<ShineLogoProps> = ({ compact = false, inverse = false,
 
   const rawLogo = forceDefault ? null : (customLogoUrl || tenant?.logoUrl || storedTenant?.logoUrl || null);
   const activeLogo = rawLogo ? getMediaUrl(rawLogo) : null;
-  const activeTitle = forceDefault ? "Portal" : (brandName || tenant?.brandTitle || tenant?.name || storedTenant?.name || "Portal");
-  const isCustomTenant = !forceDefault && (
-    (tenant?.name && !tenant.name.toLowerCase().includes("shine") && tenant.name !== "Examination Portal") ||
-    Boolean(activeLogo)
-  );
+  // Always resolve the actual tenant brand title — never fall back to a hardcoded brand name
+  const activeTitle = forceDefault
+    ? "Exam Portal"
+    : (brandName || tenant?.brandTitle || tenant?.name || storedTenant?.brandTitle || storedTenant?.name || "Exam Portal");
+  const activeColor = tenant?.primaryColor || storedTenant?.primaryColor || "#2563eb";
 
   return (
     <div className={`shine-logo ${compact ? "compact" : ""} ${inverse ? "inverse" : ""} ${className}`} aria-label={activeTitle}>
@@ -47,13 +47,13 @@ const ShineLogo: React.FC<ShineLogoProps> = ({ compact = false, inverse = false,
             }
           }}
         />
-      ) : isCustomTenant ? (
+      ) : (
         <div className="tenant-emblem-badge" style={{
           display: "inline-flex",
           alignItems: "center",
           gap: "10px",
           fontWeight: 800,
-          color: inverse ? "#ffffff" : (tenant?.primaryColor || "#0b2f6b"),
+          color: inverse ? "#ffffff" : (activeColor || "#0b2f6b"),
           letterSpacing: "-0.02em",
           fontSize: compact ? "16px" : "20px"
         }}>
@@ -61,7 +61,7 @@ const ShineLogo: React.FC<ShineLogoProps> = ({ compact = false, inverse = false,
             width: compact ? "32px" : "40px",
             height: compact ? "32px" : "40px",
             borderRadius: "10px",
-            background: tenant?.primaryColor || "linear-gradient(135deg, #2563eb, #38bdf8)",
+            background: activeColor || "linear-gradient(135deg, #2563eb, #38bdf8)",
             color: "#ffffff",
             display: "grid",
             placeItems: "center",
@@ -78,41 +78,9 @@ const ShineLogo: React.FC<ShineLogoProps> = ({ compact = false, inverse = false,
             </span>
           )}
         </div>
-      ) : (
-        <div className="tenant-emblem-badge" style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "10px",
-          fontWeight: 800,
-          color: inverse ? "#ffffff" : "#0b2f6b",
-          letterSpacing: "-0.02em",
-          fontSize: compact ? "16px" : "20px"
-        }}>
-          <div style={{
-            width: compact ? "32px" : "40px",
-            height: compact ? "32px" : "40px",
-            borderRadius: "10px",
-            background: "linear-gradient(135deg, #2563eb, #38bdf8)",
-            color: "#ffffff",
-            display: "grid",
-            placeItems: "center",
-            fontSize: compact ? "16px" : "20px",
-            fontWeight: 900,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-            flexShrink: 0
-          }}>
-            🎓
-          </div>
-          {!compact && (
-            <span style={{ fontWeight: 800 }}>
-              EXAM PORTAL
-            </span>
-          )}
-        </div>
       )}
     </div>
   );
 };
 
 export default ShineLogo;
-

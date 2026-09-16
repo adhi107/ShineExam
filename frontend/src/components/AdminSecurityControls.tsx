@@ -21,6 +21,7 @@ interface SecuritySettings {
   screenshotProtectedModules: string[];
   watermarkEnabled: boolean;
   watermarkIntervalSec: number;
+  watermarkModules: string[];  // per-module watermark visibility control
   allowCandidateDocumentView: boolean;
   allowCandidateDocumentDownload: boolean;
   watermarkDocuments: boolean;
@@ -109,11 +110,12 @@ const AdminSecurityControls: React.FC = () => {
     screenshotProtectedModules: ["exam", "results", "documents", "classes"],
     watermarkEnabled: true,
     watermarkIntervalSec: 8,
+    watermarkModules: ["exam", "results", "documents", "classes", "dashboard"],
     allowCandidateDocumentView: true,
     allowCandidateDocumentDownload: false,
     watermarkDocuments: true,
     solutionReportWatermarkEnabled: true,
-    solutionReportWatermarkText: "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT",
+    solutionReportWatermarkText: "",  // empty = auto-use tenant org name
     solutionReportWatermarkColor: "#dc2626",
     solutionReportWatermarkOpacity: 0.25,
     solutionReportWatermarkIncludeCandidate: true,
@@ -157,8 +159,9 @@ const AdminSecurityControls: React.FC = () => {
         setSettings({
           ...res.settings,
           screenshotProtectedModules: res.settings.screenshotProtectedModules || ["exam", "results", "documents", "classes"],
+          watermarkModules: res.settings.watermarkModules || ["exam", "results", "documents", "classes", "dashboard"],
           solutionReportWatermarkEnabled: res.settings.solutionReportWatermarkEnabled !== false,
-          solutionReportWatermarkText: res.settings.solutionReportWatermarkText || "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT",
+          solutionReportWatermarkText: res.settings.solutionReportWatermarkText || "",
           solutionReportWatermarkColor: res.settings.solutionReportWatermarkColor || "#dc2626",
           solutionReportWatermarkOpacity: typeof res.settings.solutionReportWatermarkOpacity === "number" ? res.settings.solutionReportWatermarkOpacity : 0.25,
           solutionReportWatermarkIncludeCandidate: res.settings.solutionReportWatermarkIncludeCandidate !== false,
@@ -658,7 +661,7 @@ const AdminSecurityControls: React.FC = () => {
                 </div>
                 <div className="sec-header-meta">
                   <h3>Dynamic Forensic Watermarking</h3>
-                  <p>Continuous canvas stamp of User ID, Session ID &amp; timestamp.</p>
+                  <p>Canvas-based tenant-branded stamp — User ID, Session ID &amp; timestamp. Module-wise control available below.</p>
                 </div>
                 <label className="switch-toggle">
                   <input
@@ -673,7 +676,7 @@ const AdminSecurityControls: React.FC = () => {
               <div className="sec-card-body">
                 <div className="sec-status-row">
                   <span className="sec-status-pill enabled">
-                    {settings.watermarkEnabled ? "● Top Canvas Layer (z-index 2147483645)" : "○ Disabled"}
+                    {settings.watermarkEnabled ? "● Top Canvas Layer (z-index 2147483645)" : "○ Master Watermark Disabled"}
                   </span>
                 </div>
 
@@ -693,16 +696,70 @@ const AdminSecurityControls: React.FC = () => {
                         </button>
                       ))}
                     </div>
+
+                    {/* Module-wise watermark control */}
+                    <label className="sec-field-label" style={{ marginTop: "18px", display: "block" }}>
+                      Watermark Active Modules
+                      <span style={{ fontSize: "11px", fontWeight: 400, color: "#64748b", marginLeft: "8px" }}>
+                        Toggle which modules show the forensic watermark overlay
+                      </span>
+                    </label>
+                    <div className="module-toggles-list">
+                      {availableModules.map((mod) => {
+                        const isWatermarkOn = settings.watermarkModules?.includes(mod.id) ?? true;
+                        return (
+                          <label
+                            key={mod.id}
+                            className={`module-toggle-row ${isWatermarkOn ? "module-row-active" : "module-row-off"}`}
+                          >
+                            <div className="module-toggle-icon">{mod.icon}</div>
+                            <div className="module-toggle-info">
+                              <strong>{mod.label}</strong>
+                              <small>{mod.description}</small>
+                            </div>
+                            <div className="module-toggle-right">
+                              <span className={`module-mini-chip ${isWatermarkOn ? "chip-on" : "chip-off"}`}>
+                                {isWatermarkOn ? "Watermark ON" : "Watermark OFF"}
+                              </span>
+                              <label className="switch-toggle switch-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={isWatermarkOn}
+                                  onChange={(e) => {
+                                    const next = e.target.checked
+                                      ? [...(settings.watermarkModules || []), mod.id]
+                                      : (settings.watermarkModules || []).filter((m) => m !== mod.id);
+                                    setSettings({ ...settings, watermarkModules: next });
+                                  }}
+                                />
+                                <span className="slider round" />
+                              </label>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+
                     <div className="watermark-mini-preview">
                       <span className="preview-label">Live Watermark Pattern Sample:</span>
                       <div className="preview-stamp">
-                        SHINE EXAM &bull; User: candidate &bull; {new Date().toLocaleDateString("en-IN")} &bull; Session: ACTIVE
+                        {(() => {
+                          try {
+                            const ti = sessionStorage.getItem("tenant_info");
+                            if (ti) {
+                              const p = JSON.parse(ti);
+                              return p.brandTitle || p.name || "Your Organisation";
+                            }
+                          } catch {}
+                          return "Your Organisation";
+                        })()} &bull; User: candidate &bull; {new Date().toLocaleDateString("en-IN")} &bull; Session: ACTIVE
                       </div>
                     </div>
                   </div>
                 )}
               </div>
             </div>
+
 
             {/* Card 5: Solution Report & Results Watermark (Bold Color & Custom Text) */}
             <div className={`sec-card ${settings.solutionReportWatermarkEnabled ? "card-active" : "card-disabled"}`}>

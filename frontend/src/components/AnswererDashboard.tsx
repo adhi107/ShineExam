@@ -151,7 +151,7 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
   const [newPassword, setNewPassword] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
-  const { loadTenantBranding } = useTenant();
+  const { loadTenantBranding, tenant } = useTenant();
 
   useEffect(() => {
     const tid = sessionStorage.getItem("activeTenantId") || sessionStorage.getItem("tenantId");
@@ -425,7 +425,7 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
               <span /><span /><span />
             </button>
             <div className="topbar-title-wrap">
-              <span className="mobile-brand">SHINE EXAM</span>
+              <span className="mobile-brand">{tenant.brandTitle || tenant.name || 'Exam Portal'}</span>
               <h1>{view === "tests" ? (selectedExamPage ? `${selectedExamPage.examLabel} ${selectedExamPage.stageLabel}` : "My Tests") : view === "report" ? "Performance Report" : navItems.find(n => n.view === view)?.label}</h1>
             </div>
           </div>

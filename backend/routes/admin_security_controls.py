@@ -22,15 +22,16 @@ DEFAULT_SECURITY_SETTINGS = {
     "autoLogoutMinutes": 15,
     "strictScreenshotLock": True,
     "screenshotAllowedAttempts": 1,       # 1 = instant permanent block on first attempt
-    "screenshotProtectedModules": ["exam", "results", "documents", "classes"],  # modules where protection is active
-    "watermarkEnabled": True,
+    "screenshotProtectedModules": ["exam", "results", "documents", "classes"],  # modules where screenshot protection is active
+    "watermarkEnabled": True,             # master watermark toggle
     "watermarkIntervalSec": 8,
+    "watermarkModules": ["exam", "results", "documents", "classes", "dashboard"],  # modules where dynamic watermark is rendered
     "allowCandidateDocumentView": True,
     "allowCandidateDocumentDownload": False,
     "watermarkDocuments": True,
     # Solution Report & Test Results Watermark Settings
     "solutionReportWatermarkEnabled": True,
-    "solutionReportWatermarkText": "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT",
+    "solutionReportWatermarkText": "",    # empty = use tenant org name automatically
     "solutionReportWatermarkColor": "#dc2626",   # Bold red default
     "solutionReportWatermarkOpacity": 0.25,      # 0.10 to 0.70
     "solutionReportWatermarkIncludeCandidate": True,
@@ -77,11 +78,12 @@ def get_security_settings():
             "screenshotProtectedModules": list(settings.get("screenshotProtectedModules", ["exam", "results", "documents", "classes"])),
             "watermarkEnabled": bool(settings.get("watermarkEnabled", True)),
             "watermarkIntervalSec": int(settings.get("watermarkIntervalSec", 8)),
+            "watermarkModules": list(settings.get("watermarkModules", ["exam", "results", "documents", "classes", "dashboard"])),
             "allowCandidateDocumentView": bool(settings.get("allowCandidateDocumentView", True)),
             "allowCandidateDocumentDownload": bool(settings.get("allowCandidateDocumentDownload", False)),
             "watermarkDocuments": bool(settings.get("watermarkDocuments", True)),
             "solutionReportWatermarkEnabled": bool(settings.get("solutionReportWatermarkEnabled", True)),
-            "solutionReportWatermarkText": str(settings.get("solutionReportWatermarkText", "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT")),
+            "solutionReportWatermarkText": str(settings.get("solutionReportWatermarkText", "")),
             "solutionReportWatermarkColor": str(settings.get("solutionReportWatermarkColor", "#dc2626")),
             "solutionReportWatermarkOpacity": float(settings.get("solutionReportWatermarkOpacity", 0.25)),
             "solutionReportWatermarkIncludeCandidate": bool(settings.get("solutionReportWatermarkIncludeCandidate", True)),
@@ -117,7 +119,13 @@ def update_security_settings():
     validated_modules = [m for m in raw_modules if m in VALID_MODULES]
     if not validated_modules:
         validated_modules = ["exam", "results", "documents", "classes"]
-    
+
+    # Validate watermarkModules (per-module watermark visibility controls)
+    raw_watermark_modules = payload.get("watermarkModules", ["exam", "results", "documents", "classes", "dashboard"])
+    if not isinstance(raw_watermark_modules, list):
+        raw_watermark_modules = ["exam", "results", "documents", "classes", "dashboard"]
+    validated_watermark_modules = [m for m in raw_watermark_modules if m in VALID_MODULES]
+
     raw_retention = payload.get("retentionPolicy") or {}
     current_doc = db.system_settings.find_one({"type": "security_config"}) or {}
     curr_ret = current_doc.get("retentionPolicy") or {}
@@ -147,11 +155,12 @@ def update_security_settings():
         "screenshotProtectedModules": validated_modules,
         "watermarkEnabled": bool(payload.get("watermarkEnabled", True)),
         "watermarkIntervalSec": max(3, min(60, int(payload.get("watermarkIntervalSec", 8)))),
+        "watermarkModules": validated_watermark_modules,
         "allowCandidateDocumentView": bool(payload.get("allowCandidateDocumentView", True)),
         "allowCandidateDocumentDownload": bool(payload.get("allowCandidateDocumentDownload", False)),
         "watermarkDocuments": bool(payload.get("watermarkDocuments", True)),
         "solutionReportWatermarkEnabled": bool(payload.get("solutionReportWatermarkEnabled", True)),
-        "solutionReportWatermarkText": str(payload.get("solutionReportWatermarkText", "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT")).strip(),
+        "solutionReportWatermarkText": str(payload.get("solutionReportWatermarkText", "")).strip(),
         "solutionReportWatermarkColor": str(payload.get("solutionReportWatermarkColor", "#dc2626")).strip(),
         "solutionReportWatermarkOpacity": clean_opacity,
         "solutionReportWatermarkIncludeCandidate": bool(payload.get("solutionReportWatermarkIncludeCandidate", True)),
@@ -329,6 +338,7 @@ def execute_data_wipeout():
 def get_public_security_config():
     """
     Public lightweight endpoint for candidates & frontend to read active security & watermark settings.
+    Returns watermarkEnabled + watermarkModules so DynamicWatermark can immediately respond to admin changes.
     """
     from utils.tenant import get_request_tenant_id, build_tenant_filter, DEFAULT_TENANT_ID
     db = get_db()
@@ -347,14 +357,14 @@ def get_public_security_config():
         "screenshotProtectedModules": list(settings.get("screenshotProtectedModules", ["exam", "results", "documents", "classes"])),
         "watermarkEnabled": bool(settings.get("watermarkEnabled", True)),
         "watermarkIntervalSec": int(settings.get("watermarkIntervalSec", 8)),
+        "watermarkModules": list(settings.get("watermarkModules", ["exam", "results", "documents", "classes", "dashboard"])),
         "allowCandidateDocumentView": bool(settings.get("allowCandidateDocumentView", True)),
         "allowCandidateDocumentDownload": bool(settings.get("allowCandidateDocumentDownload", False)),
         "watermarkDocuments": bool(settings.get("watermarkDocuments", True)),
         "solutionReportWatermarkEnabled": bool(settings.get("solutionReportWatermarkEnabled", True)),
-        "solutionReportWatermarkText": str(settings.get("solutionReportWatermarkText", "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT")),
+        "solutionReportWatermarkText": str(settings.get("solutionReportWatermarkText", "")),
         "solutionReportWatermarkColor": str(settings.get("solutionReportWatermarkColor", "#dc2626")),
         "solutionReportWatermarkOpacity": float(settings.get("solutionReportWatermarkOpacity", 0.25)),
         "solutionReportWatermarkIncludeCandidate": bool(settings.get("solutionReportWatermarkIncludeCandidate", True)),
         "solutionReportWatermarkIncludeTimestamp": bool(settings.get("solutionReportWatermarkIncludeTimestamp", True)),
     })
-
