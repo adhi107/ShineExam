@@ -1205,7 +1205,7 @@ const AdminSecurityControls: React.FC = () => {
                   Reset to Current
                 </button>
                 <button type="submit" className="btn-primary-deploy" disabled={saving}>
-                  {saving ? "Saving Changes..." : "💾 Save"}
+                  {saving ? "Saving Changes..." : "Save Controls"}
                 </button>
               </div>
             </div>

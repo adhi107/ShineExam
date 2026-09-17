@@ -76,6 +76,8 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
 
   // === Dynamic Module Protection Status ===
   const [isModuleProtected, setIsModuleProtected] = useState<boolean>(true);
+  // === Strict lock — admin controlled: true = block on threshold, false = warn only ===
+  const [isStrictLock, setIsStrictLock] = useState<boolean>(true);
 
   // === Suspension state (permanent block) ===
   const [isPermanentlySuspended, setIsPermanentlySuspended] = useState<boolean>(false);
@@ -102,10 +104,15 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
           const protectedList: string[] = data.screenshotProtectedModules;
           setIsModuleProtected(protectedList.includes(module));
         }
+        // Read strict lock mode — if disabled, only warn, never block
+        if (typeof data.strictScreenshotLock === 'boolean') {
+          setIsStrictLock(data.strictScreenshotLock);
+        }
       })
       .catch(() => {
         // Fallback: active for exam and results
         setIsModuleProtected(['exam', 'results', 'documents', 'classes'].includes(module));
+        setIsStrictLock(true);
       });
   }, [module]);
 
@@ -123,15 +130,8 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
       tenantId: activeTenantId,
     });
 
-    // Best-effort beacon
-    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
-      try {
-        const blob = new Blob([payload], { type: 'application/json' });
-        navigator.sendBeacon(buildUrl('/security/violation/block'), blob);
-      } catch {}
-    }
-
-    // Awaited fetch to get structured response
+    // Single awaited fetch — no sendBeacon to avoid double-counting violations in the DB.
+    // sendBeacon + fetch = 2 records per violation, which shifts attempt counts and breaks blocking logic.
     try {
       const res = await fetch(buildUrl('/security/violation/block'), {
         method: 'POST',
@@ -141,15 +141,20 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
           'X-User-Id': activeUserId,
         },
         body: payload,
+        // keepalive: true ensures the request completes even if user navigates away
+        keepalive: true,
       });
       if (res.ok) {
         return await res.json() as ViolationResult;
       }
     } catch {
-      // Backend offline
+      // Backend offline — return a local "block" if strict mode is on to be safe
+      if (isStrictLock) {
+        return { blocked: true, warned: false, attempt: 1, allowedAttempts: 1, remainingAttempts: 0, message: 'Connection error — applying local security block.' };
+      }
     }
     return null;
-  }, [userId, sessionId, module]);
+  }, [userId, sessionId, module, isStrictLock]);
 
   const triggerViolation = useCallback(async (reason: 'screenshot' | 'recording') => {
     // Exempt if user is submitting the exam
@@ -315,32 +320,57 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
       {isPermanentlySuspended && (
         <div className="shine-screen-shield shine-screen-suspended-backdrop" role="alert" aria-live="assertive">
           <div className="shine-screen-shield__inner shine-suspended-modal-card">
-            <div className="shine-screen-shield__icon" aria-hidden="true">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+            {/* Threat Header Strip */}
+            <div className="shine-threat-header">
+              <span className="shine-threat-header-tag">Security Violation Detected</span>
+            </div>
+
+            <div className="shine-modal-body">
+              {/* Icon */}
+              <div className="shine-screen-shield__icon" aria-hidden="true">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+              </div>
+
+              <h2 className="shine-suspended-title">Account Suspended</h2>
+              <p className="shine-suspended-subtitle">Your access has been permanently revoked</p>
+
+              <div className="shine-suspended-highlight-msg">
+                Your account is suspended due to a security policy violation. Please contact your administrator to request an account unblock.
+              </div>
+
+              <div className="shine-lock-note-box">
+                <strong>Reason for Suspension</strong>
+                {suspensionReason === 'recording'
+                  ? 'Screen recording or screen sharing activity was detected during an active exam session. This is a strict violation of the exam integrity policy.'
+                  : 'An unauthorized screenshot attempt was detected during an active exam session. This is a strict violation of the exam integrity policy.'}
+                {' '}Your exam session has been immediately terminated and this incident has been logged.
+              </div>
+
+              <div className="shine-shield-action-box">
+                <button
+                  type="button"
+                  className="shine-shield-unlock-btn"
+                  onClick={handleExitToLogin}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                  </svg>
+                  Exit to Login
+                </button>
+              </div>
+            </div>
+
+            <div className="shine-modal-footer-meta">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
-            </div>
-            
-            <h2 className="shine-screen-shield__title shine-suspended-title">
-              ACCOUNT SUSPENDED
-            </h2>
-
-            <div className="shine-suspended-highlight-msg">
-              Your account is suspended. Contact the admin for unblock.
-            </div>
-
-            <div className="shine-lock-note-box">
-              <strong>REASON:</strong> Security violation detected ({suspensionReason === 'recording' ? 'Screen Recording / Sharing' : 'Unauthorized Screenshot attempt'}). Your exam session has been terminated and your portal account is permanently blocked.
-            </div>
-
-            <div className="shine-shield-action-box">
-              <button
-                type="button"
-                className="shine-shield-unlock-btn"
-                onClick={handleExitToLogin}
-              >
-                Exit to Login
-              </button>
+              Incident ID: {(sessionStorage.getItem('securitySessionId') || 'N/A').slice(0, 12).toUpperCase()}
             </div>
           </div>
         </div>

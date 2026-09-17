@@ -613,10 +613,17 @@ def track_class_view():
 
 @answerer_videos_bp.get("/stream/<filename>")
 def stream_video(filename: str):
-    """Secure range-supporting video stream endpoint with conditional range delivery."""
+    """High-performance YouTube-style chunked range video stream endpoint.
+    
+    Features:
+    - 206 Partial Content byte range chunking (default 2MB chunk window for instant start & fast seek).
+    - Generator-based 64KB non-blocking buffered pipeline.
+    - Full CORS and client-side disk caching headers with ETag validation.
+    """
     try:
         import mimetypes
-        from flask import send_file
+        import re
+        from flask import request, Response
 
         safe_filename = secure_filename(filename)
         video_path = os.path.join(get_videos_dir(), safe_filename)
@@ -624,23 +631,96 @@ def stream_video(filename: str):
         if not os.path.exists(video_path):
             return jsonify({"error": "Video file not found"}), 404
 
-        # Try stdlib mimetypes first, fall back to our extended map
+        file_stat = os.stat(video_path)
+        total_size = file_stat.st_size
+        last_modified = int(file_stat.st_mtime)
+
+        # Content MIME detection
         ext = safe_filename.rsplit(".", 1)[-1].lower() if "." in safe_filename else ""
         mime, _ = mimetypes.guess_type(video_path)
         if not mime or not mime.startswith("video/"):
             mime = EXTRA_MIME_TYPES.get(ext, "video/mp4")
 
-        # Flask conditional=True natively supports HTTP 206 Byte-Range streaming & video scrubbing
-        response = send_file(
-            video_path,
+        # 2MB chunk size for rapid initial burst & smooth sequential playback
+        CHUNK_SIZE = 2 * 1024 * 1024
+
+        range_header = request.headers.get("Range", None)
+        etag = f'"{safe_filename}-{total_size}-{last_modified}"'
+
+        if request.headers.get("If-None-Match") == etag:
+            return Response(status=304)
+
+        if range_header:
+            # Parse Range: bytes=start-end
+            match = re.search(r"bytes=(\d+)-(\d*)", range_header)
+            if match:
+                start = int(match.group(1))
+                end_group = match.group(2)
+                if end_group:
+                    end = int(end_group)
+                else:
+                    # Adaptive chunk window: send up to 2MB ahead to avoid buffering whole file at once
+                    end = min(start + CHUNK_SIZE - 1, total_size - 1)
+                
+                # Clamp boundaries
+                if start >= total_size:
+                    return Response(
+                        status=416,
+                        headers={"Content-Range": f"bytes */{total_size}"}
+                    )
+                end = min(end, total_size - 1)
+                content_length = end - start + 1
+
+                def generate():
+                    with open(video_path, "rb") as f:
+                        f.seek(start)
+                        remaining = content_length
+                        buffer_size = 65536  # 64KB read buffer
+                        while remaining > 0:
+                            chunk = f.read(min(buffer_size, remaining))
+                            if not chunk:
+                                break
+                            remaining -= len(chunk)
+                            yield chunk
+
+                resp = Response(
+                    generate(),
+                    status=206,
+                    mimetype=mime,
+                    direct_passthrough=True
+                )
+                resp.headers["Content-Range"] = f"bytes {start}-{end}/{total_size}"
+                resp.headers["Content-Length"] = str(content_length)
+                resp.headers["Accept-Ranges"] = "bytes"
+                resp.headers["ETag"] = etag
+                resp.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=86400"
+                resp.headers["Access-Control-Allow-Origin"] = "*"
+                resp.headers["Access-Control-Expose-Headers"] = "Content-Range, Content-Length, Accept-Ranges, ETag"
+                return resp
+
+        # No range header: serve full file stream
+        def generate_full():
+            with open(video_path, "rb") as f:
+                buffer_size = 65536
+                while True:
+                    chunk = f.read(buffer_size)
+                    if not chunk:
+                        break
+                    yield chunk
+
+        resp = Response(
+            generate_full(),
+            status=200,
             mimetype=mime,
-            as_attachment=False,
-            conditional=True,
+            direct_passthrough=True
         )
-        response.headers["Accept-Ranges"] = "bytes"
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Cache-Control"] = "public, max-age=3600"
-        return response
+        resp.headers["Content-Length"] = str(total_size)
+        resp.headers["Accept-Ranges"] = "bytes"
+        resp.headers["ETag"] = etag
+        resp.headers["Cache-Control"] = "public, max-age=86400"
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Expose-Headers"] = "Content-Range, Content-Length, Accept-Ranges, ETag"
+        return resp
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

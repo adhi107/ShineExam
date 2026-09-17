@@ -100,7 +100,7 @@ export const renderFormattedContent = (content: string) => {
             <img src={extractedImgUrl} alt="Exam diagram/graph" className="parsed-preview-image" style={{ maxWidth: '100%', maxHeight: '420px', borderRadius: '0.5rem', border: '1px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
           ) : (
             <div className="parsed-graph-placeholder" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1rem', background: '#f8fafc', border: '1.5px dashed #94a3b8', borderRadius: '0.5rem', fontWeight: 600 }}>
-              📊 Graph / Diagram: {extractedImgUrl}
+              Graph / Diagram: {extractedImgUrl}
             </div>
           )}
         </div>
@@ -164,12 +164,12 @@ export const ParsedQuestionPreview: React.FC<ParsedQuestionPreviewProps> = ({
   const cleanContext = context?.trim() || '';
 
   const getContextLabel = () => {
-    if (contextType === 'table' || cleanContext.includes('|') || tableData) return '📊 SHARED DATA INTERPRETATION (TABLE)';
-    if (cleanContext.toLowerCase().includes('pie chart') || cleanContext.toLowerCase().includes('donut')) return '🥧 SHARED PIE / DONUT CHART DI DATA';
-    if (cleanContext.toLowerCase().includes('line graph') || cleanContext.toLowerCase().includes('line chart') || cleanContext.toLowerCase().includes('dual-line')) return '📈 SHARED LINE GRAPH DI DATA';
-    if (contextType === 'graph' || cleanContext.toLowerCase().includes('bar graph') || cleanContext.toLowerCase().includes('horizontal bar') || cleanContext.includes('data:image')) return '📈 SHARED DIAGRAM / GRAPH DATA';
-    if (cleanContext.toLowerCase().includes('passage') || cleanContext.toLowerCase().includes('read the following')) return '📖 SHARED PASSAGE / COMPREHENSION SET';
-    return '📝 SHARED CONTEXT / DIRECTIONS';
+    if (contextType === 'table' || cleanContext.includes('|') || tableData) return 'SHARED DATA INTERPRETATION (TABLE)';
+    if (cleanContext.toLowerCase().includes('pie chart') || cleanContext.toLowerCase().includes('donut')) return 'SHARED PIE / DONUT CHART DI DATA';
+    if (cleanContext.toLowerCase().includes('line graph') || cleanContext.toLowerCase().includes('line chart') || cleanContext.toLowerCase().includes('dual-line')) return 'SHARED LINE GRAPH DI DATA';
+    if (contextType === 'graph' || cleanContext.toLowerCase().includes('bar graph') || cleanContext.toLowerCase().includes('horizontal bar') || cleanContext.includes('data:image')) return 'SHARED DIAGRAM / GRAPH DATA';
+    if (cleanContext.toLowerCase().includes('passage') || cleanContext.toLowerCase().includes('read the following')) return 'SHARED PASSAGE / COMPREHENSION SET';
+    return 'SHARED CONTEXT / DIRECTIONS';
   };
 
   return (

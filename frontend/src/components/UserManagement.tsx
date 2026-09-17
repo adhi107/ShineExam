@@ -492,11 +492,11 @@ const UserManagement: React.FC = () => {
             className="manage-batches-btn"
             onClick={() => setBatchManagerOpen(true)}
           >
-            <span>🏷️ Manage Batches</span>
+            <span>Manage Batches</span>
             {batches.length > 0 && <span className="header-batch-count">{batches.length}</span>}
           </button>
           <button className="bulk-import-btn" onClick={() => { setBulkModalOpen(true); setBulkResult(null); setBulkFile(null); }}>
-            📤 Bulk Upload (Excel)
+            Bulk Upload (Excel)
           </button>
           <button className="add-student-btn" onClick={openAdd}>+ Add student</button>
         </div>
@@ -626,7 +626,7 @@ const UserManagement: React.FC = () => {
               </button>
             )}
             <button type="button" className="export-csv-btn" onClick={handleExportCSV}>
-              📥 Export Data
+              Export Data
             </button>
             <small className="records-count-badge">{visible.length} records</small>
           </div>
@@ -650,7 +650,7 @@ const UserManagement: React.FC = () => {
                 setBatchAssignModalOpen(true);
               }}
             >
-              🏷️ Assign Batch Wise
+              Assign Batch Wise
             </button>
             <button
               type="button"
@@ -731,7 +731,7 @@ const UserManagement: React.FC = () => {
                     </td>
                     <td>
                       <span className="batch-pill-badge">
-                        🏷️ {student.batch || "Batch-A"}
+                        {student.batch || "Batch-A"}
                       </span>
                     </td>
                     <td>
@@ -749,7 +749,7 @@ const UserManagement: React.FC = () => {
                     <td>
                       <div>
                         <div style={{ fontSize: "12px", color: "#334155" }}>{student.email || "—"}</div>
-                        {student.mobile && <small style={{ fontSize: "11px", color: "#64748b" }}>📞 {student.mobile}</small>}
+                        {student.mobile && <small style={{ fontSize: "11px", color: "#64748b" }}>{student.mobile}</small>}
                       </div>
                     </td>
                     <td><strong>{student.attempts || 0}</strong></td>
@@ -937,7 +937,7 @@ const UserManagement: React.FC = () => {
                       }}
                     />
                     <small style={{ display: "block", marginTop: "4px", fontSize: "11px", color: "#2563eb", fontWeight: 600 }}>
-                      ✨ This batch will be created and assigned automatically
+                      This batch will be created and assigned automatically
                     </small>
                   </div>
                 ) : (
@@ -1072,10 +1072,10 @@ const UserManagement: React.FC = () => {
                   >
                     {batches.map(b => (
                       <option key={b.name} value={b.name}>
-                        🏷️ {b.name} ({b.studentCount} students currently)
+                        {b.name} ({b.studentCount} students currently)
                       </option>
                     ))}
-                    <option value="__new__">✨ + Create New Batch Cohort…</option>
+                    <option value="__new__">+ Create New Batch Cohort…</option>
                   </select>
                 </div>
 
@@ -1093,7 +1093,7 @@ const UserManagement: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label>📅 Joining Date *</label>
+                        <label>Joining Date *</label>
                         <input
                           type="date"
                           value={newBatchJoiningDate}
@@ -1259,7 +1259,6 @@ const UserManagement: React.FC = () => {
               {/* Quick Create Batch Card with Dates */}
               <div className="batch-create-box">
                 <div className="batch-create-box-head">
-                  <div className="batch-create-icon-wrap">🏷️</div>
                   <div>
                     <strong>+ Create New Cohort / Batch</strong>
                     <span>Define cohort schedule, target course, and student onboarding dates</span>
@@ -1293,7 +1292,7 @@ const UserManagement: React.FC = () => {
                     </select>
                   </div>
                   <div className="batch-form-field">
-                    <label>📅 Joining / Start Date *</label>
+                    <label>Joining / Start Date *</label>
                     <input
                       type="date"
                       value={newBatchJoiningDate}
@@ -1301,7 +1300,7 @@ const UserManagement: React.FC = () => {
                     />
                   </div>
                   <div className="batch-form-field">
-                    <label>🏁 Completion Date (Optional)</label>
+                    <label>Completion Date (Optional)</label>
                     <input
                       type="date"
                       value={newBatchEndDate}
@@ -1334,7 +1333,6 @@ const UserManagement: React.FC = () => {
                   <div key={b.name} className="batch-card-item">
                     <div className="batch-card-top">
                       <div className="batch-card-title-group">
-                        <span className="batch-icon">🏷️</span>
                         <strong className="batch-card-name">{b.name}</strong>
                       </div>
                       <div className="batch-counts-group">
@@ -1352,17 +1350,17 @@ const UserManagement: React.FC = () => {
                     <div className="batch-card-meta-chips">
                       {b.courseStream && (
                         <span className="meta-chip stream">
-                          📚 {b.courseStream}
+                          {b.courseStream}
                         </span>
                       )}
                       {(b.joiningDate || b.startDate) && (
                         <span className="meta-chip date">
-                          📅 Joining: {new Date(b.joiningDate || b.startDate || "").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                          Joining: {new Date(b.joiningDate || b.startDate || "").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
                         </span>
                       )}
                       {b.endDate && (
                         <span className="meta-chip date end">
-                          🏁 End: {new Date(b.endDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                          End: {new Date(b.endDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
                         </span>
                       )}
                     </div>
@@ -1376,7 +1374,7 @@ const UserManagement: React.FC = () => {
                           setBatchManagerOpen(false);
                         }}
                       >
-                        🔍 Filter Candidates
+                        Filter Candidates
                       </button>
                       <button
                         type="button"
@@ -1387,7 +1385,7 @@ const UserManagement: React.FC = () => {
                           setBatchManagerOpen(false);
                         }}
                       >
-                        👥 Assign Students
+                        Assign Students
                       </button>
                     </div>
                   </div>
@@ -1421,7 +1419,6 @@ const UserManagement: React.FC = () => {
             <div className="bulk-modal-body">
               <div className="template-banner">
                 <div className="template-info">
-                  <span className="template-icon">📊</span>
                   <div>
                     <strong>Need the Excel Template?</strong>
                     <p>Download pre-formatted template prefilled with headers & sample entries.</p>
@@ -1429,10 +1426,10 @@ const UserManagement: React.FC = () => {
                 </div>
                 <div className="template-actions">
                   <button type="button" className="template-btn xlsx" onClick={() => handleDownloadTemplate("xlsx")}>
-                    📥 Excel Template (.xlsx)
+                    Excel Template (.xlsx)
                   </button>
                   <button type="button" className="template-btn csv" onClick={() => handleDownloadTemplate("csv")}>
-                    📄 CSV Template
+                    CSV Template
                   </button>
                 </div>
               </div>
@@ -1462,19 +1459,18 @@ const UserManagement: React.FC = () => {
                     }}
                   />
 
-                  <div className="dropzone-icon">📑</div>
                   <h4 className="dropzone-title">
                     {bulkFile ? bulkFile.name : "Drag & drop your Excel document here"}
                   </h4>
                   <p className="dropzone-sub">Supports Excel (.xlsx, .xls) and CSV (.csv) files</p>
 
                   <label htmlFor="bulk-excel-input" className="choose-file-btn">
-                    📂 {bulkFile ? "Change File" : "Choose Excel Document"}
+                    {bulkFile ? "Change File" : "Choose Excel Document"}
                   </label>
 
                   {bulkFile && (
                     <div className="selected-file-badge">
-                      <span>📄 {bulkFile.name} ({(bulkFile.size / 1024).toFixed(1)} KB)</span>
+                      <span>{bulkFile.name} ({(bulkFile.size / 1024).toFixed(1)} KB)</span>
                       <button type="button" onClick={() => setBulkFile(null)}>✕</button>
                     </div>
                   )}

@@ -41,6 +41,51 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
   const [newSection, setNewSection] = useState('');
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [showSetModal, setShowSetModal] = useState(false);
+
+  // Negative Marking Scheme State
+  const [negativeMarkingScheme, setNegativeMarkingScheme] = useState<'quarter' | 'ssc' | 'third' | 'half' | 'none' | 'custom'>('quarter');
+  const [defaultNegativeMarks, setDefaultNegativeMarks] = useState<number>(0.25);
+  const [bulkApplyFeedback, setBulkApplyFeedback] = useState<string | null>(null);
+
+  const computePenalty = (marks: number, scheme: string, customVal: number) => {
+    if (scheme === 'none') return 0;
+    if (scheme === 'quarter') return Math.round(marks * 0.25 * 100) / 100;
+    if (scheme === 'ssc') return marks >= 2 ? 0.50 : Math.round(marks * 0.25 * 100) / 100;
+    if (scheme === 'third') return Math.round(marks * 0.3333 * 100) / 100;
+    if (scheme === 'half') return Math.round(marks * 0.50 * 100) / 100;
+    return customVal >= 0 ? customVal : 0;
+  };
+
+  const handleSchemeChange = (newScheme: 'quarter' | 'ssc' | 'third' | 'half' | 'none' | 'custom') => {
+    setNegativeMarkingScheme(newScheme);
+    let newDefault = 0.25;
+    if (newScheme === 'none') newDefault = 0;
+    else if (newScheme === 'quarter') newDefault = 0.25;
+    else if (newScheme === 'ssc') newDefault = 0.25;
+    else if (newScheme === 'third') newDefault = 0.33;
+    else if (newScheme === 'half') newDefault = 0.50;
+    else if (newScheme === 'custom') newDefault = defaultNegativeMarks;
+    setDefaultNegativeMarks(newDefault);
+    setQuestionForm(prev => ({
+      ...prev,
+      negativeMarks: computePenalty(prev.marks || 1, newScheme, newDefault),
+    }));
+  };
+
+  const applySchemeToAllQuestions = () => {
+    if (questions.length === 0) {
+      alert("No questions in this test yet. The selected negative marking scheme will automatically apply to any questions you create or import.");
+      return;
+    }
+    const updated = questions.map(q => ({
+      ...q,
+      negativeMarks: computePenalty(q.marks || 1, negativeMarkingScheme, defaultNegativeMarks),
+    }));
+    setQuestions(updated);
+    setBulkApplyFeedback(`✓ Applied ${negativeMarkingScheme === 'none' ? '0.00 (No penalty)' : `-${defaultNegativeMarks}`} to all ${questions.length} questions`);
+    setTimeout(() => setBulkApplyFeedback(null), 3500);
+  };
+
   const [setForm, setSetForm] = useState({
     title: 'Directions (Q1–5): Read the passage / study the data carefully and answer the questions.',
     contextType: 'passage' as 'passage' | 'table' | 'graph',
@@ -48,6 +93,7 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
     numQuestions: 5,
     sectionId: sections[0]?.id || '',
     marks: 1,
+    negativeMarks: 0.25,
   });
 
   const applyPreset = (presetType: 'sbi' | 'ssc' | 'rrb') => {
@@ -55,33 +101,39 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
       setTestName(prev => prev || 'SBI PO Prelims Mock Test');
       setDuration(60);
       setPassingPercentage(45);
+      setNegativeMarkingScheme('quarter');
+      setDefaultNegativeMarks(0.25);
       setSections([
         { id: 'sec_qa', name: 'Quantitative Aptitude' },
         { id: 'sec_reasoning', name: 'Reasoning Ability' },
         { id: 'sec_english', name: 'English Language' }
       ]);
-      setQuestionForm(prev => ({ ...prev, section: 'sec_qa' }));
+      setQuestionForm(prev => ({ ...prev, section: 'sec_qa', marks: 1, negativeMarks: 0.25 }));
     } else if (presetType === 'ssc') {
       setTestName(prev => prev || 'SSC CGL Tier-1 Official Pattern Mock');
       setDuration(60);
       setPassingPercentage(40);
+      setNegativeMarkingScheme('ssc');
+      setDefaultNegativeMarks(0.50);
       setSections([
         { id: 'sec_gi', name: 'General Intelligence & Reasoning' },
         { id: 'sec_ga', name: 'General Awareness' },
         { id: 'sec_quant', name: 'Quantitative Aptitude' },
         { id: 'sec_english', name: 'English Comprehension' }
       ]);
-      setQuestionForm(prev => ({ ...prev, section: 'sec_gi' }));
+      setQuestionForm(prev => ({ ...prev, section: 'sec_gi', marks: 2, negativeMarks: 0.50 }));
     } else if (presetType === 'rrb') {
       setTestName(prev => prev || 'RRB NTPC CBT-1 Full Length Mock');
       setDuration(90);
       setPassingPercentage(40);
+      setNegativeMarkingScheme('third');
+      setDefaultNegativeMarks(0.33);
       setSections([
         { id: 'sec_math', name: 'Mathematics' },
         { id: 'sec_reasoning', name: 'General Intelligence & Reasoning' },
         { id: 'sec_ga', name: 'General Awareness' }
       ]);
-      setQuestionForm(prev => ({ ...prev, section: 'sec_math' }));
+      setQuestionForm(prev => ({ ...prev, section: 'sec_math', marks: 1, negativeMarks: 0.33 }));
     }
   };
 
@@ -94,6 +146,10 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
     const fullContext = setForm.title.trim() ? `${setForm.title.trim()}\n${bodyText}` : bodyText;
     const targetSection = setForm.sectionId || sections[0]?.id || 'general';
     const count = Math.max(1, setForm.numQuestions || 5);
+    const setMarks = setForm.marks || 1;
+    const setNegMarks = setForm.negativeMarks !== undefined
+      ? setForm.negativeMarks
+      : computePenalty(setMarks, negativeMarkingScheme, defaultNegativeMarks);
 
     const newSetQuestions: Question[] = [];
     for (let i = 1; i <= count; i++) {
@@ -106,8 +162,8 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
         options: [`Option A for Q${i}`, `Option B for Q${i}`, `Option C for Q${i}`, `Option D for Q${i}`],
         correctAnswer: `Option A for Q${i}`,
         section: targetSection,
-        marks: setForm.marks || 1,
-        negativeMarks: 0.25,
+        marks: setMarks,
+        negativeMarks: setNegMarks,
       });
     }
 
@@ -126,6 +182,7 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
     correctAnswers: [] as string[],
     section: sections[0]?.id || '',
     marks: 1,
+    negativeMarks: 0.25,
   });
 
 
@@ -183,30 +240,36 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
       updatedSections = [{ id: 'general', name: 'General' }];
     }
 
-    const formattedQuestions: Question[] = parsedData.questions.map((q, idx) => ({
-      id: `q_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 5)}`,
-      type: q.type,
-      question: q.question,
-      context: q.context || '',
-      contextType: q.contextType || '',
-      options: q.options || [],
-      correctAnswer: q.correctAnswer,
-      section: secIdMap[q.section] || updatedSections[0].id,
-      marks: q.marks || 1,
-      negativeMarks: q.negativeMarks || 0,
-      chartData: (q as any).chartData || null,
-      tableData: (q as any).tableData || null,
-      imageReference: (q as any).imageReference || (q as any).visual_asset || '',
-      visualReferences: (q as any).visualReferences || (q as any).visuals || [],
-      groupId: (q as any).groupId || (q as any).sharedContentId || '',
-      sharedContentId: (q as any).sharedContentId || (q as any).groupId || '',
-      questionRange: (q as any).questionRange,
-      sharedContent: (q as any).sharedContent,
-      visualId: (q as any).visualId || '',
-      visualIds: (q as any).visualIds || [],
-      mappingStatus: (q as any).mappingStatus || '',
-      mappingConfidence: (q as any).mappingConfidence || '',
-    }));
+    const formattedQuestions: Question[] = parsedData.questions.map((q, idx) => {
+      const qMarks = q.marks || 1;
+      const qNeg = q.negativeMarks !== undefined && q.negativeMarks > 0
+        ? q.negativeMarks
+        : computePenalty(qMarks, negativeMarkingScheme, defaultNegativeMarks);
+      return {
+        id: `q_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 5)}`,
+        type: q.type,
+        question: q.question,
+        context: q.context || '',
+        contextType: q.contextType || '',
+        options: q.options || [],
+        correctAnswer: q.correctAnswer,
+        section: secIdMap[q.section] || updatedSections[0].id,
+        marks: qMarks,
+        negativeMarks: qNeg,
+        chartData: (q as any).chartData || null,
+        tableData: (q as any).tableData || null,
+        imageReference: (q as any).imageReference || (q as any).visual_asset || '',
+        visualReferences: (q as any).visualReferences || (q as any).visuals || [],
+        groupId: (q as any).groupId || (q as any).sharedContentId || '',
+        sharedContentId: (q as any).sharedContentId || (q as any).groupId || '',
+        questionRange: (q as any).questionRange,
+        sharedContent: (q as any).sharedContent,
+        visualId: (q as any).visualId || '',
+        visualIds: (q as any).visualIds || [],
+        mappingStatus: (q as any).mappingStatus || '',
+        mappingConfidence: (q as any).mappingConfidence || '',
+      };
+    });
 
     setSections(updatedSections);
     if (mode === 'replace') {
@@ -251,6 +314,7 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
 
   const handleEditQuestion = (question: Question) => {
     setEditingQuestionId(question.id);
+    const qMarks = question.marks || 1;
     setQuestionForm({
       type: question.type,
       question: question.question,
@@ -260,7 +324,10 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
       correctAnswer: typeof question.correctAnswer === 'string' ? question.correctAnswer : '',
       correctAnswers: Array.isArray(question.correctAnswer) ? [...question.correctAnswer] : [],
       section: question.section,
-      marks: question.marks,
+      marks: qMarks,
+      negativeMarks: question.negativeMarks !== undefined
+        ? question.negativeMarks
+        : computePenalty(qMarks, negativeMarkingScheme, defaultNegativeMarks),
     });
     setShowQuestionForm(true);
 
@@ -284,6 +351,7 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
       correctAnswers: [],
       section: sections[0]?.id || '',
       marks: 1,
+      negativeMarks: computePenalty(1, negativeMarkingScheme, defaultNegativeMarks),
     });
     setShowQuestionForm(false);
   };
@@ -322,6 +390,9 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
       contextType: questionForm.contextType,
       section: questionForm.section,
       marks: questionForm.marks,
+      negativeMarks: questionForm.negativeMarks !== undefined
+        ? questionForm.negativeMarks
+        : computePenalty(questionForm.marks || 1, negativeMarkingScheme, defaultNegativeMarks),
     };
 
     if (questionForm.type === 'mcq' || questionForm.type === 'multiple') {
@@ -352,6 +423,7 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
       correctAnswers: [],
       section: sections[0]?.id || '',
       marks: 1,
+      negativeMarks: computePenalty(1, negativeMarkingScheme, defaultNegativeMarks),
     });
     setEditingQuestionId(null);
     setShowQuestionForm(false);
@@ -408,6 +480,8 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
         testName,
         duration,
         passingPercentage,
+        negativeMarkingScheme,
+        negativeMarks: defaultNegativeMarks,
         availableFrom,
         validUntil,
         categoryId,
@@ -435,7 +509,7 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
         className={`question-form ${isEditing ? 'editing-question-card' : ''}`}
       >
         <div className="form-header-badge">
-          {isEditing ? '✏️ EDIT QUESTION' : '✨ NEW QUESTION'}
+          {isEditing ? 'EDIT QUESTION' : 'NEW QUESTION'}
         </div>
         <div className="form-row">
           <div className="form-group">
@@ -466,7 +540,26 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
               type="number"
               value={questionForm.marks}
               min="1"
-              onChange={e => setQuestionForm({ ...questionForm, marks: Number(e.target.value) })}
+              onChange={e => {
+                const newMarks = Number(e.target.value);
+                setQuestionForm(prev => ({
+                  ...prev,
+                  marks: newMarks,
+                  negativeMarks: computePenalty(newMarks, negativeMarkingScheme, defaultNegativeMarks),
+                }));
+              }}
+            />
+          </div>
+          <div className="form-group">
+            <label>Negative Marks (Penalty)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              max="10"
+              value={questionForm.negativeMarks ?? 0}
+              onChange={e => setQuestionForm({ ...questionForm, negativeMarks: Math.max(0, Number(e.target.value)) })}
+              placeholder="0.25"
             />
           </div>
         </div>
@@ -510,7 +603,7 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
             <label>Shared passage / table / graph context</label>
             <label className="preset-chip" style={{ cursor: 'pointer', margin: 0, padding: '0.25rem 0.65rem' }}>
-              📊 Upload Bar Graph / Diagram Image
+              Upload Bar Graph / Diagram Image
               <input
                 type="file"
                 accept="image/*"
@@ -631,7 +724,7 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
             ← Back to Tests
           </button>
           <button className="primary-btn header-save-btn" onClick={handleSaveTest} disabled={isSaving}>
-            {isSaving ? "Saving..." : "💾 Save Test"}
+            {isSaving ? "Saving..." : "Save Test"}
           </button>
         </div>
       </div>
@@ -644,15 +737,14 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
 
       <div className="form-card">
         <div className="card-heading">
-          <div className="card-heading-icon">📝</div>
           <div><h3>Test Details</h3><p>Set the basic rules students will see for this examination.</p></div>
         </div>
 
         <div className="preset-quick-bar">
-          <span className="preset-label">⚡ Quick Exam Presets:</span>
-          <button type="button" className="preset-chip" onClick={() => applyPreset('sbi')}>🏦 SBI PO / IBPS PO Pattern</button>
-          <button type="button" className="preset-chip" onClick={() => applyPreset('ssc')}>🏛️ SSC CGL Tier-1 Pattern</button>
-          <button type="button" className="preset-chip" onClick={() => applyPreset('rrb')}>🚆 RRB NTPC Pattern</button>
+          <span className="preset-label">Quick Exam Presets:</span>
+          <button type="button" className="preset-chip" onClick={() => applyPreset('sbi')}>SBI PO / IBPS PO Pattern</button>
+          <button type="button" className="preset-chip" onClick={() => applyPreset('ssc')}>SSC CGL Tier-1 Pattern</button>
+          <button type="button" className="preset-chip" onClick={() => applyPreset('rrb')}>RRB NTPC Pattern</button>
         </div>
 
         <div className="form-row">
@@ -700,10 +792,127 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
           <div className="form-group"><label>Valid until *</label><input type="date" min={availableFrom} value={validUntil} onChange={e => setValidUntil(e.target.value)} /></div>
         </div>
 
+        {/* ── Exam-Wise Negative Marking Rule ── */}
+        <div className="negative-marking-box">
+          <div className="nm-header">
+            <div className="nm-title-wrap">
+              <span className="nm-badge">EXAM SCORING RULE</span>
+              <h4>Negative Marking Scheme</h4>
+              <p>Configure penalty rules applied to incorrect candidate responses based on target exam pattern.</p>
+            </div>
+            {bulkApplyFeedback && (
+              <span className="nm-feedback-pill">{bulkApplyFeedback}</span>
+            )}
+          </div>
+
+          <div className="nm-controls-grid">
+            <div className="form-group">
+              <label>Exam Negative Marking Pattern *</label>
+              <select
+                value={negativeMarkingScheme}
+                onChange={e => handleSchemeChange(e.target.value as any)}
+                className="nm-scheme-select"
+              >
+                <option value="quarter">Banking & Insurance Pattern (1/4th = -0.25 on 1M)</option>
+                <option value="ssc">SSC Pattern (1/4th = -0.50 on 2M / -0.25 on 1M)</option>
+                <option value="third">Railway NTPC / UPSC Pattern (1/3rd = -0.33 on 1M)</option>
+                <option value="half">Technical & GATE Pattern (1/2 = -0.50 on 1M)</option>
+                <option value="none">No Negative Marking (0.00)</option>
+                <option value="custom">Custom Fixed Negative Penalty</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Penalty for 1-Mark Question</label>
+              <div className="nm-input-wrap">
+                <span className="nm-prefix">-</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="10"
+                  value={defaultNegativeMarks}
+                  disabled={negativeMarkingScheme === 'none'}
+                  onChange={e => {
+                    const val = Math.max(0, Number(e.target.value));
+                    setDefaultNegativeMarks(val);
+                    if (negativeMarkingScheme !== 'custom' && negativeMarkingScheme !== 'none') {
+                      setNegativeMarkingScheme('custom');
+                    }
+                    setQuestionForm(prev => ({
+                      ...prev,
+                      negativeMarks: computePenalty(prev.marks || 1, 'custom', val),
+                    }));
+                  }}
+                  className="nm-val-input"
+                />
+                <span className="nm-suffix">marks</span>
+              </div>
+            </div>
+
+            <div className="nm-action-col">
+              <button
+                type="button"
+                className="nm-apply-all-btn"
+                onClick={applySchemeToAllQuestions}
+                title="Apply this penalty scheme to all questions currently in the test"
+              >
+                Apply to All ({questions.length})
+              </button>
+            </div>
+          </div>
+
+          <div className="nm-quick-chips">
+            <span className="nm-chips-label">Popular Patterns:</span>
+            <button
+              type="button"
+              className={`nm-chip ${negativeMarkingScheme === 'quarter' ? 'active' : ''}`}
+              onClick={() => handleSchemeChange('quarter')}
+            >
+              Banking (-0.25)
+            </button>
+            <button
+              type="button"
+              className={`nm-chip ${negativeMarkingScheme === 'ssc' ? 'active' : ''}`}
+              onClick={() => handleSchemeChange('ssc')}
+            >
+              SSC (-0.50 / -0.25)
+            </button>
+            <button
+              type="button"
+              className={`nm-chip ${negativeMarkingScheme === 'third' ? 'active' : ''}`}
+              onClick={() => handleSchemeChange('third')}
+            >
+              Railways / UPSC (-0.33)
+            </button>
+            <button
+              type="button"
+              className={`nm-chip ${negativeMarkingScheme === 'half' ? 'active' : ''}`}
+              onClick={() => handleSchemeChange('half')}
+            >
+              GATE / Technical (-0.50)
+            </button>
+            <button
+              type="button"
+              className={`nm-chip ${negativeMarkingScheme === 'none' ? 'active' : ''}`}
+              onClick={() => handleSchemeChange('none')}
+            >
+              No Penalty (0.00)
+            </button>
+          </div>
+        </div>
+
         <DocumentQuestionUploader onParsed={handleDocumentParsed} />
 
         <div className="section-management">
-          <div className="subsection-heading"><div><h4>Paper Sections</h4><p>Group questions into subjects such as Reasoning or English.</p></div><span>{sections.length} sections</span></div>
+          <div className="subsection-heading">
+            <div>
+              <h4>Paper Sections</h4>
+              <p>Group questions into subjects such as Reasoning or English.</p>
+            </div>
+            <span className="section-count-badge">{sections.length} {sections.length === 1 ? 'section' : 'sections'}</span>
+          </div>
+
           <div className="section-tags">
             {sections.map(section => (
               <div key={section.id} className="section-chip">
@@ -724,7 +933,7 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
                 <div className="section-actions">
                   <button type="button" className="icon-btn" title="Edit section"
                     onClick={() => setEditingSectionId(section.id)}>
-                    ✏️
+                    Edit
                   </button>
                   <button type="button" className="icon-btn danger" title="Delete section"
                     onClick={() => {
@@ -742,6 +951,7 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
               </div>
             ))}
           </div>
+
           <div className="section-bottom-row">
             <div className="add-section">
               <input
@@ -753,15 +963,6 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
               />
               <button type="button" className="primary-btn" onClick={addSection}>Add Section</button>
             </div>
-            <button
-              type="button"
-              className="save-test-btn-action"
-              onClick={handleSaveTest}
-              disabled={isSaving}
-              title="Save and publish this exam"
-            >
-              {isSaving ? "Saving Test..." : "💾 Save Test"}
-            </button>
           </div>
         </div>
       </div>
@@ -769,10 +970,13 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
       {/* ── Questions ── */}
       <div className="questions-section">
         <div className="section-header">
-          <div><h3>Question Bank</h3><p>{questions.length} questions • {questions.reduce((sum, q) => sum + q.marks, 0)} total marks</p></div>
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <div className="section-header-title">
+            <h3>Question Bank</h3>
+            <p>{questions.length} questions • {questions.reduce((sum, q) => sum + q.marks, 0)} total marks</p>
+          </div>
+          <div className="section-header-actions">
             <button type="button" className="secondary-btn" onClick={() => setShowSetModal(true)}>
-              📖 + Add Passage / DI Set (5 Questions)
+              + Add Passage / DI Set
             </button>
             <button className="primary-btn" onClick={() => {
               if (showQuestionForm && !editingQuestionId) {
@@ -791,8 +995,8 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
         {showSetModal && (
           <div className="modal-backdrop">
             <div className="set-modal-card">
-              <h3>📖 Add Shared Passage / DI Question Set</h3>
-              <p>Map 5 (or custom) questions under one shared paragraph, table, or graph context.</p>
+              <h3>Add Shared Passage / DI Question Set</h3>
+              <p>Map questions under one shared paragraph, table, or graph context.</p>
               
               <div className="form-group" style={{ marginTop: '1rem' }}>
                 <label>Set Type & Format *</label>
@@ -852,7 +1056,7 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
 
               <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
                 <button type="button" className="secondary-btn" onClick={() => setShowSetModal(false)}>Cancel</button>
-                <button type="button" className="primary-btn" onClick={handleCreateQuestionSet}>✨ Generate Question Set</button>
+                <button type="button" className="primary-btn" onClick={handleCreateQuestionSet}>Generate Question Set</button>
               </div>
             </div>
           </div>
@@ -877,7 +1081,16 @@ const TestBuilder: React.FC<TestBuilderProps> = ({ onBack }) => {
                       <div className="question-header">
                         <span className="question-number">Q{index + 1}</span>
                         <span className="question-type">{q.type.toUpperCase()}</span>
-                        <span className="question-marks">{q.marks} marks</span>
+                        <span className="question-marks">+{q.marks} marks</span>
+                        {q.negativeMarks && q.negativeMarks > 0 ? (
+                          <span className="question-neg-badge" title="Negative mark penalty for wrong answer">
+                            -{q.negativeMarks} neg
+                          </span>
+                        ) : (
+                          <span className="question-neg-badge zero" title="No penalty for this question">
+                            0 neg
+                          </span>
+                        )}
                         <button
                           className="question-edit-btn"
                           type="button"

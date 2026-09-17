@@ -156,7 +156,7 @@ const AuditLogs: React.FC = () => {
         </div>
         <div className="header-action-group">
           <button type="button" className="csv-export-btn" onClick={handleExportCSV}>
-            📥 Export CSV
+            Export CSV
           </button>
           <button type="button" className="refresh-btn" onClick={() => loadLogs(pagination.page, pagination.limit)}>
             ↻ Refresh

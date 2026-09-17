@@ -1,48 +1,60 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Shine Dialog Modal — Premium Screen Center Popups
+   ConfirmDialog.css — Enterprise-Level Modal System
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Used by: ConfirmDialog, AlertDialog, PromptDialog
+   CSS custom properties driven by variant (--accent, --accent-light, --icon-color)
    ═══════════════════════════════════════════════════════════════════════════ */
 
-.shine-dialog-backdrop {
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+/* ─── Backdrop ──────────────────────────────────────────────────────────── */
+
+.ent-dialog-backdrop {
   position: fixed !important;
   inset: 0 !important;
   width: 100vw !important;
   height: 100vh !important;
-  background: rgba(15, 23, 42, 0.72) !important;
-  backdrop-filter: blur(8px) !important;
+  background: rgba(2, 8, 23, 0.75) !important;
+  backdrop-filter: blur(10px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(1.2) !important;
   z-index: 2147483647 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   padding: 20px !important;
   box-sizing: border-box !important;
-  animation: dialog-fade-in 0.18s ease-out !important;
+  animation: ent-backdrop-in 0.2s ease-out !important;
 }
 
-@keyframes dialog-fade-in {
+@keyframes ent-backdrop-in {
   from { opacity: 0; }
-  to { opacity: 1; }
+  to   { opacity: 1; }
 }
 
-.shine-dialog-card {
-  background: #ffffff !important;
-  border-radius: 24px !important;
-  max-width: 440px !important;
+/* ─── Card ──────────────────────────────────────────────────────────────── */
+
+.ent-dialog-card {
+  position: relative !important;
   width: 100% !important;
-  padding: 28px 24px 22px !important;
-  box-sizing: border-box !important;
-  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.12) !important;
+  max-width: 460px !important;
+  background: #ffffff !important;
+  border-radius: 20px !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.06),
+    0 10px 30px -5px rgba(0, 0, 0, 0.15),
+    0 30px 80px -10px rgba(0, 0, 0, 0.25) !important;
+  overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
-  align-items: center !important;
-  text-align: center !important;
-  position: relative !important;
-  animation: dialog-pop-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  animation: ent-card-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
 }
 
-@keyframes dialog-pop-in {
+@keyframes ent-card-in {
   from {
     opacity: 0;
-    transform: scale(0.92) translateY(12px);
+    transform: scale(0.9) translateY(16px);
   }
   to {
     opacity: 1;
@@ -50,152 +62,337 @@
   }
 }
 
-/* Icon Wrap */
-.shine-dialog-icon-wrap {
-  margin-bottom: 16px !important;
+/* ─── Accent Bar (top strip) ────────────────────────────────────────────── */
+
+.ent-dialog-accent-bar {
+  height: 4px !important;
+  width: 100% !important;
+  background: var(--accent, #2563eb) !important;
+  flex-shrink: 0 !important;
 }
 
-.shine-dialog-icon-circle {
-  width: 64px !important;
-  height: 64px !important;
-  border-radius: 50% !important;
+/* ─── Header ────────────────────────────────────────────────────────────── */
+
+.ent-dialog-header {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 16px !important;
+  padding: 22px 24px 18px !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+/* Icon shell */
+.ent-dialog-icon-shell {
+  flex-shrink: 0 !important;
+  margin-top: 2px !important;
+}
+
+.ent-dialog-icon-ring {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 14px !important;
+  background: var(--accent-light, rgba(37, 99, 235, 0.08)) !important;
+  border: 1.5px solid color-mix(in srgb, var(--accent, #2563eb) 25%, transparent) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  font-size: 30px !important;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08) !important;
+  flex-shrink: 0 !important;
 }
 
-.variant-unblock .shine-dialog-icon-circle {
-  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%) !important;
-  border: 2px solid #86efac !important;
+.ent-dialog-icon-svg {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--icon-color, #2563eb) !important;
 }
 
-.variant-danger .shine-dialog-icon-circle {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%) !important;
-  border: 2px solid #fca5a5 !important;
+/* Header text block */
+.ent-dialog-header-text {
+  flex: 1 !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
 }
 
-.variant-warning .shine-dialog-icon-circle {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
-  border: 2px solid #fcd34d !important;
+.ent-dialog-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  width: fit-content !important;
+  padding: 2px 8px !important;
+  border-radius: 6px !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  color: var(--icon-color, #2563eb) !important;
+  background: var(--accent-light, rgba(37, 99, 235, 0.08)) !important;
+  border: 1px solid color-mix(in srgb, var(--accent, #2563eb) 20%, transparent) !important;
+  line-height: 1.4 !important;
 }
 
-.variant-info .shine-dialog-icon-circle {
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%) !important;
-  border: 2px solid #bfdbfe !important;
-}
-
-.variant-success .shine-dialog-icon-circle {
-  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%) !important;
-  border: 2px solid #a7f3d0 !important;
-}
-
-/* Content */
-.shine-dialog-content {
-  margin-bottom: 24px !important;
-}
-
-.shine-dialog-title {
-  font-size: 20px !important;
+.ent-dialog-title {
+  margin: 0 !important;
+  font-size: 18px !important;
   font-weight: 800 !important;
   color: #0f172a !important;
-  margin: 0 0 8px 0 !important;
-  letter-spacing: -0.02em !important;
+  letter-spacing: -0.025em !important;
+  line-height: 1.25 !important;
+  font-family: 'Inter', -apple-system, sans-serif !important;
 }
 
-.shine-dialog-message {
+/* ─── Divider ───────────────────────────────────────────────────────────── */
+
+.ent-dialog-divider {
+  display: none !important; /* Divider is handled by header border-bottom */
+}
+
+/* ─── Body ──────────────────────────────────────────────────────────────── */
+
+.ent-dialog-body {
+  padding: 18px 24px 20px !important;
+  flex: 1 !important;
+}
+
+.ent-dialog-message {
   font-size: 14px !important;
-  color: #64748b !important;
-  line-height: 1.55 !important;
+  color: #475569 !important;
+  line-height: 1.65 !important;
   margin: 0 !important;
+  font-weight: 450 !important;
 }
 
-.shine-dialog-message strong {
+.ent-dialog-message strong {
   color: #0f172a !important;
   font-weight: 700 !important;
 }
 
-.shine-dialog-message code {
+.ent-dialog-message code {
   background: #f1f5f9 !important;
   color: #0f172a !important;
-  padding: 2px 6px !important;
-  border-radius: 6px !important;
-  font-family: 'JetBrains Mono', monospace !important;
+  padding: 1px 6px !important;
+  border-radius: 5px !important;
+  font-family: 'JetBrains Mono', 'Courier New', monospace !important;
+  font-size: 12.5px !important;
+  border: 1px solid #e2e8f0 !important;
 }
 
-/* Actions */
-.shine-dialog-actions {
+/* ─── Footer ────────────────────────────────────────────────────────────── */
+
+.ent-dialog-footer {
   display: flex !important;
-  width: 100% !important;
-  gap: 12px !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 16px 24px 20px !important;
+  border-top: 1px solid #f1f5f9 !important;
+  background: #fafafa !important;
 }
 
-.shine-dialog-btn-cancel {
+.ent-footer-single {
+  justify-content: center !important;
+}
+
+/* Cancel button */
+.ent-dialog-btn-cancel {
   flex: 1 !important;
-  height: 44px !important;
-  background: #f1f5f9 !important;
+  height: 42px !important;
+  padding: 0 18px !important;
+  background: #ffffff !important;
   border: 1.5px solid #e2e8f0 !important;
-  border-radius: 12px !important;
-  font-size: 14px !important;
+  border-radius: 11px !important;
+  font-size: 13.5px !important;
   font-weight: 700 !important;
   color: #475569 !important;
   cursor: pointer !important;
-  transition: all 0.15s ease !important;
+  transition: all 0.16s ease !important;
+  font-family: 'Inter', -apple-system, sans-serif !important;
+  letter-spacing: 0.01em !important;
 }
 
-.shine-dialog-btn-cancel:hover {
-  background: #e2e8f0 !important;
+.ent-dialog-btn-cancel:hover {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
   color: #0f172a !important;
+  transform: translateY(-1px) !important;
 }
 
-.shine-dialog-btn-confirm {
-  flex: 1.3 !important;
-  height: 44px !important;
+.ent-dialog-btn-cancel:active {
+  transform: translateY(0) !important;
+}
+
+/* Confirm button (base) */
+.ent-dialog-btn-confirm {
+  flex: 1.4 !important;
+  height: 42px !important;
+  padding: 0 22px !important;
   border: none !important;
-  border-radius: 12px !important;
-  font-size: 14px !important;
+  border-radius: 11px !important;
+  font-size: 13.5px !important;
   font-weight: 800 !important;
   color: #ffffff !important;
   cursor: pointer !important;
   transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15) !important;
+  letter-spacing: 0.01em !important;
+  font-family: 'Inter', -apple-system, sans-serif !important;
+  position: relative !important;
+  overflow: hidden !important;
 }
 
-.shine-dialog-btn-confirm:hover {
+/* Confirm button shimmer sweep on hover */
+.ent-dialog-btn-confirm::after {
+  content: '' !important;
+  position: absolute !important;
+  inset: 0 !important;
+  background: linear-gradient(110deg, rgba(255,255,255,0) 25%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0) 75%) !important;
+  transform: translateX(-100%) !important;
+  transition: transform 0.5s ease !important;
+}
+
+.ent-dialog-btn-confirm:hover::after {
+  transform: translateX(100%) !important;
+}
+
+.ent-dialog-btn-confirm:hover {
   transform: translateY(-2px) !important;
 }
 
-.btn-unblock,
-.btn-success {
-  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
-  box-shadow: 0 4px 14px rgba(22, 163, 74, 0.35) !important;
-}
-.btn-unblock:hover,
-.btn-success:hover {
-  box-shadow: 0 6px 20px rgba(22, 163, 74, 0.5) !important;
+.ent-dialog-btn-confirm:active {
+  transform: translateY(0) scale(0.98) !important;
 }
 
-.btn-danger {
+.ent-dialog-btn-confirm:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+/* ─── Variant colour tokens ─────────────────────────────────────────────── */
+
+.ent-btn-danger,
+.ent-btn-suspended {
   background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
-  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35) !important;
-}
-.btn-danger:hover {
-  box-shadow: 0 6px 20px rgba(220, 38, 38, 0.5) !important;
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.3) !important;
 }
 
-.btn-warning {
+.ent-btn-danger:hover,
+.ent-btn-suspended:hover {
+  box-shadow: 0 8px 24px rgba(220, 38, 38, 0.45) !important;
+}
+
+.ent-btn-warning {
   background: linear-gradient(135deg, #d97706 0%, #b45309 100%) !important;
-  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.35) !important;
-}
-.btn-warning:hover {
-  box-shadow: 0 6px 20px rgba(217, 119, 6, 0.5) !important;
+  box-shadow: 0 4px 16px rgba(217, 119, 6, 0.3) !important;
 }
 
-.btn-info {
+.ent-btn-warning:hover {
+  box-shadow: 0 8px 24px rgba(217, 119, 6, 0.45) !important;
+}
+
+.ent-btn-success,
+.ent-btn-unblock {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+  box-shadow: 0 4px 16px rgba(22, 163, 74, 0.3) !important;
+}
+
+.ent-btn-success:hover,
+.ent-btn-unblock:hover {
+  box-shadow: 0 8px 24px rgba(22, 163, 74, 0.45) !important;
+}
+
+.ent-btn-info {
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35) !important;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.3) !important;
 }
-.btn-info:hover {
-  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5) !important;
+
+.ent-btn-info:hover {
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.45) !important;
 }
+
+/* ─── PromptDialog extras ───────────────────────────────────────────────── */
+
+.prompt-card {
+  max-width: 500px !important;
+}
+
+.prompt-form {
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.prompt-input-wrap {
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.prompt-text-input {
+  width: 100% !important;
+  height: 48px !important;
+  background: #f8fafc !important;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 11px !important;
+  padding: 0 16px !important;
+  font-size: 14.5px !important;
+  font-weight: 600 !important;
+  color: #0f172a !important;
+  box-sizing: border-box !important;
+  transition: all 0.18s ease !important;
+  outline: none !important;
+  font-family: 'Inter', -apple-system, sans-serif !important;
+}
+
+.prompt-text-input:focus {
+  background: #ffffff !important;
+  border-color: var(--accent, #2563eb) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent, #2563eb) 12%, transparent) !important;
+}
+
+.prompt-text-input::placeholder {
+  color: #94a3b8 !important;
+  font-weight: 400 !important;
+}
+
+/* ─── Mobile ────────────────────────────────────────────────────────────── */
+
+@media (max-width: 520px) {
+  .ent-dialog-card {
+    border-radius: 16px !important;
+    max-width: 100% !important;
+  }
+
+  .ent-dialog-header {
+    padding: 18px 20px 16px !important;
+    gap: 14px !important;
+  }
+
+  .ent-dialog-icon-ring {
+    width: 42px !important;
+    height: 42px !important;
+    border-radius: 12px !important;
+  }
+
+  .ent-dialog-title {
+    font-size: 16px !important;
+  }
+
+  .ent-dialog-body {
+    padding: 16px 20px 18px !important;
+  }
+
+  .ent-dialog-footer {
+    padding: 14px 20px 18px !important;
+    flex-direction: column-reverse !important;
+  }
+
+  .ent-dialog-btn-cancel,
+  .ent-dialog-btn-confirm {
+    flex: unset !important;
+    width: 100% !important;
+    height: 48px !important;
+    border-radius: 12px !important;
+  }
+}
+
+/* ─── Legacy aliases (backward compat for old .shine-dialog-* usage) ─────── */
+
+.shine-dialog-backdrop { display: none !important; }

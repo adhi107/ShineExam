@@ -284,20 +284,20 @@ export const VisualChartRenderer: React.FC<VisualChartRendererProps> = ({
     <div className="visual-chart-card">
       <div className="visual-chart-header">
         <div className="visual-chart-badge">
-          📊 VISUAL DATA INTERPRETATION — {chartType.replace(/_/g, ' ').toUpperCase()}
+          VISUAL DATA INTERPRETATION — {chartType.replace(/_/g, ' ').toUpperCase()}
         </div>
         {cleanTitle && <h4 className="visual-chart-title">{cleanTitle}</h4>}
       </div>
 
       {imgUrl ? (
         <div className="visual-original-snapshot">
-          <div className="snapshot-label">🖼️ ORIGINAL DOCUMENT IMAGE SNAPSHOT</div>
+          <div className="snapshot-label">ORIGINAL DOCUMENT IMAGE SNAPSHOT</div>
           <img src={imgUrl} alt="Original document visual" className="visual-snapshot-img" />
         </div>
       ) : null}
 
       <div className="visual-chart-body">
-        <div className="chart-renderer-label">📈 GENERATED INTERACTIVE CHART MODEL ({unit || 'values'})</div>
+        <div className="chart-renderer-label">GENERATED INTERACTIVE CHART MODEL ({unit || 'values'})</div>
         {chartType.includes('pie') || chartType.includes('doughnut') || chartType.includes('donut')
           ? renderPieChart()
           : chartType.includes('line')

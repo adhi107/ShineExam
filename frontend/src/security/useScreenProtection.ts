@@ -105,6 +105,8 @@ export function useScreenProtection(
 
   const streamTrackerRef = useRef<MediaStream | null>(null);
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Prevent double-firing violation callbacks from keydown+keyup of same key event
+  const lastViolationCallRef = useRef<number>(0);
 
   const unlockScreenshotBlock = useCallback(() => {
     setIsPrintScreenAttempted(false);
@@ -167,7 +169,12 @@ export function useScreenProtection(
       }
     }, 1000);
 
-    onPrintScreenAttempt?.();
+    // Only call onPrintScreenAttempt once per 2 seconds to prevent keydown+keyup double-trigger
+    const now = Date.now();
+    if (now - lastViolationCallRef.current > 2000) {
+      lastViolationCallRef.current = now;
+      onPrintScreenAttempt?.();
+    }
   }, [flashOnPrintScreen, screenshotLockDurationSec, onPrintScreenAttempt]);
 
   // ── Page Visibility change ──────────────────────────────────────────────

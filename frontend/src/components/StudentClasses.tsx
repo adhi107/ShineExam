@@ -15,6 +15,7 @@ export interface StudentClassItem {
   videoUrl?: string;
   embedUrl?: string;
   originalUrl?: string;
+  thumbnailUrl?: string;
   tags?: string[];
   viewCount: number;
   createdAt: string;
@@ -83,10 +84,12 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
 
   // In-Screen Video Player State
   const [activeClass, setActiveClass] = useState<StudentClassItem | null>(null);
-  // Track when iframe is loaded for fade-in
   const [iframeLoaded, setIframeLoaded] = useState<boolean>(false);
-  // Video element ref for local videos
+  const [isBuffering, setIsBuffering] = useState<boolean>(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
+  const [seekFeedback, setSeekFeedback] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const seekTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     loadClasses();
@@ -114,42 +117,106 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
 
   const handleWatchClass = (video: StudentClassItem) => {
     setIframeLoaded(false);
+    setIsBuffering(true);
+    setPlaybackSpeed(1);
     setActiveClass(video);
-    // Track view asynchronously safely
-    apiPost("/answerer/classes/track", { videoId: video.id, userId }).catch(() => {
-      // Non-blocking fallback
-    });
+    apiPost("/answerer/classes/track", { videoId: video.id, userId }).catch(() => {});
   };
 
   const closePlayer = useCallback(() => {
+    if (activeClass && videoRef.current) {
+      try {
+        localStorage.setItem(`shine_class_pos_${activeClass.id}`, String(videoRef.current.currentTime));
+      } catch {}
+    }
     setActiveClass(null);
     setIframeLoaded(false);
-    // Pause any playing video element before unmounting
+    setIsBuffering(false);
     if (videoRef.current) {
       videoRef.current.pause();
       videoRef.current.src = "";
     }
-  }, []);
+  }, [activeClass]);
 
-  // Close player on Escape key
+  const triggerSeekFeedback = (text: string) => {
+    setSeekFeedback(text);
+    if (seekTimeoutRef.current) clearTimeout(seekTimeoutRef.current);
+    seekTimeoutRef.current = setTimeout(() => setSeekFeedback(null), 700);
+  };
+
+  const seekRelative = (seconds: number) => {
+    if (!videoRef.current) return;
+    const newTime = Math.max(0, Math.min(videoRef.current.duration || 0, videoRef.current.currentTime + seconds));
+    videoRef.current.currentTime = newTime;
+    triggerSeekFeedback(seconds > 0 ? `+${seconds}s ⏩` : `${seconds}s ⏪`);
+  };
+
+  const changeSpeed = (speed: number) => {
+    setPlaybackSpeed(speed);
+    if (videoRef.current) {
+      videoRef.current.playbackRate = speed;
+    }
+  };
+
+  const handleVideoLoaded = () => {
+    setIframeLoaded(true);
+    setIsBuffering(false);
+    if (videoRef.current && activeClass) {
+      videoRef.current.playbackRate = playbackSpeed;
+      try {
+        const savedPos = localStorage.getItem(`shine_class_pos_${activeClass.id}`);
+        if (savedPos && Number(savedPos) > 3) {
+          videoRef.current.currentTime = Number(savedPos);
+        }
+      } catch {}
+      videoRef.current.play().catch(() => {});
+    }
+  };
+
+  const handleScreenDoubleTap = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    if (clickX < rect.width / 2) {
+      seekRelative(-10);
+    } else {
+      seekRelative(10);
+    }
+  };
+
+  // Keyboard shortcuts for YouTube-style experience
   useEffect(() => {
     if (!activeClass) return;
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closePlayer();
+      if (e.key === "Escape") {
+        closePlayer();
+      } else if (e.key === " " || e.key === "k") {
+        if (videoRef.current) {
+          e.preventDefault();
+          if (videoRef.current.paused) videoRef.current.play();
+          else videoRef.current.pause();
+        }
+      } else if (e.key === "ArrowLeft" || e.key === "j") {
+        e.preventDefault();
+        seekRelative(-5);
+      } else if (e.key === "ArrowRight" || e.key === "l") {
+        e.preventDefault();
+        seekRelative(5);
+      } else if (e.key === "m") {
+        if (videoRef.current) {
+          videoRef.current.muted = !videoRef.current.muted;
+        }
+      } else if (e.key === "f") {
+        const screen = document.querySelector(".student-player-screen");
+        if (screen && !document.fullscreenElement) {
+          screen.requestFullscreen().catch(() => {});
+        } else if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [activeClass, closePlayer]);
-
-  // Prevent body scroll when player is open
-  useEffect(() => {
-    if (activeClass) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => { document.body.style.overflow = ""; };
-  }, [activeClass]);
 
   return (
     <SensitiveContent
@@ -206,16 +273,19 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
           </div>
 
           <div className="classes-search-box">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
             <input
               type="text"
-              placeholder="Search classes..."
+              placeholder="Search lectures, topics, or subjects..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            {search && <button type="button" className="clear-search-btn" onClick={() => setSearch("")} aria-label="Clear search">✕</button>}
+            {search && (
+              <button className="search-clear-btn" onClick={() => setSearch("")} aria-label="Clear search">✕</button>
+            )}
           </div>
         </div>
 
@@ -227,7 +297,9 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
           </div>
         ) : classes.length === 0 ? (
           <div className="classes-empty-state">
-            <div className="empty-icon-wrap">🎬</div>
+            <div className="empty-icon-wrap">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+            </div>
             <h3>No Video Classes Available</h3>
             <p>
               {selectedCategory !== "all" || search
@@ -274,9 +346,11 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
                       {cls.duration || "Video"}
                     </span>
 
-                    <span className="media-provider-badge">
-                      {cls.sourceType === "file" ? "📁 Local Video" : cls.provider === "youtube" || ytThumb ? "▶ YouTube" : "▶ Video Stream"}
-                    </span>
+                    {(cls.provider === "youtube" || ytThumb) && (
+                      <span className="media-provider-badge">
+                        ▶ YouTube
+                      </span>
+                    )}
                   </div>
 
                   {/* Card Info */}
@@ -284,7 +358,7 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
                     <div className="card-meta-row">
                       <span className="category-tag">{cls.category || "General"}</span>
                       <span className="views-count">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                         </svg>
                         {cls.viewCount || 0} views
@@ -328,14 +402,7 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
           </div>
         )}
 
-        {/* ──────────────────────────────────────────────────────────────────────
-            In-Screen Protected Video Player with Full DRM Anti-Recording Shield
-            - Plays inside the page: no redirect to YouTube/Vimeo
-            - iframe: sandbox restricts navigation, no picture-in-picture, no web-share
-            - Dynamic watermark burns the tenant org name onto the video
-            - Right-click, drag, and context menu are blocked
-            - GPU video overlay protection active via SensitiveContent
-        ────────────────────────────────────────────────────────────────────── */}
+        {/* Video Player Modal */}
         {activeClass && (
           <div
             className="player-modal-backdrop"
@@ -355,21 +422,18 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
                   <h3 title={activeClass.title}>{activeClass.title}</h3>
                 </div>
                 <div className="player-meta-right">
-                  <div className="drm-live-indicator">
-                    <span className="live-dot" />
-                    DRM Protected
-                  </div>
                   <button className="btn-close-player" onClick={closePlayer} title="Close Player" aria-label="Close Video">✕</button>
                 </div>
               </div>
 
-              {/* Protected Video Screen — Watermark burns on top, no download/redirect */}
+              {/* Protected Video Screen */}
               <div
                 className="student-player-screen"
                 style={{ position: "relative" }}
+                onDoubleClick={handleScreenDoubleTap}
                 onContextMenu={(e) => e.preventDefault()}
               >
-                {/* DRM Forensic Watermark — uses tenant org name, module-controlled */}
+                {/* Forensic Watermark */}
                 <DynamicWatermark
                   module="classes"
                   userId={userId}
@@ -377,7 +441,21 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
                   isBold={true}
                 />
 
-                {/* Anti-grab invisible overlay — prevents right-click context on the video area */}
+                {/* Seek Feedback Animation */}
+                {seekFeedback && (
+                  <div className="player-seek-overlay">
+                    <span>{seekFeedback}</span>
+                  </div>
+                )}
+
+                {/* Buffering Spinner */}
+                {isBuffering && (
+                  <div className="player-buffering-overlay" aria-label="Buffering video...">
+                    <div className="youtube-buffer-spinner" />
+                  </div>
+                )}
+
+                {/* Anti-grab DRM Overlay */}
                 <div
                   className="video-drm-overlay"
                   onContextMenu={(e) => e.preventDefault()}
@@ -392,7 +470,7 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
                 />
 
                 {activeClass.sourceType === "file" || activeClass.provider === "direct" || activeClass.provider === "local" ? (
-                  /* ── Local / Direct Video — Native HTML5 Player with DRM controls ── */
+                  /* ── Local / Direct Video — Native HTML5 Player with Chunk Stream ── */
                   <video
                     ref={videoRef}
                     src={getMediaUrl(activeClass.videoUrl || activeClass.embedUrl)}
@@ -404,14 +482,23 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
                     className="student-video-element"
                     onContextMenu={(e) => e.preventDefault()}
                     disablePictureInPicture
-                    onLoadedMetadata={() => setIframeLoaded(true)}
+                    onLoadedData={handleVideoLoaded}
+                    onCanPlay={() => setIsBuffering(false)}
+                    onWaiting={() => setIsBuffering(true)}
+                    onPlaying={() => setIsBuffering(false)}
+                    onTimeUpdate={() => {
+                      if (videoRef.current && activeClass) {
+                        try {
+                          localStorage.setItem(`shine_class_pos_${activeClass.id}`, String(videoRef.current.currentTime));
+                        } catch {}
+                      }
+                    }}
                   >
                     Your browser does not support video streaming.
                   </video>
                 ) : (
-                  /* ── External Video (YouTube/Vimeo) — Sandboxed iframe, no redirect ── */
+                  /* ── External Video (YouTube/Vimeo) — Sandboxed iframe ── */
                   <>
-                    {/* Loading skeleton shown while iframe loads */}
                     {!iframeLoaded && (
                       <div className="video-loading-skeleton" aria-label="Loading video...">
                         <div className="video-skeleton-pulse">
@@ -420,7 +507,7 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
                               <polygon points="5 3 19 12 5 21 5 3"/>
                             </svg>
                           </div>
-                          <p>Loading video...</p>
+                          <p>Loading video stream...</p>
                         </div>
                       </div>
                     )}
@@ -428,20 +515,46 @@ const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
                       src={resolveVideoEmbedUrl(activeClass.embedUrl || activeClass.videoUrl || activeClass.originalUrl)}
                       title={activeClass.title}
                       className={`student-iframe-element ${iframeLoaded ? "iframe-ready" : "iframe-loading"}`}
-                      // No sandbox attr — YouTube embed player breaks with sandbox restrictions.
-                      // Security is enforced by: embed URL params (rel=0, modestbranding),
-                      // the DRM watermark overlay on top, and right-click prevention.
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; fullscreen"
                       allowFullScreen
                       referrerPolicy="strict-origin-when-cross-origin"
                       loading="eager"
-                      onLoad={() => setIframeLoaded(true)}
+                      onLoad={() => { setIframeLoaded(true); setIsBuffering(false); }}
                     />
                   </>
                 )}
               </div>
 
-              {/* Lecture Description */}
+              {/* YouTube-Style Quick Speed & Seek Action Bar */}
+              {(activeClass.sourceType === "file" || activeClass.provider === "direct" || activeClass.provider === "local") && (
+                <div className="player-quick-controls-bar">
+                  <div className="quick-seek-group">
+                    <button type="button" className="quick-action-pill" onClick={() => seekRelative(-10)} title="Rewind 10s (Left Arrow / J)">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg>
+                      -10s
+                    </button>
+                    <button type="button" className="quick-action-pill" onClick={() => seekRelative(10)} title="Forward 10s (Right Arrow / L)">
+                      +10s
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>
+                    </button>
+                  </div>
+                  <div className="speed-selector-group">
+                    <span className="speed-label">Speed:</span>
+                    {[0.75, 1, 1.25, 1.5, 2].map((spd) => (
+                      <button
+                        key={spd}
+                        type="button"
+                        className={`speed-pill ${playbackSpeed === spd ? "active" : ""}`}
+                        onClick={() => changeSpeed(spd)}
+                      >
+                        {spd}x
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Lecture Overview */}
               {activeClass.description && (
                 <div className="student-player-footer">
                   <strong>Lecture Overview:</strong>

@@ -253,6 +253,41 @@ def block_user_on_violation():
 
     status_reason = "security_violation_screenshot" if reason == "screenshot" else "security_violation_recording"
 
+    # ── Deduplication guard: ignore identical rapid duplicate calls within 3 seconds ──
+    # This protects against double-counting from keydown+keyup triggers, race conditions,
+    # or any retry from the frontend within a short window.
+    from datetime import timedelta
+    dedup_window = datetime.utcnow() - timedelta(seconds=3)
+    recent_dupe = db.security_violations.find_one({
+        **tenant_filter,
+        "userId": {"$regex": f"^{re.escape(canonical_user_id)}$", "$options": "i"},
+        "type": reason,
+        "sessionId": session_id,
+        "recordedAt": {"$gte": dedup_window},
+    }) if session_id else None
+
+    if recent_dupe:
+        # Return the same result as the recorded attempt — don't count twice
+        prior_attempt = int(recent_dupe.get("attemptNumber", 1))
+        prior_status = recent_dupe.get("status", "warned")
+        if prior_status == "blocked":
+            return jsonify({
+                "blocked": True,
+                "userId": canonical_user_id,
+                "reason": status_reason,
+                "attempt": prior_attempt,
+                "message": "Account has been permanently blocked due to repeated security violations. Please contact your administrator to unblock."
+            })
+        remaining = max(0, allowed_attempts - prior_attempt)
+        return jsonify({
+            "blocked": False,
+            "warned": True,
+            "attempt": prior_attempt,
+            "allowedAttempts": allowed_attempts,
+            "remainingAttempts": remaining,
+            "message": f"Warning {prior_attempt} of {allowed_attempts - 1}. Account will be blocked on attempt {allowed_attempts}."
+        })
+
     # Count previous violations of this type for this user within tenant
     previous_violations = db.security_violations.count_documents({
         **tenant_filter,

@@ -212,8 +212,11 @@ async function fetchSecurityConfig(): Promise<PublicSecurityConfig> {
       return _cachedConfig;
     }
   } catch {
-    // Backend offline — use permissive defaults so watermark still shows
+    // Backend offline — use last known config to respect admin's last known setting
   }
+  // If we have a cached config (from a prior successful fetch), use it even if stale
+  if (_cachedConfig) return _cachedConfig;
+  // No cache yet — use permissive defaults so watermark shows until we know the admin's setting
   return { watermarkEnabled: true, watermarkModules: ['exam', 'results', 'documents', 'classes', 'dashboard'], watermarkIntervalSec: 8 };
 }
 
@@ -352,6 +355,7 @@ const DynamicWatermark: React.FC<DynamicWatermarkProps> = ({
       className="shine-watermark-canvas"
       aria-hidden="true"
       role="presentation"
+      style={isWatermarkActive === false ? { display: 'none' } : undefined}
     />
   );
 };

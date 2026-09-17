@@ -505,15 +505,15 @@ const CandidateAnalytics = ({ detail, test, onBack, formatTime }: { detail: Resu
             <div className="candidate-info-block">
               <h1 className="candidate-name-title">{detail.userName}</h1>
               <div className="candidate-meta-badges">
-                <span className="meta-badge test-tag">📝 {test.name}</span>
+                <span className="meta-badge test-tag">{test.name}</span>
                 <span className="meta-badge-dot">•</span>
                 <span className="meta-badge time-tag">
-                  📅 {detail.submittedAt ? new Date(detail.submittedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "Completed"}
+                  {detail.submittedAt ? new Date(detail.submittedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "Completed"}
                 </span>
                 {detail.percentile !== undefined && (
                   <>
                     <span className="meta-badge-dot">•</span>
-                    <span className="meta-badge percentile-tag">🎯 {detail.percentile.toFixed(1)}th Percentile</span>
+                    <span className="meta-badge percentile-tag">{detail.percentile.toFixed(1)}th Percentile</span>
                   </>
                 )}
               </div>
@@ -540,16 +540,22 @@ const CandidateAnalytics = ({ detail, test, onBack, formatTime }: { detail: Resu
               "--ring-color": detail.percentage >= 60 ? "#10b981" : detail.percentage >= 40 ? "#f59e0b" : "#ef4444"
             } as React.CSSProperties}
           >
-            <div className="score-gauge-center">
-              <strong className="gauge-val">{detail.percentage.toFixed(1)}%</strong>
+            <div className="score-gauge-inner">
+              <span className="gauge-value">{safePercentage.toFixed(1)}%</span>
               <span className="gauge-label">Score</span>
             </div>
+          </div>
+          <div className="score-ring-summary">
+            <strong>{detail.passed ? "Qualified" : "Not Qualified"}</strong>
+            <span>{detail.scoredMarks} of {detail.totalMarks} marks</span>
           </div>
         </div>
 
         {/* 5 KPI Metric Cards */}
         <div className="candidate-kpi-card">
-          <div className="kpi-icon-pill blue">🎯</div>
+          <div className="kpi-icon-pill blue">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          </div>
           <div className="kpi-content">
             <span className="kpi-label">Marks Scored</span>
             <strong className="kpi-num">
@@ -559,7 +565,9 @@ const CandidateAnalytics = ({ detail, test, onBack, formatTime }: { detail: Resu
         </div>
 
         <div className="candidate-kpi-card">
-          <div className="kpi-icon-pill purple">⏱️</div>
+          <div className="kpi-icon-pill purple">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
           <div className="kpi-content">
             <span className="kpi-label">Time Spent</span>
             <strong className="kpi-num">{formatTime(detail.timeSpentSec)}</strong>
@@ -567,7 +575,9 @@ const CandidateAnalytics = ({ detail, test, onBack, formatTime }: { detail: Resu
         </div>
 
         <div className="candidate-kpi-card">
-          <div className="kpi-icon-pill emerald">✅</div>
+          <div className="kpi-icon-pill emerald">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
           <div className="kpi-content">
             <span className="kpi-label">Correct</span>
             <strong className="kpi-num text-emerald">{correct}</strong>
@@ -575,7 +585,9 @@ const CandidateAnalytics = ({ detail, test, onBack, formatTime }: { detail: Resu
         </div>
 
         <div className="candidate-kpi-card">
-          <div className="kpi-icon-pill rose">❌</div>
+          <div className="kpi-icon-pill rose">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </div>
           <div className="kpi-content">
             <span className="kpi-label">Incorrect</span>
             <strong className="kpi-num text-rose">{wrong}</strong>
@@ -583,7 +595,9 @@ const CandidateAnalytics = ({ detail, test, onBack, formatTime }: { detail: Resu
         </div>
 
         <div className="candidate-kpi-card">
-          <div className="kpi-icon-pill amber">⚪</div>
+          <div className="kpi-icon-pill amber">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </div>
           <div className="kpi-content">
             <span className="kpi-label">Unattempted</span>
             <strong className="kpi-num text-amber">{skipped}</strong>
@@ -596,7 +610,9 @@ const CandidateAnalytics = ({ detail, test, onBack, formatTime }: { detail: Resu
         {/* Section Performance */}
         <article className="candidate-panel-card section-breakdown-card">
           <div className="panel-card-head">
-            <div className="head-icon blue">📚</div>
+            <div className="head-icon blue">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            </div>
             <div>
               <h3>Section Performance</h3>
               <p>Module-wise marks and qualification ratio</p>
@@ -641,7 +657,9 @@ const CandidateAnalytics = ({ detail, test, onBack, formatTime }: { detail: Resu
         {/* Benchmark & Cohort Comparison */}
         <article className="candidate-panel-card benchmark-comparison-card">
           <div className="panel-card-head">
-            <div className="head-icon cyan">📊</div>
+            <div className="head-icon cyan">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            </div>
             <div>
               <h3>Performance Comparison</h3>
               <p>Relative positioning against cohort statistics</p>
@@ -656,9 +674,6 @@ const CandidateAnalytics = ({ detail, test, onBack, formatTime }: { detail: Resu
             </div>
 
             <div className={`benchmark-note-banner ${detail.percentage >= test.avgScore ? "positive" : "alert"}`}>
-              <div className="note-icon-circle">
-                {detail.percentage >= test.avgScore ? "🎉" : "📉"}
-              </div>
               <div className="note-content">
                 <strong>{detail.percentage >= test.avgScore ? "Above Cohort Average" : "Below Cohort Average"}</strong>
                 <p>
@@ -683,7 +698,9 @@ const CandidateAnalytics = ({ detail, test, onBack, formatTime }: { detail: Resu
       <article className="candidate-panel-card question-matrix-card">
         <div className="panel-card-head question-matrix-head">
           <div className="head-title-wrap">
-            <div className="head-icon amber">🧩</div>
+            <div className="head-icon amber">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            </div>
             <div>
               <h3>Question Analysis Matrix</h3>
               <p>Granular outcome for all {review.length} examination questions</p>
@@ -693,7 +710,7 @@ const CandidateAnalytics = ({ detail, test, onBack, formatTime }: { detail: Resu
           <div className="question-matrix-pills">
             <span className="q-pill correct">✓ {correct} Correct</span>
             <span className="q-pill wrong">✗ {wrong} Incorrect</span>
-            <span className="q-pill empty">⚪ {skipped} Unattempted</span>
+            <span className="q-pill empty">— {skipped} Unattempted</span>
           </div>
         </div>
 

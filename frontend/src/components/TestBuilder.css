@@ -1042,3 +1042,290 @@
   font-size: 0.88rem;
 }
 
+/* ==========================================================================
+   Exam-Wise Negative Marking Rule Panel & Badges
+   ========================================================================== */
+.negative-marking-box {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #2563eb;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  transition: all 0.2s ease;
+}
+
+.negative-marking-box:focus-within {
+  border-color: #cbd5e1;
+  border-left-color: #1d4ed8;
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.08);
+}
+
+.nm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.nm-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  margin-bottom: 0.35rem;
+}
+
+.nm-title-wrap h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.nm-title-wrap p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.nm-feedback-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.95rem;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  font-size: 0.82rem;
+  font-weight: 750;
+  border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.15);
+  animation: nmFadeIn 0.25s ease-out;
+}
+
+@keyframes nmFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.nm-controls-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) minmax(160px, 1.2fr) auto;
+  gap: 1.25rem;
+  align-items: flex-end;
+  margin-bottom: 1.15rem;
+}
+
+.nm-controls-grid .form-group {
+  margin-bottom: 0;
+}
+
+.nm-controls-grid .form-group label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 750;
+  color: #475569;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0.45rem;
+}
+
+.nm-scheme-select {
+  width: 100%;
+  height: 2.85rem;
+  padding: 0 0.9rem;
+  border-radius: 0.65rem;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 0.88rem;
+  font-weight: 650;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-sizing: border-box;
+}
+
+.nm-scheme-select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.nm-input-wrap {
+  display: flex;
+  align-items: center;
+  height: 2.85rem;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 0.65rem;
+  padding: 0 0.85rem;
+  box-sizing: border-box;
+  transition: all 0.18s ease;
+}
+
+.nm-input-wrap:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.nm-prefix {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #ef4444;
+  margin-right: 5px;
+  line-height: 1;
+}
+
+.nm-val-input {
+  width: 100%;
+  border: none !important;
+  outline: none !important;
+  font-size: 1rem !important;
+  font-weight: 750 !important;
+  color: #0f172a !important;
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+}
+
+.nm-val-input:disabled {
+  color: #94a3b8 !important;
+  cursor: not-allowed;
+}
+
+.nm-suffix {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
+.nm-action-col {
+  display: flex;
+  align-items: flex-end;
+}
+
+.nm-apply-all-btn {
+  height: 2.85rem;
+  padding: 0 1.35rem;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  border: 0;
+  border-radius: 0.65rem;
+  font-size: 0.86rem;
+  font-weight: 750;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.18s ease;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.nm-apply-all-btn:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+}
+
+.nm-apply-all-btn:active {
+  transform: translateY(0);
+}
+
+/* Quick Pattern Chips */
+.nm-quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.nm-chips-label {
+  font-size: 0.75rem;
+  font-weight: 750;
+  color: #64748b;
+  margin-right: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.nm-chip {
+  appearance: none;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 650;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.nm-chip:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.nm-chip.active {
+  background: #1e293b;
+  border-color: #1e293b;
+  color: #ffffff;
+  font-weight: 750;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.25);
+}
+
+/* Question Card Negative Badge */
+.question-neg-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0.25rem 0.6rem;
+  border-radius: 0.45rem;
+  font-size: 0.74rem;
+  font-weight: 750;
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  letter-spacing: -0.01em;
+}
+
+.question-neg-badge.zero {
+  background: #f1f5f9;
+  color: #64748b;
+  border-color: #e2e8f0;
+}
+
+@media (max-width: 860px) {
+  .nm-controls-grid {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+  }
+  
+  .nm-apply-all-btn {
+    width: 100%;
+  }
+}
+
+

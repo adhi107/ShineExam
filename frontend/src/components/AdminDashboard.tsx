@@ -234,18 +234,18 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
             <span className="admin-mobile-title">
               {/* Show current section name on mobile */}
               {currentView === 'dashboard' ? 'Admin Console'
-                : currentView === 'users' ? '👥 Students'
-                : currentView === 'tests' ? '📄 Tests'
-                : currentView === 'create-test' ? '✏️ Create Test'
-                : currentView === 'edit-test' ? '✏️ Edit Test'
-                : currentView === 'results' ? '📊 Analytics'
-                : currentView === 'violations' ? '🔒 Violations'
-                : currentView === 'audit-logs' ? '📋 Audit Logs'
-                : currentView === 'security-controls' ? '🛡 Controls'
-                : currentView === 'categories' ? '🗂 Categories'
-                : currentView === 'documents' ? '📁 Documents'
-                : currentView === 'announcements' ? '📢 Announcements'
-                : currentView === 'videos' ? '🎬 Videos'
+                : currentView === 'users' ? 'Students'
+                : currentView === 'tests' ? 'Tests'
+                : currentView === 'create-test' ? 'Create Test'
+                : currentView === 'edit-test' ? 'Edit Test'
+                : currentView === 'results' ? 'Analytics'
+                : currentView === 'violations' ? 'Violations'
+                : currentView === 'audit-logs' ? 'Audit Logs'
+                : currentView === 'security-controls' ? 'Security Controls'
+                : currentView === 'categories' ? 'Exam Categories'
+                : currentView === 'documents' ? 'Documents'
+                : currentView === 'announcements' ? 'Announcements'
+                : currentView === 'videos' ? 'Classes & Videos'
                 : 'Admin Console'}
             </span>
           </div>
@@ -256,8 +256,13 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
             className="admin-mobile-pw-btn"
             onClick={() => setShowPassword(true)}
             title="Change password"
+            aria-label="Change password"
           >
-            🔑
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 2l-2 2m-1.5 1.5L16 7l-1.5-1.5L13 7l-1 1" />
+              <circle cx="7.5" cy="15.5" r="5.5" />
+              <path d="m11.5 11.5 8.5-8.5" />
+            </svg>
           </button>
           <button className="admin-mobile-signout-btn" onClick={onLogout}>Sign out</button>
         </div>

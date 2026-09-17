@@ -1017,7 +1017,7 @@ const AdminVideos: React.FC = () => {
                         </div>
                         <strong>Click to browse or drag video file here</strong>
                         <small>MP4, WebM, MKV, MOV, AVI, FLV, WMV, 3GP, MPEG &amp; all formats (Up to 2 GB)</small>
-                        <span className="turbo-badge">⚡ Turbo High-Speed Multi-Stream Upload Enabled</span>
+                        <span className="turbo-badge">Turbo Multi-Stream Upload Enabled</span>
                       </div>
                     </div>
                   ) : (
@@ -1026,7 +1026,9 @@ const AdminVideos: React.FC = () => {
                         {videoThumbnailSnapshot ? (
                           <img src={videoThumbnailSnapshot} alt="Video Snapshot" />
                         ) : (
-                          <div className="thumb-fallback-icon">🎬</div>
+                          <div className="thumb-fallback-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>
+                          </div>
                         )}
                         <span className="preview-play-icon">▶</span>
                       </div>
@@ -1034,8 +1036,8 @@ const AdminVideos: React.FC = () => {
                         <strong className="file-name" title={selectedFile.name}>{selectedFile.name}</strong>
                         <div className="file-meta-pills">
                           <span className="meta-pill">{formatFileSize(selectedFile.size)}</span>
-                          {videoDurationDetected && <span className="meta-pill duration">⏱️ {videoDurationDetected}</span>}
-                          <span className="meta-pill high-speed">🚀 Fast Parallel Pipeline</span>
+                          {videoDurationDetected && <span className="meta-pill duration">{videoDurationDetected}</span>}
+                          <span className="meta-pill high-speed">Parallel Pipeline</span>
                         </div>
                       </div>
                       {!submitting && (
@@ -1075,17 +1077,17 @@ const AdminVideos: React.FC = () => {
                       <div className="turbo-metrics-row">
                         {uploadSpeed && (
                           <span className="turbo-metric-chip speed">
-                            ⚡ {uploadSpeed}
+                            {uploadSpeed}
                           </span>
                         )}
                         {uploadEta && (
                           <span className="turbo-metric-chip eta">
-                            ⏱️ {uploadEta}
+                            {uploadEta}
                           </span>
                         )}
                         {uploadedBytesFormatted && (
                           <span className="turbo-metric-chip bytes">
-                            📊 {uploadedBytesFormatted}
+                            {uploadedBytesFormatted}
                           </span>
                         )}
                       </div>
@@ -1365,12 +1367,19 @@ const AdminVideos: React.FC = () => {
               {assignTab === "students" && (
                 <div className="form-student-picker-box">
                   <div className="picker-search-wrap">
+                    <svg className="picker-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
                     <input
                       type="text"
                       placeholder="Search candidates by name, user ID, email..."
                       value={assignSearch}
                       onChange={(e) => setAssignSearch(e.target.value)}
                     />
+                    {assignSearch && (
+                      <button type="button" className="picker-search-clear" onClick={() => setAssignSearch("")}>✕</button>
+                    )}
                   </div>
 
                   <label className="picker-select-all">
@@ -1401,7 +1410,7 @@ const AdminVideos: React.FC = () => {
                         }
                       }}
                     />
-                    <span>Select all visible candidates</span>
+                    <span>Select all visible candidates ({students.filter((s) => `${s.name} ${s.userId} ${s.email || ""}`.toLowerCase().includes(assignSearch.toLowerCase())).length})</span>
                   </label>
 
                   <div className="picker-students-list">
@@ -1441,12 +1450,19 @@ const AdminVideos: React.FC = () => {
               {assignTab === "batches" && (
                 <div className="form-student-picker-box">
                   <div className="picker-search-wrap">
+                    <svg className="picker-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
                     <input
                       type="text"
                       placeholder="Search batch or cohort name..."
                       value={batchSearch}
                       onChange={(e) => setBatchSearch(e.target.value)}
                     />
+                    {batchSearch && (
+                      <button type="button" className="picker-search-clear" onClick={() => setBatchSearch("")}>✕</button>
+                    )}
                   </div>
 
                   <label className="picker-select-all">

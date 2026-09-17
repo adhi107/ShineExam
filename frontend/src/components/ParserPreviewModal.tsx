@@ -155,28 +155,28 @@ export const ParserPreviewModal: React.FC<ParserPreviewModalProps> = ({
               onClick={() => setActiveTab('needs_review')}
               style={{ color: needsReviewCount > 0 ? '#e11d48' : undefined }}
             >
-              ⚠️ Needs Review ({needsReviewCount})
+              Needs Review ({needsReviewCount})
             </button>
             <button
               type="button"
               className={`filter-tab-btn ${activeTab === 'chart' ? 'active' : ''}`}
               onClick={() => setActiveTab('chart')}
             >
-              📊 Chart / Graphs ({stats.chartQuestions || 0})
+              Chart / Graphs ({stats.chartQuestions || 0})
             </button>
             <button
               type="button"
               className={`filter-tab-btn ${activeTab === 'table' ? 'active' : ''}`}
               onClick={() => setActiveTab('table')}
             >
-              📋 Tables ({stats.tableQuestions || 0})
+              Tables ({stats.tableQuestions || 0})
             </button>
             <button
               type="button"
               className={`filter-tab-btn ${activeTab === 'text' ? 'active' : ''}`}
               onClick={() => setActiveTab('text')}
             >
-              📝 Text Only
+              Text Only
             </button>
           </div>
         </div>

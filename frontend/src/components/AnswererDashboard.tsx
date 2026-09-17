@@ -431,30 +431,128 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
           </div>
           <div className="candidate-top-actions">
             {view === "tests" && <div className="portal-value-help"><ValueHelpField label="Search Tests" placeholder="Search assigned tests" value={search} options={tests.map(test=>({value:test.name,label:test.name,keywords:[`${test.duration} minutes`,`${test.questions} questions`]}))} onChange={setSearch} allowFreeText compact/></div>}
-            <div className="notification-wrap">
-              <button className="icon-button" aria-label="Notifications" onClick={() => { setNotificationsOpen(v => !v); setProfileOpen(false); }}>
+            <div className="notification-wrap" ref={(el) => {
+              if (!el) return;
+              const handler = (e: MouseEvent) => {
+                if (!el.contains(e.target as Node)) setNotificationsOpen(false);
+              };
+              document.addEventListener('mousedown', handler);
+              return () => document.removeEventListener('mousedown', handler);
+            }}>
+              <button
+                className={`icon-button notif-bell-btn ${notificationsOpen ? 'active' : ''}`}
+                aria-label={`Notifications${unreadNotifications > 0 ? ` (${unreadNotifications} unread)` : ''}`}
+                onClick={() => { setNotificationsOpen(v => !v); setProfileOpen(false); }}
+              >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                {unreadNotifications > 0 && <i />}
+                {unreadNotifications > 0 && <span className="notif-badge">{unreadNotifications > 9 ? '9+' : unreadNotifications}</span>}
               </button>
-              {notificationsOpen && <div className="notification-menu">
-                <div className="notification-menu-head">
-                  <strong>Notifications ({unreadNotifications})</strong>
-                  <div className="notification-head-actions">
-                    <button onClick={() => markNotificationRead("all")}>Mark all read</button>
-                    <span className="dot-sep">•</span>
-                    <button className="clear-all-btn" onClick={() => void clearNotifications("all")}>Clear all</button>
+              {notificationsOpen && (
+                <div className="notification-panel" role="dialog" aria-label="Notifications">
+                  {/* Panel Header */}
+                  <div className="notif-panel-header">
+                    <div className="notif-panel-header-top">
+                      <div className="notif-panel-title-row">
+                        <div className="notif-panel-icon">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                        </div>
+                        <h4 className="notif-panel-title">Notifications</h4>
+                        {unreadNotifications > 0 && <span className="notif-panel-count-badge">{unreadNotifications} new</span>}
+                      </div>
+                      <button
+                        className="notif-panel-close-btn"
+                        onClick={() => setNotificationsOpen(false)}
+                        aria-label="Close notifications"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    </div>
+                    {notifications.length > 0 && (
+                      <div className="notif-panel-actions">
+                        <button className="notif-action-btn" onClick={() => markNotificationRead('all')}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          Mark all read
+                        </button>
+                        <button className="notif-action-btn notif-action-danger" onClick={() => void clearNotifications('all')}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                          Clear all
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Notification List */}
+                  <div className="notif-panel-list">
+                    {notifications.length === 0 ? (
+                      <div className="notif-empty-state">
+                        <div className="notif-empty-icon">
+                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                        </div>
+                        <p className="notif-empty-title">All caught up!</p>
+                        <p className="notif-empty-sub">No new notifications at the moment.</p>
+                      </div>
+                    ) : notifications.map((item) => {
+                      const typeConfig = {
+                        test: { color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', label: 'New Test',
+                          icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></svg> },
+                        result: { color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe', label: 'Result',
+                          icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> },
+                        document: { color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc', label: 'Document',
+                          icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> },
+                        announcement: { color: '#d97706', bg: '#fffbeb', border: '#fde68a', label: 'Notice',
+                          icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
+                      }[item.type] ?? { color: '#64748b', bg: '#f8fafc', border: '#e2e8f0', label: 'Info', icon: null };
+
+                      const relativeTime = (() => {
+                        if (!item.createdAt) return '';
+                        const diff = Date.now() - new Date(item.createdAt).getTime();
+                        const mins = Math.floor(diff / 60000);
+                        if (mins < 1) return 'Just now';
+                        if (mins < 60) return `${mins}m ago`;
+                        const hrs = Math.floor(mins / 60);
+                        if (hrs < 24) return `${hrs}h ago`;
+                        return `${Math.floor(hrs / 24)}d ago`;
+                      })();
+
+                      return (
+                        <div
+                          key={item.id}
+                          className={`notif-item ${item.read ? 'notif-read' : 'notif-unread'}`}
+                        >
+                          {!item.read && <span className="notif-unread-dot" aria-hidden="true" />}
+                          <button
+                            className="notif-item-btn"
+                            onClick={() => { void markNotificationRead(item.id); setNotificationsOpen(false); goTo(item.target); }}
+                          >
+                            <span
+                              className="notif-item-icon"
+                              style={{ color: typeConfig.color, background: typeConfig.bg, borderColor: typeConfig.border }}
+                            >
+                              {typeConfig.icon}
+                            </span>
+                            <div className="notif-item-body">
+                              <div className="notif-item-meta">
+                                <span className="notif-type-label" style={{ color: typeConfig.color }}>{typeConfig.label}</span>
+                                <span className="notif-timestamp">{relativeTime}</span>
+                              </div>
+                              <strong className="notif-item-title">{item.title}</strong>
+                              <p className="notif-item-msg">{item.message}</p>
+                            </div>
+                          </button>
+                          <button
+                            className="notif-dismiss-btn"
+                            onClick={(e) => { e.stopPropagation(); void clearNotifications(item.id); }}
+                            title="Dismiss"
+                            aria-label="Dismiss notification"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-                {notifications.length === 0 ? <div className="notification-empty">You are all caught up.</div> : notifications.map(item => (
-                  <div className={`notification-item-row ${item.read ? "read" : "unread"}`} key={item.id}>
-                    <button className="notification-item-main" onClick={() => { void markNotificationRead(item.id); setNotificationsOpen(false); goTo(item.target); }}>
-                      <span>{item.type === "test" ? "NEW" : item.type === "document" ? "DOC" : item.type === "announcement" ? "NEWS" : "✓"}</span>
-                      <div><strong>{item.title}</strong><small>{item.message}</small></div>
-                    </button>
-                    <button className="notification-dismiss-btn" onClick={(e) => { e.stopPropagation(); void clearNotifications(item.id); }} title="Clear notification" aria-label="Clear notification">✕</button>
-                  </div>
-                ))}
-              </div>}
+              )}
             </div>
             <div className="profile-wrap">
               <button className="profile-button" onClick={() => { setProfileOpen(v => !v); setNotificationsOpen(false); }}>
@@ -465,14 +563,52 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
                 </div>
                 <svg className={`profile-chevron ${profileOpen ? "open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
-              {profileOpen && <div className="profile-menu"><div className="profile-menu-user"><span>{userName.charAt(0).toUpperCase()}</span><div><strong>{userName}</strong><small>Candidate account</small></div></div><button onClick={() => openAccountPanel("profile")}>My profile</button><button onClick={() => openAccountPanel("settings")}>Settings & password</button><button className="signout" onClick={onLogout}>Sign out</button></div>}
+              {profileOpen && (
+                <div className="profile-menu" role="menu" aria-label="Candidate account menu">
+                  <div className="profile-menu-user">
+                    <span className="profile-menu-avatar">{userName.charAt(0).toUpperCase()}</span>
+                    <div className="profile-menu-info">
+                      <strong className="profile-menu-name">{userName}</strong>
+                      <span className="profile-menu-role">Candidate account</span>
+                    </div>
+                  </div>
+                  <div className="profile-menu-divider" />
+                  <div className="profile-menu-links">
+                    <button className="profile-menu-item" onClick={() => { setProfileOpen(false); openAccountPanel("profile"); }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                      <span>My profile</span>
+                    </button>
+                    <button className="profile-menu-item" onClick={() => { setProfileOpen(false); openAccountPanel("settings"); }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                      <span>Settings & password</span>
+                    </button>
+                  </div>
+                  <div className="profile-menu-divider" />
+                  <button className="profile-menu-item signout" onClick={() => { setProfileOpen(false); onLogout(); }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    <span>Sign out</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>
 
         {view === "tests" && <section className="portal-page tests-page">
-          <div className="test-tabs">
-            {(["active", "upcoming", "missed", "completed"] as TestTab[]).map(tab => <button key={tab} className={testTab === tab ? "active" : ""} onClick={() => setTestTab(tab)}><span>{tab === "active" ? "◉" : tab === "upcoming" ? "◷" : tab === "missed" ? "⊘" : "✓"}</span>{tab[0].toUpperCase()+tab.slice(1)}<i>{selectedExamPage ? scopedTests(tab).length : tab === "completed" ? history.length : tests.filter(t => categoryFor(t) === tab).length}</i></button>)}
+          <div className="test-tabs" role="tablist" aria-label="Test status filters">
+            {(["active", "upcoming", "missed", "completed"] as TestTab[]).map(tab => (
+              <button
+                key={tab}
+                role="tab"
+                aria-selected={testTab === tab}
+                className={`test-tab-btn ${testTab === tab ? "active" : ""}`}
+                onClick={() => setTestTab(tab)}
+              >
+                <span className="test-tab-icon">{tab === "active" ? "◉" : tab === "upcoming" ? "◷" : tab === "missed" ? "⊘" : "✓"}</span>
+                <span className="test-tab-label">{tab[0].toUpperCase()+tab.slice(1)}</span>
+                <i className="test-tab-badge">{selectedExamPage ? scopedTests(tab).length : tab === "completed" ? history.length : tests.filter(t => categoryFor(t) === tab).length}</i>
+              </button>
+            ))}
           </div>
           <div className="page-toolbar">
             <div>
@@ -910,7 +1046,159 @@ const SolutionReport = ({ testName, userName, review, onClose }: any) => {
     </div>
   );
 };
-const QuestionReport=({total,correct,review}:any)=>{const [filter,setFilter]=useState("all");const rows=Array.from({length:total},(_,i)=>({item:review[i],index:i,status:reviewStatus(review[i],i,correct,total-correct)})).filter(({item}:any)=>filter==="all"||(filter==="faster"&&item?.topperTimeSec>0&&item?.timeSpentSec<=item?.topperTimeSec)||(filter==="slower"&&item?.topperTimeSec>0&&item?.timeSpentSec>item?.topperTimeSec)||(filter==="untimed"&&!item?.timeSpentSec));const time=(seconds?:number)=>seconds?`${Math.floor(seconds/60).toString().padStart(2,"0")}:${(seconds%60).toString().padStart(2,"0")}`:"—";return <div className="report-card table-card question-time-report"><div className="question-report-heading"><div><h3>Question Report</h3><p>Actual time spent compared with the cohort and top performer.</p></div><label>Topper comparison<select value={filter} onChange={event=>setFilter(event.target.value)}><option value="all">All questions</option><option value="faster">Faster than topper</option><option value="slower">Slower than topper</option><option value="untimed">No timing recorded</option></select></label></div><div className="report-table question-table"><div className="table-head"><span>S.No.</span><span>Status</span><span>Score</span><span>Your time</span><span>Average</span><span>Topper time</span><span>Comparison</span></div>{rows.map(({item,index,status}:any)=>{const delta=item?.topperTimeSec&&item?.timeSpentSec?item.timeSpentSec-item.topperTimeSec:0;return <div className="table-row" key={index}><span>{index+1}</span><span className={status==='correct'?'text-success':status==='wrong'?'text-danger':''}>{status==='correct'?'✓ Correct':status==='wrong'?'× Incorrect':'— Unattempted'}</span><span>{item?.marks ?? (status==='correct'?1:0)}</span><b>{time(item?.timeSpentSec)}</b><span>{time(item?.avgTimeSec)}</span><span>{time(item?.topperTimeSec)}</span><span className={delta<=0&&item?.timeSpentSec?"text-success":delta>0?"text-danger":""}>{!item?.timeSpentSec||!item?.topperTimeSec?"—":delta<=0?`${Math.abs(delta)}s faster`:`${delta}s slower`}</span></div>})}{rows.length===0&&<div className="question-report-empty">No questions match this topper filter.</div>}</div></div>};
+const QuestionReport=({total,correct,review}:any)=>{
+  const [filter,setFilter]=useState("all");
+
+  const allRows = Array.from({ length: total }, (_, i) => ({
+    item: review?.[i],
+    index: i,
+    status: reviewStatus(review?.[i], i, correct, total - correct),
+  }));
+
+  const correctCount = allRows.filter((r) => r.status === "correct").length;
+  const wrongCount = allRows.filter((r) => r.status === "wrong").length;
+  const unattemptedCount = allRows.filter((r) => r.status === "unattempted").length;
+  const fasterCount = allRows.filter(
+    (r) => r.item?.topperTimeSec > 0 && r.item?.timeSpentSec > 0 && r.item.timeSpentSec <= r.item.topperTimeSec
+  ).length;
+
+  const rows = allRows.filter(({ item, status }: any) => {
+    if (filter === "all") return true;
+    if (filter === "correct") return status === "correct";
+    if (filter === "wrong") return status === "wrong";
+    if (filter === "unattempted") return status === "unattempted";
+    if (filter === "faster") return item?.topperTimeSec > 0 && item?.timeSpentSec > 0 && item?.timeSpentSec <= item?.topperTimeSec;
+    if (filter === "slower") return item?.topperTimeSec > 0 && item?.timeSpentSec > item?.topperTimeSec;
+    if (filter === "untimed") return !item?.timeSpentSec;
+    return true;
+  });
+
+  const time = (seconds?: number) =>
+    seconds ? `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}` : "—";
+
+  return (
+    <div className="report-card table-card question-time-report">
+      {/* Header */}
+      <div className="question-report-heading">
+        <div className="question-report-title-wrap">
+          <h3>Question Report</h3>
+          <p>Actual time spent compared with the cohort and top performer.</p>
+        </div>
+      </div>
+
+      {/* Quick Summary Strip */}
+      <div className="question-summary-strip">
+        <div className="summary-pill total">
+          <span className="pill-num">{total}</span>
+          <span className="pill-lbl">Total Questions</span>
+        </div>
+        <div className="summary-pill correct">
+          <span className="pill-num">{correctCount}</span>
+          <span className="pill-lbl">Correct</span>
+        </div>
+        <div className="summary-pill wrong">
+          <span className="pill-num">{wrongCount}</span>
+          <span className="pill-lbl">Incorrect</span>
+        </div>
+        <div className="summary-pill unattempted">
+          <span className="pill-num">{unattemptedCount}</span>
+          <span className="pill-lbl">Unattempted</span>
+        </div>
+        <div className="summary-pill faster">
+          <span className="pill-num">{fasterCount}</span>
+          <span className="pill-lbl">⚡ Faster Than Topper</span>
+        </div>
+      </div>
+
+      {/* Quick Filter Pills */}
+      <div className="question-filter-pills-row">
+        {[
+          { id: "all", label: `All (${total})` },
+          { id: "correct", label: `✓ Correct (${correctCount})` },
+          { id: "wrong", label: `× Incorrect (${wrongCount})` },
+          { id: "unattempted", label: `— Unattempted (${unattemptedCount})` },
+          { id: "faster", label: `⚡ Faster (${fasterCount})` },
+          { id: "slower", label: `🐢 Slower` },
+        ].map((btn) => (
+          <button
+            key={btn.id}
+            type="button"
+            className={`question-filter-btn ${filter === btn.id ? "active" : ""}`}
+            onClick={() => setFilter(btn.id)}
+          >
+            {btn.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Table Content or Centered Empty State */}
+      {rows.length === 0 ? (
+        <div className="question-report-empty">
+          <div className="qr-empty-icon">🔍</div>
+          <h4>No Questions Match This Filter</h4>
+          <p>You have 0 questions in this category.</p>
+          <button type="button" className="btn-reset-qr-filter" onClick={() => setFilter("all")}>
+            View All Questions ({total})
+          </button>
+        </div>
+      ) : (
+        <div className="question-table-scroll-wrap">
+          <div className="report-table question-table">
+            <div className="table-head">
+              <span className="col-sno">S.No.</span>
+              <span className="col-status">Status</span>
+              <span className="col-score">Score</span>
+              <span className="col-yourtime">Your Time</span>
+              <span className="col-avg">Average</span>
+              <span className="col-topper">Topper Time</span>
+              <span className="col-compare">Comparison</span>
+            </div>
+
+            {rows.map(({ item, index, status }: any) => {
+              const delta =
+                item?.topperTimeSec && item?.timeSpentSec ? item.timeSpentSec - item.topperTimeSec : 0;
+              return (
+                <div className="table-row" key={index}>
+                  <span className="col-sno">
+                    <span className="sno-circle">{index + 1}</span>
+                  </span>
+                  <span className="col-status">
+                    {status === "correct" ? (
+                      <span className="qr-status-badge correct">✓ Correct</span>
+                    ) : status === "wrong" ? (
+                      <span className="qr-status-badge wrong">× Incorrect</span>
+                    ) : (
+                      <span className="qr-status-badge unattempted">— Unattempted</span>
+                    )}
+                  </span>
+                  <span className="col-score">
+                    <span className={`qr-score-badge ${status === "correct" ? "positive" : status === "wrong" ? "negative" : "zero"}`}>
+                      {item?.marks ?? (status === "correct" ? "+1.00" : status === "wrong" ? "-0.25" : "0")}
+                    </span>
+                  </span>
+                  <span className="col-yourtime">
+                    <b>{time(item?.timeSpentSec)}</b>
+                  </span>
+                  <span className="col-avg">{time(item?.avgTimeSec)}</span>
+                  <span className="col-topper">{time(item?.topperTimeSec)}</span>
+                  <span className="col-compare">
+                    {!item?.timeSpentSec || !item?.topperTimeSec ? (
+                      <span className="qr-delta-chip neutral">—</span>
+                    ) : delta <= 0 ? (
+                      <span className="qr-delta-chip faster">▲ {Math.abs(delta)}s faster</span>
+                    ) : (
+                      <span className="qr-delta-chip slower">▼ {delta}s slower</span>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 const CompareReport=({score,total,pct}:any)=><><div className="compare-grid"><article className="report-card"><h3>Score Comparison</h3><div className="comparison-bars"><Metric label="You" value={score} max={total} color="#2f6fed"/><Metric label="Average" value={total*.52} max={total} color="#29b6d8"/><Metric label="Topper" value={total} max={total} color="#27b487"/></div></article><article className="report-card"><h3>Accuracy Comparison</h3><div className="comparison-bars"><Metric label="You" value={pct} max={100} color="#2f6fed"/><Metric label="Average" value={53} max={100} color="#29b6d8"/><Metric label="Topper" value={98} max={100} color="#27b487"/></div></article></div><div className="report-card topper-card"><h3>Top Performers</h3><div className="topper-bars">{[100,91,86,82,78,72,68,63,58,pct].map((x,i)=><div key={i}><span style={{height:`${Math.max(12,x)}%`}} className={i===9?'you':''}/><small>{i===9?'YOU':`${i+1}${i===0?'st':i===1?'nd':i===2?'rd':'th'}`}</small></div>)}</div></div></>;
 
 export default AnswererDashboard;
