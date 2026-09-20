@@ -448,7 +448,7 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
         {!isDesktopCollapsed && (
           <div className="candidate-sidebar-footer">
             <div className="support-card"><span>?</span><div><strong>Need help?</strong><small>Visit our support center</small></div></div>
-            <small>{tenantInfo?.name?.toUpperCase() || "VICTORY STUDY CIRCLE"} • v2.0</small>
+            <small>VICTORY STUDY CIRCLE • v2.0</small>
           </div>
         )}
       </aside>
