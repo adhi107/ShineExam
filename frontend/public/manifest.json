@@ -1,11 +1,12 @@
 {
-  "short_name": "Shine",
-  "name": "Shine Exam Prep",
+  "short_name": "Victory Study Circle",
+  "name": "Victory Study Circle",
+  "description": "Victory Study Circle — Premier Competitive Exam & Test Series Platform",
   "icons": [
     {
-      "src": "shine-favicon.svg",
+      "src": "victory-logo.png",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/png"
     },
     {
       "src": "logo192.png",
@@ -20,6 +21,6 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
+  "theme_color": "#2563eb",
   "background_color": "#ffffff"
 }
