@@ -1,31 +1,35 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './QuestionPanel.css';
 import { VisualContentRenderer } from './VisualContentRenderer';
+import EssayAnswerUploader from './Essay/EssayAnswerUploader';
 
 interface Question {
-  id: string;
-  type: 'mcq' | 'msq' | 'multiple' | 'ordering' | 'text';
+  id: string | number;
   question: string;
-  context?: string;
-  contextType?: string;
+  type?: string;
   options?: string[];
   correctAnswer?: string | string[];
-  section: string;
-  marks: number;
+  context?: string;
+  contextType?: string;
   chartData?: any;
   tableData?: any;
   imageReference?: string;
   visualReferences?: any[];
+  wordLimit?: number;
+  maxWordCount?: number;
+  instructions?: string;
 }
 
 interface QuestionPanelProps {
   question: Question;
   questionNumber: number;
   totalQuestions: number;
-  answer: string | string[];
+  answer: any;
   isMarked: boolean;
-  onAnswer: (answer: string | string[]) => void;
+  onAnswer: (answer: any) => void;
   onMarkForReview: () => void;
+  attemptId?: string;
+  userId?: string;
 }
 
 const renderFormattedContent = (content: string) => {
@@ -193,6 +197,8 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
   question,
   answer,
   onAnswer,
+  attemptId,
+  userId,
 }) => {
   const isMultipleChoice = Array.isArray(question.correctAnswer) || question.type === 'multiple';
 
@@ -356,14 +362,16 @@ const QuestionPanel: React.FC<QuestionPanelProps> = ({
         </div>
       )}
 
-      {!hasOptions && question.type === 'text' && (
-        <div className="bank-text-wrap">
-          <textarea
-            className="bank-text-area"
-            value={typeof answer === 'string' ? answer : ''}
-            onChange={(e) => onAnswer(e.target.value)}
-            placeholder="Type your descriptive answer here..."
-            rows={5}
+      {(!hasOptions || question.type === 'essay' || question.type === 'descriptive' || question.type === 'subjective' || question.type === 'text' || question.type?.startsWith('descriptive_')) && question.type !== 'ordering' && (
+        <div className="bank-essay-uploader-wrap" style={{ marginTop: 14 }}>
+          <EssayAnswerUploader
+            questionId={question.id}
+            attemptId={attemptId}
+            userId={userId}
+            value={answer}
+            onChange={onAnswer}
+            wordLimit={question.wordLimit || question.maxWordCount}
+            instructions={question.instructions}
           />
         </div>
       )}

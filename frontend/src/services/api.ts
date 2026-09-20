@@ -58,7 +58,13 @@ async function handleResponse<T>(res: Response): Promise<T> {
     let isBlocked = false;
     try {
       const body = await res.json();
-      message = body.error || body.message || message;
+      let rawMsg = body.error || body.message || message;
+      if (Array.isArray(rawMsg)) {
+        rawMsg = rawMsg.filter(item => typeof item === "string" && item.trim().length > 0).join(" ") || "Invalid request payload";
+      } else if (typeof rawMsg === "object" && rawMsg !== null) {
+        rawMsg = Object.values(rawMsg).filter(item => typeof item === "string" && item.trim().length > 0).join(" ") || JSON.stringify(rawMsg);
+      }
+      message = String(rawMsg || message);
       isBlocked = Boolean(body.blocked || res.status === 403);
     } catch {
       const text = await res.text().catch(() => "");

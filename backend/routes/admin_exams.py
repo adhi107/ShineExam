@@ -88,7 +88,8 @@ def list_exams():
             "assignedColleges": sorted(summary["colleges"]),
         })
     out.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
-    return jsonify({"tests": to_jsonable(out)})
+    tests_payload = to_jsonable(out)
+    return jsonify({"tests": tests_payload, "exams": tests_payload})
 
 
 @admin_exams_bp.route("", methods=["POST"])
@@ -258,22 +259,25 @@ def create_exam():
 
     db.questions.insert_many(q_docs)
 
+    created_test = to_jsonable({
+        "id": str(exam_id),
+        "name": exam_doc["name"],
+        "duration": exam_doc["duration"],
+        "passingPercentage": exam_doc["passingPercentage"],
+        "questions": exam_doc["questionCount"],
+        "sections": exam_doc["sections"],
+        "createdAt": exam_doc["createdAt"].isoformat(),
+        "status": exam_doc["status"],
+        "availableFrom": exam_doc.get("availableFrom") or exam_doc.get("createdAt"),
+        "validUntil": exam_doc.get("validUntil"),
+        "categoryId": exam_doc["categoryId"],
+        "subcategoryId": exam_doc["subcategoryId"],
+        "stage": exam_doc["stage"],
+    })
     return jsonify({
-        "test": to_jsonable({
-            "id": str(exam_id),
-            "name": exam_doc["name"],
-            "duration": exam_doc["duration"],
-            "passingPercentage": exam_doc["passingPercentage"],
-            "questions": exam_doc["questionCount"],
-            "sections": exam_doc["sections"],
-            "createdAt": exam_doc["createdAt"].isoformat(),
-            "status": exam_doc["status"],
-            "availableFrom": exam_doc.get("availableFrom") or exam_doc.get("createdAt"),
-            "validUntil": exam_doc.get("validUntil"),
-            "categoryId": exam_doc["categoryId"],
-            "subcategoryId": exam_doc["subcategoryId"],
-            "stage": exam_doc["stage"],
-        })
+        "test": created_test,
+        "exam": created_test,
+        "message": "Test created successfully",
     }), 201
 
 

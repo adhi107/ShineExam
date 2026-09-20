@@ -24,6 +24,16 @@ security_bp = Blueprint("security", __name__)
 
 
 # ─────────────────────────────────────────────────────────────
+# GET /security/config (alias for public security config)
+# ─────────────────────────────────────────────────────────────
+@security_bp.get("/config")
+def get_security_config_alias():
+    """Alias for /api/public/security/config so both routes succeed seamlessly."""
+    from routes.admin_security_controls import get_public_security_config
+    return get_public_security_config()
+
+
+# ─────────────────────────────────────────────────────────────
 # POST /security/session
 # ─────────────────────────────────────────────────────────────
 @security_bp.post("/session")

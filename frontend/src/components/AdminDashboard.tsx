@@ -14,6 +14,10 @@ import AdminSecurityControls from "./AdminSecurityControls";
 import ShineLogo from "./ShineLogo";
 import AdminVideos from "./AdminVideos";
 import AppIcon from "./AppIcons";
+import AdminTestSeriesDashboard from "./TestSeries/AdminTestSeriesDashboard";
+import StudentEnrollmentManager from "./Enrollment/StudentEnrollmentManager";
+import QuestionBankDashboard from "./QuestionBank/QuestionBankDashboard";
+import CurrentAffairsHub from "./CurrentAffairs/CurrentAffairsHub";
 import { apiGet, apiPost } from "../services/api";
 import { useTenant } from "../context/TenantContext";
 import "./AdminDashboard.css";
@@ -22,6 +26,9 @@ import "./AdminPolish.css";
 type AdminView =
   | "dashboard"
   | "users"
+  | "enrollment"
+  | "question-bank"
+  | "current-affairs"
   | "violations"
   | "audit-logs"
   | "security-controls"
@@ -32,11 +39,15 @@ type AdminView =
   | "tests"
   | "create-test"
   | "edit-test"
-  | "results";
+  | "results"
+  | "test-series";
 
 const paths: Record<AdminView, string> = {
   dashboard: "/admin",
   users: "/admin/users",
+  enrollment: "/admin/enrollments",
+  "question-bank": "/admin/question-bank",
+  "current-affairs": "/admin/current-affairs",
   violations: "/admin/violations",
   "audit-logs": "/admin/audit-logs",
   "security-controls": "/admin/security-controls",
@@ -48,11 +59,15 @@ const paths: Record<AdminView, string> = {
   "create-test": "/admin/tests/create",
   "edit-test": "/admin/tests/edit",
   results: "/admin/results",
+  "test-series": "/admin/test-series",
 };
 
 const views: Record<string, AdminView> = {
   "/admin": "dashboard",
   "/admin/users": "users",
+  "/admin/enrollments": "enrollment",
+  "/admin/question-bank": "question-bank",
+  "/admin/current-affairs": "current-affairs",
   "/admin/violations": "violations",
   "/admin/audit-logs": "audit-logs",
   "/admin/security-controls": "security-controls",
@@ -64,6 +79,7 @@ const views: Record<string, AdminView> = {
   "/admin/tests/create": "create-test",
   "/admin/tests/edit": "edit-test",
   "/admin/results": "results",
+  "/admin/test-series": "test-series",
 };
 
 interface RecentAttempt {
@@ -180,6 +196,9 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
 
   const render = () => {
     if (currentView === "users") return <UserManagement />;
+    if (currentView === "enrollment") return <StudentEnrollmentManager />;
+    if (currentView === "question-bank") return <QuestionBankDashboard />;
+    if (currentView === "current-affairs") return <CurrentAffairsHub isAdmin={true} />;
     if (currentView === "violations") return <SecurityViolations />;
     if (currentView === "audit-logs") return <AuditLogs />;
     if (currentView === "security-controls") return <AdminSecurityControls />;
@@ -213,6 +232,7 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
     }
     if (currentView === "videos") return <AdminVideos />;
     if (currentView === "results") return <TestResults />;
+    if (currentView === "test-series") return <AdminTestSeriesDashboard />;
     return <AdminHome adminName={adminName} stats={stats} go={go} />;
   };
 
@@ -235,6 +255,9 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
               {/* Show current section name on mobile */}
               {currentView === 'dashboard' ? 'Admin Console'
                 : currentView === 'users' ? 'Students'
+                : currentView === 'enrollment' ? 'Enrollment & Optional'
+                : currentView === 'question-bank' ? 'Question Bank'
+                : currentView === 'current-affairs' ? 'Current Affairs'
                 : currentView === 'tests' ? 'Tests'
                 : currentView === 'create-test' ? 'Create Test'
                 : currentView === 'edit-test' ? 'Edit Test'
@@ -246,6 +269,7 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
                 : currentView === 'documents' ? 'Documents'
                 : currentView === 'announcements' ? 'Announcements'
                 : currentView === 'videos' ? 'Classes & Videos'
+                : currentView === 'test-series' ? 'Test Series'
                 : 'Admin Console'}
             </span>
           </div>
@@ -333,6 +357,10 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
           <Nav active={["tests", "create-test", "edit-test"].includes(currentView)} icon="tests" label="Tests" collapsed={isDesktopCollapsed} onClick={() => goMobile("tests")} />
           <Nav active={currentView === "videos"} icon="videos" label="Videos" collapsed={isDesktopCollapsed} onClick={() => goMobile("videos")} />
           <Nav active={currentView === "documents"} icon="documents" label="Documents" collapsed={isDesktopCollapsed} onClick={() => goMobile("documents")} />
+          <Nav active={currentView === "enrollment"} icon="users" label="Enrollment & Optional" collapsed={isDesktopCollapsed} onClick={() => goMobile("enrollment")} />
+          <Nav active={currentView === "question-bank"} icon="documents" label="Question Bank" collapsed={isDesktopCollapsed} onClick={() => goMobile("question-bank")} />
+          <Nav active={currentView === "current-affairs"} icon="documents" label="Current Affairs" collapsed={isDesktopCollapsed} onClick={() => goMobile("current-affairs")} />
+          <Nav active={currentView === "test-series"} icon="results" label="Test Series" collapsed={isDesktopCollapsed} onClick={() => goMobile("test-series")} />
           <Nav active={currentView === "announcements"} icon="documents" label="Announcements" collapsed={isDesktopCollapsed} onClick={() => goMobile("announcements")} />
           <Nav active={currentView === "results"} icon="results" label="Analytics" collapsed={isDesktopCollapsed} onClick={() => goMobile("results")} />
           <Nav active={currentView === "violations"} icon="violations" label="Violations" collapsed={isDesktopCollapsed} onClick={() => goMobile("violations")} />
@@ -464,6 +492,14 @@ const AdminHome=({adminName="Admin",stats,go}:{adminName:string;stats:DashboardS
           <div>
             <strong>Open analytics</strong>
             <small>Review scores and performance</small>
+          </div>
+          <b className="cmd-arrow">→</b>
+        </button>
+        <button onClick={()=>go("test-series")}>
+          <span className="cmd-num">05</span>
+          <div>
+            <strong>Test Series</strong>
+            <small>UPSC, Groups &amp; Daily test series</small>
           </div>
           <b className="cmd-arrow">→</b>
         </button>

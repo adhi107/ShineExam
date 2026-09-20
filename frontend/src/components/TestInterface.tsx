@@ -655,6 +655,8 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
                 isMarked={activeAnswer?.marked || false}
                 onAnswer={handleAnswerChange}
                 onMarkForReview={handleMarkForReview}
+                attemptId={attemptId}
+                userId={userId}
               />
 
               {/* Native Mobile Sticky Action Footer */}

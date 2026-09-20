@@ -38,17 +38,30 @@ def documents_collection():
             result.append(_document_json(row, len(user_ids), user_ids))
         return jsonify({"documents": to_jsonable(result)})
     upload = request.files.get("file")
-    title = str(request.form.get("title") or "").strip()
-    if not upload or not title:
-        return jsonify({"error": "Title and file are required"}), 400
-    original = secure_filename(upload.filename or "document")
-    extension = original.rsplit(".", 1)[-1].lower() if "." in original else ""
-    if extension not in ALLOWED_EXTENSIONS:
-        return jsonify({"error": "Unsupported document type"}), 400
-    stored_name = f"{uuid.uuid4().hex}.{extension}"
-    path = UPLOAD_DIR / stored_name
-    upload.save(path)
-    doc = {"tenantId": tenant_id, "title": title, "description": str(request.form.get("description") or "").strip(), "filename": stored_name, "originalName": original, "mimeType": upload.mimetype, "size": path.stat().st_size, "createdAt": datetime.utcnow()}
+    json_data = request.get_json(silent=True) or {}
+    title = str(request.form.get("title") or json_data.get("title") or "").strip()
+    if not title:
+        return jsonify({"error": "Title is required"}), 400
+    if upload:
+        original = secure_filename(upload.filename or "document")
+        extension = original.rsplit(".", 1)[-1].lower() if "." in original else ""
+        if extension not in ALLOWED_EXTENSIONS:
+            return jsonify({"error": "Unsupported document type"}), 400
+        stored_name = f"{uuid.uuid4().hex}.{extension}"
+        path = UPLOAD_DIR / stored_name
+        upload.save(path)
+        mime = upload.mimetype
+        size = path.stat().st_size
+    else:
+        file_url = str(json_data.get("fileUrl") or request.form.get("fileUrl") or "").strip()
+        original = str(json_data.get("filename") or request.form.get("filename") or f"{title}.pdf").strip()
+        stored_name = original
+        mime = "application/pdf"
+        size = 1024
+    description = str(request.form.get("description") or json_data.get("description") or "").strip()
+    doc = {"tenantId": tenant_id, "title": title, "description": description, "filename": stored_name, "originalName": original, "mimeType": mime, "size": size, "createdAt": datetime.utcnow()}
+    if not upload and file_url:
+        doc["fileUrl"] = file_url
     doc["_id"] = db.documents.insert_one(doc).inserted_id
     return jsonify({"document": to_jsonable(_document_json(doc))}), 201
 
@@ -196,20 +209,40 @@ def announcement_collection():
             users=db.announcement_assignments.distinct("userId",{"announcementId":row["_id"]})
             result.append(_announcement_json(row,users))
         return jsonify({"announcements":to_jsonable(result)})
-    title=str(request.form.get("title") or "").strip();message=str(request.form.get("message") or "").strip()
-    if not title or not message:return jsonify({"error":"Title and message are required"}),400
-    image=request.files.get("image");image_name=""
+    json_data = request.get_json(silent=True) or {}
+    title = str(request.form.get("title") or json_data.get("title") or "").strip()
+    message = str(request.form.get("message") or json_data.get("message") or "").strip()
+    if not title or not message:
+        return jsonify({"error": "Title and message are required"}), 400
+    image = request.files.get("image")
+    image_name = ""
     if image and image.filename:
-        original=secure_filename(image.filename);extension=original.rsplit(".",1)[-1].lower() if "." in original else ""
-        if extension not in {"png","jpg","jpeg"}:return jsonify({"error":"Announcement image must be PNG or JPG"}),400
-        image_name=f"{uuid.uuid4().hex}.{extension}";image.save(ANNOUNCEMENT_DIR/image_name)
-    now=datetime.utcnow()
-    publish_at=_parse_announcement_datetime(request.form.get("publishAt")) or now
-    expires_at=_parse_announcement_datetime(request.form.get("expiresAt"))
-    if expires_at and expires_at < publish_at:return jsonify({"error":"Expire date must be after the publish date"}),400
-    doc={"tenantId": tenant_id, "title":title,"message":message,"linkUrl":str(request.form.get("linkUrl") or "").strip(),"imageName":image_name,"publishAt":publish_at,"expiresAt":expires_at,"createdAt":now}
-    doc["_id"]=db.announcements.insert_one(doc).inserted_id
-    return jsonify({"announcement":to_jsonable(_announcement_json(doc))}),201
+        original = secure_filename(image.filename)
+        extension = original.rsplit(".", 1)[-1].lower() if "." in original else ""
+        if extension not in {"png", "jpg", "jpeg"}:
+            return jsonify({"error": "Announcement image must be PNG or JPG"}), 400
+        image_name = f"{uuid.uuid4().hex}.{extension}"
+        image.save(ANNOUNCEMENT_DIR / image_name)
+    now = datetime.utcnow()
+    publish_at = _parse_announcement_datetime(request.form.get("publishAt") or json_data.get("publishAt")) or now
+    expires_at = _parse_announcement_datetime(request.form.get("expiresAt") or json_data.get("expiresAt"))
+    if expires_at and expires_at < publish_at:
+        return jsonify({"error": "Expire date must be after the publish date"}), 400
+    priority = str(request.form.get("priority") or json_data.get("priority") or "normal").strip()
+    link_url = str(request.form.get("linkUrl") or json_data.get("linkUrl") or "").strip()
+    doc = {
+        "tenantId": tenant_id,
+        "title": title,
+        "message": message,
+        "priority": priority,
+        "linkUrl": link_url,
+        "imageName": image_name,
+        "publishAt": publish_at,
+        "expiresAt": expires_at,
+        "createdAt": now
+    }
+    doc["_id"] = db.announcements.insert_one(doc).inserted_id
+    return jsonify({"announcement": to_jsonable(_announcement_json(doc))}), 201
 
 
 @admin_announcements_bp.delete("/<announcement_id>")

@@ -75,8 +75,25 @@ def compute_result(
         user_ans = answer_doc.get("answer")
 
         is_correct = False
-        qtype = q.get("type")
-        if qtype == "ordering":
+        qtype = q.get("type", "single")
+        is_subjective = qtype in ("essay", "descriptive", "descriptive_10m", "descriptive_15m", "descriptive_20m", "subjective")
+
+        # Determine if candidate attempted this question
+        attempted = False
+        if isinstance(user_ans, dict):
+            attempted = bool(user_ans.get("textAnswer") or user_ans.get("attachments") or user_ans.get("files"))
+        elif isinstance(user_ans, list):
+            attempted = len(user_ans) > 0
+        elif user_ans is not None:
+            attempted = str(user_ans).strip() != ""
+
+        if is_subjective:
+            # Descriptive / Essay questions are pending manual evaluator review unless exact match
+            if correct and isinstance(user_ans, str) and _normalize_answer(user_ans).lower() == _normalize_answer(correct).lower():
+                is_correct = True
+            else:
+                is_correct = None if attempted else False
+        elif qtype == "ordering":
             is_correct = _normalize_sequence(user_ans) == _normalize_sequence(correct)
         elif qtype == "text":
             is_correct = _normalize_answer(user_ans).lower() == _normalize_answer(correct).lower()
@@ -88,12 +105,11 @@ def compute_result(
         marks = float(q.get("marks", 0))
         negative_marks = float(q.get("negativeMarks", 0) or 0)
         section = q.get("section", "General")
-        attempted = user_ans not in (None, "", [])
 
-        if is_correct:
+        if is_correct is True:
             scored_marks += marks
             section_scored[section] = section_scored.get(section, 0) + marks
-        elif attempted and negative_marks > 0:
+        elif attempted and negative_marks > 0 and is_correct is False and not is_subjective:
             scored_marks -= negative_marks
             section_scored[section] = section_scored.get(section, 0) - negative_marks
         else:
@@ -107,12 +123,13 @@ def compute_result(
                 "contextType": q.get("contextType", ""),
                 "type": qtype,
                 "section": section,
-                "marks": marks if is_correct else (-negative_marks if attempted else 0),
+                "marks": marks if is_correct is True else (0 if is_subjective else (-negative_marks if attempted else 0)),
                 "negativeMarks": negative_marks,
                 "options": q.get("options", []),
                 "correctAnswer": correct,
                 "userAnswer": user_ans,
                 "isCorrect": is_correct,
+                "evaluationStatus": "pending" if (is_subjective and attempted) else ("evaluated" if not is_subjective else "unattempted"),
                 "marked": bool(answer_doc.get("marked", False)),
             }
         )

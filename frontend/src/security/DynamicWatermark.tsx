@@ -52,6 +52,10 @@ interface PublicSecurityConfig {
   watermarkEnabled: boolean;
   watermarkModules: string[];
   watermarkIntervalSec: number;
+  solutionReportWatermarkEnabled?: boolean;
+  solutionReportWatermarkText?: string;
+  solutionReportWatermarkColor?: string;
+  solutionReportWatermarkOpacity?: number;
 }
 
 /** Resolve tenant org name from all available sources */
@@ -89,9 +93,25 @@ function resolveTenantOrgName(ctxOrgName?: string): { orgName: string; color: st
     }
   }
 
-  // Priority: sessionStorage > context; never fall back to "Shine Exam" branding
-  if (!orgName) {
-    orgName = ctxOrgName || '';
+  if (!orgName && typeof localStorage !== 'undefined') {
+    try {
+      const storedTenant = localStorage.getItem('tenant_info');
+      if (storedTenant) {
+        const parsed = JSON.parse(storedTenant);
+        orgName = parsed.brandTitle || parsed.name || '';
+      }
+      if (!orgName) {
+        orgName =
+          localStorage.getItem('tenantBrandTitle') ||
+          localStorage.getItem('tenantName') ||
+          localStorage.getItem('orgName') ||
+          '';
+      }
+    } catch {}
+  }
+
+  if (!orgName && ctxOrgName) {
+    orgName = ctxOrgName;
   }
 
   return { orgName, color };
@@ -133,12 +153,18 @@ function drawWatermark(
   });
 
   const lines: string[] = [];
-  if (customText) {
-    lines.push(customText.toUpperCase());
+  
+  // Clean up any legacy hardcoded brand names if a tenant organisation name exists
+  let headline = (customText || '').trim();
+  if (headline && orgName && (headline.toUpperCase().includes('SHINE EXAM') || headline.toUpperCase().includes('SHINE'))) {
+    headline = headline.replace(/SHINE\s+EXAM/gi, orgName).replace(/SHINE/gi, orgName);
+  }
+
+  if (headline) {
+    lines.push(headline.toUpperCase());
   } else if (orgName) {
     lines.push(orgName.toUpperCase());
   } else {
-    // Last resort: use a generic confidential label — no branding
     lines.push('CONFIDENTIAL');
   }
 
@@ -200,13 +226,24 @@ async function fetchSecurityConfig(): Promise<PublicSecurityConfig> {
     return _cachedConfig;
   }
   try {
-    const res = await fetch(buildUrl('/public/security/config'), { credentials: 'omit' });
+    const activeTenantId = (typeof sessionStorage !== 'undefined' ? (sessionStorage.getItem('activeTenantId') || sessionStorage.getItem('tenantId')) : null) || 'default';
+    const headers: Record<string, string> = {};
+    if (activeTenantId) headers['X-Tenant-Id'] = activeTenantId;
+
+    const res = await fetch(buildUrl('/public/security/config'), {
+      headers,
+      credentials: 'omit',
+    });
     if (res.ok) {
       const data = await res.json();
       _cachedConfig = {
         watermarkEnabled: data.watermarkEnabled !== false,
         watermarkModules: Array.isArray(data.watermarkModules) ? data.watermarkModules : ['exam', 'results', 'documents', 'classes', 'dashboard'],
         watermarkIntervalSec: typeof data.watermarkIntervalSec === 'number' ? data.watermarkIntervalSec : 8,
+        solutionReportWatermarkEnabled: data.solutionReportWatermarkEnabled !== false,
+        solutionReportWatermarkText: data.solutionReportWatermarkText || '',
+        solutionReportWatermarkColor: data.solutionReportWatermarkColor || '#dc2626',
+        solutionReportWatermarkOpacity: typeof data.solutionReportWatermarkOpacity === 'number' ? data.solutionReportWatermarkOpacity : 0.25,
       };
       _lastConfigFetch = now;
       return _cachedConfig;
@@ -216,8 +253,16 @@ async function fetchSecurityConfig(): Promise<PublicSecurityConfig> {
   }
   // If we have a cached config (from a prior successful fetch), use it even if stale
   if (_cachedConfig) return _cachedConfig;
-  // No cache yet — use permissive defaults so watermark shows until we know the admin's setting
-  return { watermarkEnabled: true, watermarkModules: ['exam', 'results', 'documents', 'classes', 'dashboard'], watermarkIntervalSec: 8 };
+  // Fallback defaults
+  return {
+    watermarkEnabled: true,
+    watermarkModules: ['exam', 'results', 'documents', 'classes', 'dashboard'],
+    watermarkIntervalSec: 8,
+    solutionReportWatermarkEnabled: true,
+    solutionReportWatermarkText: '',
+    solutionReportWatermarkColor: '#dc2626',
+    solutionReportWatermarkOpacity: 0.25,
+  };
 }
 
 const DynamicWatermark: React.FC<DynamicWatermarkProps> = ({
@@ -248,10 +293,24 @@ const DynamicWatermark: React.FC<DynamicWatermarkProps> = ({
     const loadConfig = async () => {
       const config = await fetchSecurityConfig();
       if (cancelled) return;
-      const moduleActive = config.watermarkEnabled && (
-        module === 'general' || config.watermarkModules.includes(module)
-      );
-      setIsWatermarkActive(moduleActive);
+
+      // Master switch: If master watermark toggle is OFF, immediately disable
+      if (!config.watermarkEnabled) {
+        setIsWatermarkActive(false);
+        return;
+      }
+
+      // If this is the results / solution report module, check both solutionReportWatermarkEnabled and watermarkModules
+      if (module === 'results') {
+        const isResultsActive =
+          config.solutionReportWatermarkEnabled !== false &&
+          config.watermarkModules.includes('results');
+        setIsWatermarkActive(isResultsActive);
+      } else if (module === 'general') {
+        setIsWatermarkActive(true);
+      } else {
+        setIsWatermarkActive(config.watermarkModules.includes(module));
+      }
     };
 
     // First fetch — immediately

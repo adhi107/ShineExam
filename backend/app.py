@@ -1,10 +1,20 @@
 import os
 import sys
+import time
+import logging
+from datetime import datetime
 
 # Ensure backend root is in sys.path so modules (config, routes, etc.) resolve cleanly
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from flask import Flask, jsonify, send_from_directory
+# Ensure unbuffered stdout on Windows/Linux so logs appear in the terminal immediately
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
+
+from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 
 from config.settings import settings
@@ -23,10 +33,29 @@ from routes.admin_violations import admin_violations_bp
 from routes.admin_audit import admin_audit_bp
 from routes.super_admin import super_admin_bp
 from routes.admin_security_controls import admin_security_controls_bp, public_security_bp
+from routes.test_series import test_series_bp
+from routes.student_test_series import student_series_bp
+from routes.exam_configurations import exam_config_bp
+from routes.syllabus_management import syllabus_bp
+from routes.question_bank import question_bank_bp
+from routes.descriptive_evaluation import descriptive_eval_bp
+from routes.manual_assignments import manual_assign_bp
+from routes.pyq_current_affairs import pyq_ca_bp
+from routes.student_enrollment_engine import enrollment_bp
+from routes.current_affairs_engine import ca_engine_bp
 from utils.security import add_security_headers
 
 
 def create_app() -> Flask:
+    # Setup standard logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s] [%(levelname)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        stream=sys.stdout
+    )
+    logging.getLogger("werkzeug").setLevel(logging.INFO)
+
     app = Flask(__name__)
 
     # Allow the configured Shine Exam frontend origins.
@@ -67,13 +96,28 @@ def create_app() -> Flask:
     app.register_blueprint(admin_audit_bp,      url_prefix="/api/admin/audit-logs")
     app.register_blueprint(admin_security_controls_bp, url_prefix="/api/admin")
     app.register_blueprint(public_security_bp, url_prefix="/api/public/security")
+    app.register_blueprint(test_series_bp, url_prefix="/api/admin/test-series")
+    app.register_blueprint(student_series_bp, url_prefix="/api/answerer/test-series")
+    app.register_blueprint(exam_config_bp, url_prefix="/api/admin/exam-config")
+    app.register_blueprint(syllabus_bp, url_prefix="/api/admin/syllabus")
+    app.register_blueprint(question_bank_bp, url_prefix="/api/admin/question-bank")
+    app.register_blueprint(descriptive_eval_bp, url_prefix="/api/admin/evaluations")
+    app.register_blueprint(manual_assign_bp, url_prefix="/api/admin/assignments")
+    app.register_blueprint(pyq_ca_bp, url_prefix="/api/answerer/learning-hub")
+    app.register_blueprint(enrollment_bp, url_prefix="/api/admin/enrollments")
+    app.register_blueprint(enrollment_bp, url_prefix="/api/answerer/enrollments", name="answerer_enrollments")
+    app.register_blueprint(ca_engine_bp, url_prefix="/api/admin/current-affairs")
+    app.register_blueprint(ca_engine_bp, url_prefix="/api/answerer/current-affairs", name="answerer_current_affairs")
 
 
+
+    @app.before_request
+    def record_request_start():
+        request._start_time = time.time()
 
     # Global firewall: If a candidate account is inactive/suspended, block all requests
     @app.before_request
     def global_candidate_security_gate():
-        from flask import request
         # ALWAYS allow CORS preflight OPTIONS requests
         if request.method == "OPTIONS":
             return None
@@ -144,8 +188,37 @@ def create_app() -> Flask:
     # Support large video and asset uploads (up to 2 GB)
     app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024
 
-    # Add security headers to every API response
-    app.after_request(add_security_headers)
+    # Add security headers and log every API response to the terminal
+    @app.after_request
+    def process_response_and_log(response):
+        # 1. Apply security headers
+        response = add_security_headers(response)
+
+        # 2. Calculate execution time
+        start_time = getattr(request, "_start_time", None)
+        if start_time:
+            latency_ms = int((time.time() - start_time) * 1000)
+            latency_str = f"{latency_ms}ms"
+        else:
+            latency_str = "-ms"
+
+        # 3. Format method, path, IP, status code
+        method = request.method
+        path = request.path
+        if request.query_string:
+            qs = request.query_string.decode("utf-8", errors="replace")
+            if qs:
+                path = f"{path}?{qs}"
+        status_code = response.status_code
+        ip = request.headers.get("X-Forwarded-For", request.remote_addr or "127.0.0.1").split(",")[0].strip()
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Color indicator based on HTTP status code
+        # 2xx: Green/Normal, 3xx: Cyan, 4xx: Yellow, 5xx: Red
+        status_tag = f"[{status_code}]"
+        print(f"[{ts}] [API] {method:<6} {path:<45} -> {status_tag} ({latency_str}) [IP: {ip}]", flush=True)
+
+        return response
 
 
     @app.errorhandler(404)
@@ -156,7 +229,9 @@ def create_app() -> Flask:
     def server_error(e):
         # Return safe JSON errors without exposing backend stack traces.
         import traceback
-        print("[500 ERROR]", traceback.format_exc())
+        err_tb = traceback.format_exc()
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{ts}] [ERROR 500] {request.method} {request.path}\n{err_tb}", flush=True)
         return jsonify({"error": "Internal server error"}), 500
 
     @app.errorhandler(413)

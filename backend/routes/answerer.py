@@ -384,9 +384,31 @@ def get_history():
     
     history = []
     for r in results:
-        # Attach the Shine Exam test name to each history row.
-        exam = db.exams.find_one({"_id": r.get("examId")})
-        exam_name = exam.get("name", "Unknown Test") if exam else "Unknown Test"
+        exam_id = r.get("examId")
+        exam_name = r.get("testName") or r.get("examName") or r.get("paperTitle") or ""
+
+        if not exam_name and exam_id:
+            try:
+                from bson import ObjectId
+                obj_id = ObjectId(exam_id) if isinstance(exam_id, str) and ObjectId.is_valid(exam_id) else exam_id
+                exam = db.exams.find_one({"$or": [{"_id": obj_id}, {"_id": str(exam_id)}, {"id": str(exam_id)}]})
+                if exam:
+                    exam_name = exam.get("name") or exam.get("title") or exam.get("testName") or ""
+            except Exception:
+                pass
+
+        if not exam_name and exam_id:
+            try:
+                from bson import ObjectId
+                obj_id = ObjectId(exam_id) if isinstance(exam_id, str) and ObjectId.is_valid(exam_id) else exam_id
+                ts_paper = db.test_series_papers.find_one({"$or": [{"_id": obj_id}, {"_id": str(exam_id)}, {"paperId": str(exam_id)}]})
+                if ts_paper:
+                    exam_name = ts_paper.get("title") or ts_paper.get("name") or ts_paper.get("paperTitle") or ""
+            except Exception:
+                pass
+
+        if not exam_name:
+            exam_name = "Examination Assessment"
         
         history.append({
             "attemptId": str(r.get("attemptId") or r.get("_id")),
@@ -726,7 +748,41 @@ def start_attempt():
 
     exam = db.exams.find_one({"_id": exam_oid})
     if not exam:
+        series_paper = db.series_papers.find_one({"_id": exam_oid})
+        if series_paper:
+            series = db.test_series.find_one({"_id": series_paper.get("seriesId")})
+            # Resume existing attempt if any
+            existing_series_att = db.series_attempts.find_one({
+                "paperId": exam_oid,
+                "userId": userId,
+                "status": "in_progress"
+            })
+            if existing_series_att:
+                return jsonify({
+                    "attemptId": str(existing_series_att["_id"]),
+                    "isResume": True,
+                    "answers": existing_series_att.get("answers", []),
+                    "timeSpentSec": int(existing_series_att.get("timeSpentSec", 0)),
+                })
+
+            now = datetime.utcnow()
+            new_series_att = {
+                "seriesId": series_paper.get("seriesId"),
+                "paperId": exam_oid,
+                "seriesName": series.get("name", "") if series else "",
+                "paperName": series_paper.get("paperName", ""),
+                "paperType": series_paper.get("paperType", "mcq"),
+                "userId": userId,
+                "tenantId": series_paper.get("tenantId", DEFAULT_TENANT_ID),
+                "status": "in_progress",
+                "startedAt": now,
+                "answers": [],
+            }
+            res = db.series_attempts.insert_one(new_series_att)
+            return jsonify({"attemptId": str(res.inserted_id)})
+
         return jsonify({"error": "Exam not found"}), 404
+
     availability = _exam_availability(exam)
     if availability == "expired":
         return jsonify({"error": "This test has expired"}), 410
@@ -846,6 +902,72 @@ def save_attempt(attempt_id: str = None):
 
     db.attempts.update_one({"_id": oid}, {"$set": update})
     return jsonify({"message": "Saved", "attemptId": str(oid)})
+
+
+ALLOWED_ANSWER_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "webp", "docx", "doc", "heic"}
+
+
+@answerer_bp.route("/attempts/upload-attachment", methods=["POST"])
+@answerer_bp.route("/upload-answer-document", methods=["POST"])
+def upload_attempt_attachment():
+    """
+    Upload candidate handwritten essay document/images for an active question.
+    Supports single or multi-page batch uploads (.pdf, .jpg, .png, .webp, .docx, .doc, .heic).
+    """
+    raw_files = request.files.getlist("files") or request.files.getlist("file")
+    if not raw_files and "file" in request.files:
+        raw_files = [request.files["file"]]
+
+    if not raw_files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    upload_dir = os.path.join(os.getcwd(), "uploads", "answer_sheets")
+    os.makedirs(upload_dir, exist_ok=True)
+
+    question_id = request.form.get("questionId", "q")
+    attempt_id = request.form.get("attemptId", "attempt")
+    uploaded_items = []
+
+    for f in raw_files:
+        if not f or not f.filename:
+            continue
+        orig_name = f.filename
+        ext = orig_name.rsplit(".", 1)[-1].lower() if "." in orig_name else ""
+        if ext not in ALLOWED_ANSWER_EXTENSIONS:
+            return jsonify({
+                "error": f"File format '.{ext}' is not supported. Allowed formats: {', '.join(sorted(ALLOWED_ANSWER_EXTENSIONS)).upper()}"
+            }), 400
+
+        # Unique secure filename
+        unique_token = secrets.token_hex(6)
+        safe_name = f"ans_{attempt_id}_{question_id}_{unique_token}.{ext}"
+        target_path = os.path.join(upload_dir, safe_name)
+        f.save(target_path)
+        file_size = os.path.getsize(target_path)
+
+        mime_type = f.content_type or ("application/pdf" if ext == "pdf" else f"image/{ext}" if ext in ("jpg", "jpeg", "png", "webp") else "application/octet-stream")
+        file_url = f"/uploads/answer_sheets/{safe_name}"
+
+        uploaded_items.append({
+            "id": unique_token,
+            "name": orig_name,
+            "filename": safe_name,
+            "url": file_url,
+            "size": file_size,
+            "type": mime_type,
+            "extension": ext,
+            "uploadedAt": datetime.utcnow().isoformat()
+        })
+
+    if not uploaded_items:
+        return jsonify({"error": "Failed to upload files"}), 400
+
+    return jsonify({
+        "success": True,
+        "message": f"Successfully uploaded {len(uploaded_items)} document(s)",
+        "file": uploaded_items[0],
+        "files": uploaded_items
+    }), 201
 
 
 @answerer_bp.route("/attempts/<attempt_id>/pause", methods=["POST"])

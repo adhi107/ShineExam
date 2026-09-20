@@ -96,77 +96,105 @@ const ValueHelpField: React.FC<ValueHelpFieldProps> = ({
       </div>
 
       {open && !disabled && (
-        <div className="value-help-popover">
-          <div className="value-help-header">
-            <span className="value-help-title">{label}</span>
-            <span className="value-help-hint">Select or type to filter options</span>
-          </div>
-
-          <div className="value-help-search-bar">
-            <span className="value-help-search-icon">🔍</span>
-            <input
-              className="value-help-search"
-              type="text"
-              value={query}
-              placeholder={searchPlaceholder}
-              onChange={(e) => setQuery(e.target.value)}
-              autoFocus
-            />
-            {query && (
+        <>
+          <div
+            className="value-help-backdrop"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="value-help-popover" role="dialog" aria-modal="true">
+            <div className="value-help-header">
+              <div className="value-help-header-text">
+                <span className="value-help-title">{label}</span>
+                <span className="value-help-hint">Select or type to filter options</span>
+              </div>
               <button
                 type="button"
-                className="value-help-clear-btn"
-                onClick={() => setQuery("")}
-                aria-label="Clear search"
+                className="value-help-mobile-close"
+                onClick={() => setOpen(false)}
+                aria-label="Close"
               >
                 ✕
               </button>
-            )}
-          </div>
+            </div>
 
-          <div className="value-help-list">
-            {filteredOptions.length === 0 && (
-              <div className="value-help-empty">No matching items found</div>
-            )}
-            {filteredOptions.map((option) => {
-              const isSelected = option.value === value;
-              return (
+            <div className="value-help-search-bar">
+              <span className="value-help-search-icon" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+              </span>
+              <input
+                className="value-help-search"
+                type="text"
+                value={query}
+                placeholder={searchPlaceholder}
+                onChange={(e) => setQuery(e.target.value)}
+                autoFocus
+              />
+              {query && (
                 <button
-                  key={option.value}
                   type="button"
-                  className={`value-help-option ${isSelected ? "selected" : ""}`}
-                  onClick={() => {
-                    onChange(option.value);
-                    setOpen(false);
-                    setQuery("");
-                  }}
+                  className="value-help-clear-btn"
+                  onClick={() => setQuery("")}
+                  aria-label="Clear search"
                 >
-                  <div className="value-help-option-content">
-                    <span className="value-help-option-label">{option.label}</span>
-                    {option.keywords && option.keywords.length > 0 && (
-                      <div className="value-help-option-badges">
-                        {option.keywords.map((kw, i) => {
-                          const lower = kw.toLowerCase();
-                          const isPass = lower.includes("pass");
-                          const isFail = lower.includes("improvement") || lower.includes("fail");
-                          return (
-                            <span
-                              key={i}
-                              className={`value-help-badge ${isPass ? "badge-pass" : isFail ? "badge-fail" : ""}`}
-                            >
-                              {kw}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  {isSelected && <span className="value-help-check">✓</span>}
+                  ✕
                 </button>
-              );
-            })}
+              )}
+            </div>
+
+            <div className="value-help-list">
+              {filteredOptions.length === 0 && (
+                <div className="value-help-empty">No matching reports found</div>
+              )}
+              {filteredOptions.map((option) => {
+                const isSelected = option.value === value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`value-help-option ${isSelected ? "selected" : ""}`}
+                    onClick={() => {
+                      onChange(option.value);
+                      setOpen(false);
+                      setQuery("");
+                    }}
+                  >
+                    <div className="value-help-option-content">
+                      <span className="value-help-option-label">{option.label}</span>
+                      {option.keywords && option.keywords.length > 0 && (
+                        <div className="value-help-option-badges">
+                          {option.keywords.map((kw, i) => {
+                            const lower = kw.toLowerCase();
+                            const isPass = lower.includes("pass");
+                            const isFail = lower.includes("improvement") || lower.includes("fail");
+                            return (
+                              <span
+                                key={i}
+                                className={`value-help-badge ${isPass ? "badge-pass" : isFail ? "badge-fail" : ""}`}
+                              >
+                                {kw}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    {isSelected && (
+                      <span className="value-help-check" aria-hidden="true">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

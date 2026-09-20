@@ -10,10 +10,13 @@ import ValueHelpField from "./ValueHelpField";
 import { ParsedQuestionPreview } from "./ParsedQuestionPreview";
 import DynamicWatermark from "../security/DynamicWatermark";
 import { useTenant } from "../context/TenantContext";
+import StudentTestSeriesView from "./TestSeries/StudentTestSeriesView";
+import CurrentAffairsHub from "./CurrentAffairs/CurrentAffairsHub";
+import PerformanceHeatmap from "./Analytics/PerformanceHeatmap";
 import "./AnswererDashboard.css";
 import "./CandidateValidity.css";
 
-type PortalView = "tests" | "report" | "classes" | "bookmarks" | "documents" | "announcements";
+type PortalView = "tests" | "test-series" | "current-affairs" | "performance" | "report" | "classes" | "bookmarks" | "documents" | "announcements";
 type TestTab = "active" | "upcoming" | "missed" | "completed";
 type ReportTab = "score" | "subject" | "solution" | "questions" | "compare";
 
@@ -110,6 +113,39 @@ const navItems: Array<{ view: PortalView; label: string; icon: React.ReactNode }
     ),
   },
   {
+    view: "test-series",
+    label: "Test Series",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+      </svg>
+    ),
+  },
+  {
+    view: "current-affairs",
+    label: "Current Affairs",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
+        <path d="M18 14h-8" />
+        <path d="M15 18h-5" />
+        <path d="M10 6h8v4h-8V6Z" />
+      </svg>
+    ),
+  },
+  {
+    view: "performance",
+    label: "Performance",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+      </svg>
+    ),
+  },
+  {
     view: "announcements",
     label: "Announcements",
     icon: (
@@ -164,7 +200,11 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
     ? "classes" : location.pathname.includes("history") || location.pathname.includes("report")
     ? "report" : location.pathname.includes("bookmark") ? "bookmarks"
     : location.pathname.includes("document") || location.pathname.includes("courses") ? "documents"
-    : location.pathname.includes("announcement") ? "announcements" : "tests";
+    : location.pathname.includes("announcement") ? "announcements"
+    : location.pathname.includes("test-series") ? "test-series"
+    : location.pathname.includes("current-affairs") ? "current-affairs"
+    : location.pathname.includes("performance") || location.pathname.includes("readiness") ? "performance"
+    : "tests";
   const examGroups=useMemo(()=>categoryData.map(category=>({id:category.id,slug:category.slug,label:category.name,exams:category.subcategories.map(sub=>({id:sub.id,slug:sub.slug,label:sub.name,stages:sub.stages}))})),[categoryData]);
   const examPages=useMemo<ExamPage[]>(()=>examGroups.flatMap(group=>group.exams.flatMap(exam=>exam.stages.map(stage=>({groupSlug:group.slug,examSlug:exam.slug,stageSlug:stage.toLowerCase().replace(/[^a-z0-9]+/g,"-"),groupLabel:group.label,examLabel:exam.label,stageLabel:stage,categoryId:group.id,subcategoryId:exam.id,stage})))),[examGroups]);
   const selectedExamPage = examPages.find(page => location.pathname === `/dashboard/exams/${page.groupSlug}/${page.examSlug}/${page.stageSlug}`);
@@ -708,13 +748,37 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
             <div className="report-selector-left">
               <span className="report-badge">REPORT FOR</span>
               <div className="report-search-wrap">
-                <ValueHelpField label="Search Reports" placeholder="Search test, date or result" value={reportSearch} options={history.map(item=>({value:item.testName,label:item.testName,keywords:[formatDate(item.submittedAt),item.passed?"Passed":"Needs improvement"]}))} onChange={(val) => { setReportSearch(val); const match = history.find(h => h.testName === val || h.testName.toLowerCase().includes(val.toLowerCase())); if (match) setSelectedReport(match); }} allowFreeText compact/>
+                <ValueHelpField
+                  label="Select Assessment Report"
+                  placeholder="Search assessment, date or score..."
+                  value={currentReport?.attemptId || ""}
+                  options={history.map((h) => ({
+                    value: h.attemptId,
+                    label: `${h.testName} (${formatDate(h.submittedAt)})`,
+                    keywords: [
+                      `${h.percentage}% Score`,
+                      h.passed ? "Passed" : "Needs improvement",
+                      formatDate(h.submittedAt),
+                    ],
+                  }))}
+                  onChange={(attemptId) => {
+                    const found = history.find((h) => h.attemptId === attemptId);
+                    if (found) {
+                      setSelectedReport(found);
+                      setReportSearch(found.testName);
+                    }
+                  }}
+                  compact
+                />
               </div>
-              <select className="report-select-box" value={currentReport?.attemptId || ""} onChange={e => setSelectedReport(history.find(h => h.attemptId === e.target.value) || null)}>
-                {filteredHistory.length ? filteredHistory.map(h => <option key={h.attemptId} value={h.attemptId}>{h.testName} — {formatDate(h.submittedAt)}</option>) : <option value="">No matching reports</option>}
-              </select>
             </div>
-            {currentReport && <span className={`result-pill ${currentReport.passed ? "pass" : "fail"}`}>{currentReport.passed ? "Passed" : "Needs improvement"}</span>}
+            {currentReport && (
+              <div className="report-selector-right">
+                <span className={`result-pill ${currentReport.passed ? "pass" : "fail"}`}>
+                  {currentReport.passed ? "✓ Passed" : "Needs Improvement"} ({currentReport.percentage}%)
+                </span>
+              </div>
+            )}
           </div>
           <div className="report-tabs">{([['score','Score Card'],['subject','Subject Report'],['solution','Solution Report'],['questions','Question Report'],['compare','Compare Yourself']] as [ReportTab,string][]).map(([id,label]) => <button className={reportTab === id ? "active" : ""} onClick={() => setReportTab(id)} key={id}>{label}</button>)}</div>
           {!currentReport ? <div className="portal-empty"><span>▤</span><h3>No report available</h3><p>Complete a test and your detailed analytics will appear here.</p></div> : <>
@@ -731,6 +795,24 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
         {view === "bookmarks" && <CandidateBookmarks userId={userName} bookmarks={bookmarks} onChanged={loadBookmarks} onOpenTest={openBookmarkedTest} />}
         {view === "documents" && <CandidateDocuments userId={userName} />}
         {view === "announcements" && <CandidateAnnouncements userId={userName} />}
+        {view === "current-affairs" && <CurrentAffairsHub isAdmin={false} userName={userName} />}
+        {view === "performance" && <PerformanceHeatmap userName={userName} />}
+        {view === "test-series" && (
+          <StudentTestSeriesView
+            userName={userName}
+            onStartExam={(examData: any) => {
+              setActiveExam({
+                id: examData.paperId || examData.id,
+                testName: examData.testName,
+                duration: examData.duration,
+                passingPercentage: examData.passingPercentage,
+                questions: examData.questions || [],
+                timerMode: examData.timerMode || "overall",
+              });
+              navigate("/dashboard/tests");
+            }}
+          />
+        )}
       </main>
 
       {/* Native Play Store Mobile Bottom Navigation Bar */}
@@ -857,6 +939,24 @@ const SolutionReport = ({ testName, userName, review, onClose }: any) => {
   const sections = Array.from(new Set((review || []).map((item: any) => item.section).filter(Boolean))) as string[];
   const [activeSection, setActiveSection] = useState<string>(sections[0] || (review[0]?.section ?? ''));
   const [sectionIndex, setSectionIndex] = useState<number>(0);
+
+  const tenantOrg = (() => {
+    try {
+      const ti = typeof sessionStorage !== "undefined" ? sessionStorage.getItem("tenant_info") : null;
+      if (ti) {
+        const p = JSON.parse(ti);
+        return p.brandTitle || p.name || "";
+      }
+    } catch {}
+    return (
+      (typeof sessionStorage !== "undefined" &&
+        (sessionStorage.getItem("tenantBrandTitle") ||
+          sessionStorage.getItem("tenantName") ||
+          sessionStorage.getItem("orgName"))) ||
+      ""
+    );
+  })();
+
   const [watermarkConfig, setWatermarkConfig] = useState<{
     enabled: boolean;
     text: string;
@@ -866,7 +966,7 @@ const SolutionReport = ({ testName, userName, review, onClose }: any) => {
     includeTimestamp: boolean;
   }>({
     enabled: true,
-    text: "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT",
+    text: tenantOrg ? `${tenantOrg} • CONFIDENTIAL SOLUTION REPORT` : "CONFIDENTIAL SOLUTION REPORT",
     color: "#dc2626",
     opacity: 0.25,
     includeCandidate: true,
@@ -874,12 +974,24 @@ const SolutionReport = ({ testName, userName, review, onClose }: any) => {
   });
 
   useEffect(() => {
-    apiGet<any>("/security/config")
+    apiGet<any>("/public/security/config")
       .then((cfg) => {
         if (cfg) {
+          const isMaster = cfg.watermarkEnabled !== false;
+          const isReport = cfg.solutionReportWatermarkEnabled !== false;
+          const isModule = !Array.isArray(cfg.watermarkModules) || cfg.watermarkModules.includes("results");
+          const enabled = isMaster && isReport && isModule;
+
+          let text = (cfg.solutionReportWatermarkText || "").trim();
+          if (!text) {
+            text = tenantOrg ? `${tenantOrg} • CONFIDENTIAL SOLUTION REPORT` : "CONFIDENTIAL SOLUTION REPORT";
+          } else if (tenantOrg) {
+            text = text.replace(/SHINE\s+EXAM/gi, tenantOrg).replace(/SHINE/gi, tenantOrg);
+          }
+
           setWatermarkConfig({
-            enabled: cfg.solutionReportWatermarkEnabled !== false,
-            text: cfg.solutionReportWatermarkText || "SHINE EXAM • CONFIDENTIAL SOLUTION REPORT",
+            enabled,
+            text,
             color: cfg.solutionReportWatermarkColor || "#dc2626",
             opacity: typeof cfg.solutionReportWatermarkOpacity === "number" ? cfg.solutionReportWatermarkOpacity : 0.25,
             includeCandidate: cfg.solutionReportWatermarkIncludeCandidate !== false,
@@ -888,7 +1000,7 @@ const SolutionReport = ({ testName, userName, review, onClose }: any) => {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [tenantOrg]);
 
   useEffect(() => {
     const origOverflow = document.body.style.overflow;
