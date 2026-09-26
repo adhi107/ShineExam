@@ -31,7 +31,6 @@ services:
     volumes:
       # Persistent host-bind mount for uploads directory so all videos, PDFs, and handouts are preserved
       - ./backend/uploads:/app/uploads
-      - backend_uploads:/app/uploads
     depends_on:
       - mongodb
     networks:
@@ -54,8 +53,6 @@ volumes:
   # Persistent volume definitions
   mongodb_data:
     name: exam_app_mongodb_data
-  backend_uploads:
-    name: exam_app_backend_uploads
 
 networks:
   exam_network:
