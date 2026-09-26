@@ -1,14 +1,41 @@
 version: "3.9"
 
 services:
+  mongodb:
+    image: mongo:6.0
+    container_name: exam_app_mongodb
+    restart: always
+    environment:
+      MONGO_INITDB_DATABASE: shine
+    ports:
+      - "27017:27017"
+    volumes:
+      # Persistent named volume ensures MongoDB data is NEVER lost across docker down/up
+      - mongodb_data:/data/db
+    networks:
+      - exam_network
+
   exam-portal-backend:
     build: ./backend
     container_name: exam_app_backend
     restart: always
     ports:
       - "5001:5001"
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/shine
+      - DB_NAME=shine
+      - PORT=5001
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001
     env_file:
       - ./backend/.env
+    volumes:
+      # Persistent host-bind mount for uploads directory so all videos, PDFs, and handouts are preserved
+      - ./backend/uploads:/app/uploads
+      - backend_uploads:/app/uploads
+    depends_on:
+      - mongodb
+    networks:
+      - exam_network
 
   exam-portal-frontend:
     build: ./frontend
@@ -20,3 +47,17 @@ services:
       - ./frontend/.env
     depends_on:
       - exam-portal-backend
+    networks:
+      - exam_network
+
+volumes:
+  # Persistent volume definitions
+  mongodb_data:
+    name: exam_app_mongodb_data
+  backend_uploads:
+    name: exam_app_backend_uploads
+
+networks:
+  exam_network:
+    name: exam_app_network
+    driver: bridge

@@ -14,10 +14,10 @@ RUN apt-get update && apt-get install -y \
     fonts-freefont-ttf \
     fontconfig \
     tesseract-ocr \
-    tesseract-ocr-eng \
     poppler-utils \
     libgl1 \
     libglib2.0-0 \
+    ffmpeg \
     --no-install-recommends \
     && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
