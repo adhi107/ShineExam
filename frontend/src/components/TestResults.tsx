@@ -447,9 +447,13 @@ const OverviewCharts = ({ overview, tests, weightedPass, onTest, onTopper, onBan
         </header>
         {topTests.map(test => (
           <button key={test.id} onClick={() => onTest(test)}>
-            <span>{test.name}</span>
-            <div><i style={{ width: `${Math.max(5, test.totalAttempts / Math.max(1, topTests[0]?.totalAttempts) * 100)}%` }} /></div>
-            <b>{test.totalAttempts}</b>
+            <div className="test-comp-top">
+              <span>{test.name}</span>
+              <b>{test.totalAttempts}</b>
+            </div>
+            <div className="test-comp-bar">
+              <i style={{ width: `${Math.max(5, test.totalAttempts / Math.max(1, topTests[0]?.totalAttempts) * 100)}%` }} />
+            </div>
           </button>
         ))}
       </article>

@@ -148,6 +148,19 @@ class TestEnterpriseExamPlatform(unittest.TestCase):
         self.assertIn("heatmap", data)
         self.assertGreater(len(data["heatmap"]), 0)
 
+    def test_08_performance_analytics(self):
+        res = self.client.get("/api/answerer/learning-hub/performance/analytics?userId=candidate_upsc_01")
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertIn("kpis", data)
+        self.assertIn("overallReadiness", data["kpis"])
+        self.assertIn("overallAccuracy", data["kpis"])
+        self.assertIn("negativeMarksLost", data["kpis"])
+        self.assertIn("drawbacks", data)
+        self.assertIn("testReports", data)
+        self.assertIn("recommendations", data)
+
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -69,11 +69,21 @@ def create_app() -> Flask:
     def health():
         return jsonify({"status": "ok", "service": "exam-portal-backend"})
 
-    @app.get("/uploads/<path:filename>")
-    @app.get("/api/uploads/<path:filename>")
+    @app.route("/uploads/<path:filename>", methods=["GET", "HEAD"])
+    @app.route("/api/uploads/<path:filename>", methods=["GET", "HEAD"])
     def serve_uploads(filename):
+        # Route videos directly to high-speed partial-content streaming engine
+        clean_name = filename.replace("\\", "/")
+        if clean_name.startswith("videos/"):
+            video_file = clean_name.split("videos/", 1)[-1]
+            from routes.admin_videos import stream_video
+            return stream_video(video_file)
         uploads_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
-        return send_from_directory(uploads_dir, filename)
+        resp = send_from_directory(uploads_dir, filename)
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, HEAD, OPTIONS"
+        resp.headers.pop("X-Frame-Options", None)
+        return resp
 
     # Register active Shine Exam API route groups.
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
@@ -120,7 +130,7 @@ def create_app() -> Flask:
     def global_candidate_security_gate():
         # ALWAYS allow CORS preflight OPTIONS requests
         if request.method == "OPTIONS":
-            return None
+            return jsonify({"status": "ok"}), 200
 
         path = request.path
 
@@ -193,6 +203,9 @@ def create_app() -> Flask:
     def process_response_and_log(response):
         # 1. Apply security headers
         response = add_security_headers(response)
+        if request.path.startswith("/uploads") or request.path.startswith("/api/uploads"):
+            response.headers.pop("X-Frame-Options", None)
+            response.headers["Access-Control-Allow-Origin"] = "*"
 
         # 2. Calculate execution time
         start_time = getattr(request, "_start_time", None)

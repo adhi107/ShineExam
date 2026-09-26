@@ -377,10 +377,43 @@ def get_history():
     if not userId:
         return jsonify({"error": "userId is required"}), 400
 
-    db = get_db()
-    
+    import re
+    identities = {userId, userId.lower(), userId.upper(), userId.capitalize()}
+    try:
+        user_docs = list(db.users.find({
+            "$or": [
+                {"userId": userId},
+                {"userId": {"$regex": f"^{re.escape(userId)}$", "$options": "i"}},
+                {"name": userId},
+                {"name": {"$regex": f"^{re.escape(userId)}$", "$options": "i"}},
+                {"email": userId},
+                {"email": {"$regex": f"^{re.escape(userId)}$", "$options": "i"}}
+            ]
+        }))
+        names = set()
+        for u in user_docs:
+            if u.get("userId"): identities.add(str(u["userId"]))
+            if u.get("name"):
+                identities.add(str(u["name"]))
+                names.add(str(u["name"]))
+            if u.get("email"): identities.add(str(u["email"]))
+        if names:
+            for u in db.users.find({"name": {"$in": list(names)}}):
+                if u.get("userId"): identities.add(str(u["userId"]))
+                if u.get("name"): identities.add(str(u["name"]))
+    except Exception:
+        pass
+
+    clean_ids = [c for c in identities if c]
+    clauses = []
+    for cid in clean_ids:
+        clauses.append({"userId": cid})
+        clauses.append({"userId": {"$regex": f"^{re.escape(cid)}$", "$options": "i"}})
+        clauses.append({"userName": cid})
+        clauses.append({"userName": {"$regex": f"^{re.escape(cid)}$", "$options": "i"}})
+
     # Show the candidate's submitted test history from newest to oldest.
-    results = list(db.results.find({"userId": userId}).sort("submittedAt", -1))
+    results = list(db.results.find({"$or": clauses}).sort("submittedAt", -1))
     
     history = []
     for r in results:

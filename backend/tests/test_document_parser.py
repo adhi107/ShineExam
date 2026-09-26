@@ -252,6 +252,35 @@ Answer: A
         self.assertEqual(res['validatedImages'], 1)
 
 
+    def test_current_affairs_document_extraction(self):
+        from routes.current_affairs_engine import _extract_ca_content_from_file
+        doc_text = """
+RBI Keeps Repo Rate Unchanged at 6.5% in Monetary Policy Review
+
+The Monetary Policy Committee (MPC) of the Reserve Bank of India has unanimously decided to keep the policy repo rate unchanged at 6.50%.
+The decision reflects the central bank's commitment to aligning inflation with the 4% target while supporting growth.
+
+• Headline inflation moderated to 4.8% in recent months.
+• GDP growth forecast for FY25 retained at 7.2%.
+• Liquidity conditions remain comfortable with regular fine-tuning operations.
+
+1. What is the current policy repo rate maintained by the RBI?
+A) 6.00%
+B) 6.25%
+C) 6.50%
+D) 6.75%
+Answer: C
+Explanation: The RBI MPC decided to keep the repo rate steady at 6.50%.
+"""
+        parsed = _extract_ca_content_from_file(doc_text.encode('utf-8'), "rbi_monetary_policy.txt")
+        self.assertIn("Repo Rate", parsed["title"])
+        self.assertEqual(parsed["category"], "Economy")
+        self.assertIn("Monetary Policy Committee", parsed["shortSummary"])
+        self.assertTrue(len(parsed["keyPoints"]) >= 2)
+        self.assertEqual(len(parsed["questions"]), 1)
+        self.assertEqual(parsed["questions"][0]["correctAnswer"], "6.50%")
+
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -156,7 +156,8 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
   };
 
   const [mobileOpen, setMobileOpen] = useState(false);
-  const closeMobileSidebar = () => setMobileOpen(false);
+  const [showMoreSheet, setShowMoreSheet] = useState(false);
+  const closeMobileSidebar = () => { setMobileOpen(false); setShowMoreSheet(false); };
   const goMobile = (view: AdminView) => { go(view); closeMobileSidebar(); };
 
   useEffect(() => {
@@ -393,6 +394,196 @@ const AdminDashboard: React.FC<Props> = ({ adminName, onLogout }) => {
       <main className={`shine-admin-main ${isDesktopCollapsed ? "collapsed" : ""}`}>
         {render()}
       </main>
+
+      {/* Admin Native Mobile Bottom Navigation Bar */}
+      <nav className="admin-mobile-app-bottom-nav" aria-label="Admin Mobile Navigation">
+        <button
+          type="button"
+          className={`admin-mobile-bottom-nav-item ${currentView === "dashboard" ? "active" : ""}`}
+          onClick={() => goMobile("dashboard")}
+        >
+          <div className="admin-mobile-bottom-nav-icon-wrap">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1.5" />
+              <rect x="14" y="3" width="7" height="7" rx="1.5" />
+              <rect x="14" y="14" width="7" height="7" rx="1.5" />
+              <rect x="3" y="14" width="7" height="7" rx="1.5" />
+            </svg>
+          </div>
+          <span className="admin-mobile-bottom-nav-label">Home</span>
+        </button>
+
+        <button
+          type="button"
+          className={`admin-mobile-bottom-nav-item ${currentView === "users" ? "active" : ""}`}
+          onClick={() => goMobile("users")}
+        >
+          <div className="admin-mobile-bottom-nav-icon-wrap">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          </div>
+          <span className="admin-mobile-bottom-nav-label">Students</span>
+        </button>
+
+        <button
+          type="button"
+          className={`admin-mobile-bottom-nav-item ${["tests", "create-test", "edit-test", "test-series"].includes(currentView) ? "active" : ""}`}
+          onClick={() => goMobile("tests")}
+        >
+          <div className="admin-mobile-bottom-nav-icon-wrap">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
+            </svg>
+          </div>
+          <span className="admin-mobile-bottom-nav-label">Tests</span>
+        </button>
+
+        <button
+          type="button"
+          className={`admin-mobile-bottom-nav-item ${currentView === "videos" ? "active" : ""}`}
+          onClick={() => goMobile("videos")}
+        >
+          <div className="admin-mobile-bottom-nav-icon-wrap">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="23 7 16 12 23 17 23 7" />
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+            </svg>
+          </div>
+          <span className="admin-mobile-bottom-nav-label">Videos</span>
+        </button>
+
+        <button
+          type="button"
+          className={`admin-mobile-bottom-nav-item ${showMoreSheet || !["dashboard", "users", "tests", "create-test", "edit-test", "videos"].includes(currentView) ? "active" : ""}`}
+          onClick={() => setShowMoreSheet(true)}
+        >
+          <div className="admin-mobile-bottom-nav-icon-wrap">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="1.5" />
+              <circle cx="12" cy="5" r="1.5" />
+              <circle cx="12" cy="19" r="1.5" />
+            </svg>
+          </div>
+          <span className="admin-mobile-bottom-nav-label">More</span>
+        </button>
+      </nav>
+
+      {/* Admin Mobile More Action Sheet */}
+      {showMoreSheet && (
+        <div className="admin-more-sheet-backdrop" onMouseDown={() => setShowMoreSheet(false)}>
+          <section className="admin-more-sheet" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="admin-more-sheet-handle" />
+            <header className="admin-more-sheet-header">
+              <div>
+                <span>MANAGEMENT & TOOLS</span>
+                <h3>All Admin Features</h3>
+              </div>
+              <button className="admin-more-sheet-close" onClick={() => setShowMoreSheet(false)}>✕</button>
+            </header>
+
+            <div className="admin-more-sheet-grid">
+              <button className={`admin-more-card ${currentView === "results" ? "active" : ""}`} onClick={() => goMobile("results")}>
+                <div className="admin-more-icon-badge" style={{ background: "rgba(37, 99, 235, 0.12)", color: "#2563eb" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>
+                </div>
+                <span>Analytics</span>
+              </button>
+
+              <button className={`admin-more-card ${currentView === "current-affairs" ? "active" : ""}`} onClick={() => goMobile("current-affairs")}>
+                <div className="admin-more-icon-badge" style={{ background: "rgba(59, 130, 246, 0.12)", color: "#2563eb" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
+                </div>
+                <span>Current Affairs</span>
+              </button>
+
+              <button className={`admin-more-card ${currentView === "test-series" ? "active" : ""}`} onClick={() => goMobile("test-series")}>
+                <div className="admin-more-icon-badge" style={{ background: "rgba(147, 51, 234, 0.12)", color: "#9333ea" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></svg>
+                </div>
+                <span>Test Series</span>
+              </button>
+
+              <button className={`admin-more-card ${currentView === "question-bank" ? "active" : ""}`} onClick={() => goMobile("question-bank")}>
+                <div className="admin-more-icon-badge" style={{ background: "rgba(245, 158, 11, 0.12)", color: "#d97706" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                </div>
+                <span>Question Bank</span>
+              </button>
+
+              <button className={`admin-more-card ${currentView === "categories" ? "active" : ""}`} onClick={() => goMobile("categories")}>
+                <div className="admin-more-icon-badge" style={{ background: "rgba(16, 185, 129, 0.12)", color: "#059669" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                </div>
+                <span>Exam Categories</span>
+              </button>
+
+              <button className={`admin-more-card ${currentView === "documents" ? "active" : ""}`} onClick={() => goMobile("documents")}>
+                <div className="admin-more-icon-badge" style={{ background: "rgba(6, 182, 212, 0.12)", color: "#0891b2" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                </div>
+                <span>Documents</span>
+              </button>
+
+              <button className={`admin-more-card ${currentView === "enrollment" ? "active" : ""}`} onClick={() => goMobile("enrollment")}>
+                <div className="admin-more-icon-badge" style={{ background: "rgba(99, 102, 241, 0.12)", color: "#4f46e5" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <span>Enrollment</span>
+              </button>
+
+              <button className={`admin-more-card ${currentView === "announcements" ? "active" : ""}`} onClick={() => goMobile("announcements")}>
+                <div className="admin-more-icon-badge" style={{ background: "rgba(249, 115, 22, 0.12)", color: "#ea580c" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                </div>
+                <span>Announcements</span>
+              </button>
+
+              <button className={`admin-more-card ${currentView === "violations" ? "active" : ""}`} onClick={() => goMobile("violations")}>
+                <div className="admin-more-icon-badge" style={{ background: "rgba(225, 29, 72, 0.12)", color: "#e11d48" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                </div>
+                <span>Violations</span>
+              </button>
+
+              <button className={`admin-more-card ${currentView === "audit-logs" ? "active" : ""}`} onClick={() => goMobile("audit-logs")}>
+                <div className="admin-more-icon-badge" style={{ background: "rgba(100, 116, 139, 0.12)", color: "#475569" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                </div>
+                <span>Audit Logs</span>
+              </button>
+
+              <button className={`admin-more-card ${currentView === "security-controls" ? "active" : ""}`} onClick={() => goMobile("security-controls")}>
+                <div className="admin-more-icon-badge" style={{ background: "rgba(14, 165, 233, 0.12)", color: "#0284c7" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                </div>
+                <span>Access Controls</span>
+              </button>
+
+              <button className="admin-more-card" onClick={() => { setShowPassword(true); setShowMoreSheet(false); }}>
+                <div className="admin-more-icon-badge" style={{ background: "rgba(20, 184, 166, 0.12)", color: "#0d9488" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><circle cx="12" cy="16" r="1"/></svg>
+                </div>
+                <span>Password</span>
+              </button>
+            </div>
+
+            <footer className="admin-more-sheet-footer">
+              <button className="admin-more-sheet-signout" onClick={onLogout}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Sign Out of Admin Portal
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
       {showPassword && (
         <div className="admin-password-backdrop" onMouseDown={closePassword}>
           <section onMouseDown={(event) => event.stopPropagation()}>

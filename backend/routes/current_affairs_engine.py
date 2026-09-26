@@ -10,6 +10,9 @@ Features:
 - Student Reader with bookmarks, private personal notes, revision filters & reading analytics
 """
 
+import io
+import re
+import json
 from datetime import datetime
 import hashlib
 from pathlib import Path
@@ -17,6 +20,31 @@ import uuid
 from bson import ObjectId
 from flask import Blueprint, jsonify, request
 from werkzeug.utils import secure_filename
+
+# ── Document Extraction Libraries ──────────────────────────────────────────
+try:
+    import fitz  # PyMuPDF
+    _HAVE_FITZ = True
+except ImportError:
+    _HAVE_FITZ = False
+
+try:
+    import docx as python_docx
+    _HAVE_DOCX = True
+except ImportError:
+    _HAVE_DOCX = False
+
+try:
+    import pdfplumber
+    _HAVE_PLUMBER = True
+except ImportError:
+    _HAVE_PLUMBER = False
+
+try:
+    import PyPDF2
+    _HAVE_PYPDF2 = True
+except ImportError:
+    _HAVE_PYPDF2 = False
 
 from config.db import get_db
 from utils.json import to_jsonable
@@ -28,6 +56,191 @@ ca_engine_bp = Blueprint("current_affairs_engine", __name__)
 
 UPLOAD_ATTACHMENTS_DIR = Path(__file__).resolve().parents[1] / "uploads" / "attachments"
 UPLOAD_ATTACHMENTS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _extract_text_from_file(file_bytes: bytes, filename: str) -> str:
+    """Extract raw text from PDF, DOCX, XLSX, CSV, TXT, or other document formats."""
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    text_chunks = []
+
+    if ext == "pdf":
+        if _HAVE_FITZ:
+            try:
+                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                for page in doc:
+                    t = page.get_text()
+                    if t:
+                        text_chunks.append(t)
+            except Exception:
+                pass
+        if not text_chunks and _HAVE_PLUMBER:
+            try:
+                with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                    for page in pdf.pages:
+                        t = page.extract_text() or ""
+                        if t:
+                            text_chunks.append(t)
+            except Exception:
+                pass
+        if not text_chunks and _HAVE_PYPDF2:
+            try:
+                reader = PyPDF2.PdfReader(io.BytesIO(file_bytes))
+                for page in reader.pages:
+                    t = page.extract_text() or ""
+                    if t:
+                        text_chunks.append(t)
+            except Exception:
+                pass
+    elif ext in ("docx", "doc"):
+        if _HAVE_DOCX:
+            try:
+                doc = python_docx.Document(io.BytesIO(file_bytes))
+                for p in doc.paragraphs:
+                    if p.text.strip():
+                        text_chunks.append(p.text)
+                for table in doc.tables:
+                    for row in table.rows:
+                        row_text = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
+                        if row_text:
+                            text_chunks.append(row_text)
+            except Exception:
+                pass
+    elif ext in ("xlsx", "xls", "csv", "tsv"):
+        try:
+            raw_str = file_bytes.decode("utf-8", errors="ignore")
+            text_chunks.append(raw_str)
+        except Exception:
+            pass
+    else:
+        try:
+            raw_str = file_bytes.decode("utf-8", errors="ignore")
+            text_chunks.append(raw_str)
+        except Exception:
+            pass
+
+    return "\n".join(text_chunks).strip()
+
+
+def _extract_ca_content_from_file(file_bytes: bytes, filename: str) -> dict:
+    """
+    Intelligently analyze document text and extract structured Current Affairs fields:
+    - Title / Headline
+    - Category & Subcategory
+    - Executive Summary
+    - Detailed In-depth Analysis
+    - Key Takeaways / Points
+    - Important Facts & Figures
+    - MCQ Practice Questions
+    """
+    full_text = _extract_text_from_file(file_bytes, filename)
+
+    # 1. Try to extract MCQs / practice questions using question parser
+    extracted_questions = []
+    try:
+        from services.document_parser import parse_document_file
+        _, q_objs = parse_document_file(file_bytes, filename)
+        if q_objs:
+            for q in q_objs:
+                extracted_questions.append({
+                    "question": q.get("question", ""),
+                    "options": q.get("options", []),
+                    "correctAnswer": q.get("correctAnswer", ""),
+                    "explanation": q.get("explanation", "") or q.get("solution", ""),
+                    "marks": q.get("marks", 2),
+                    "negativeMarks": q.get("negativeMarks", 0.66)
+                })
+    except Exception:
+        pass
+
+    # 2. Extract Title / Headline
+    lines = [line.strip() for line in full_text.splitlines() if line.strip()]
+    title = ""
+    for l in lines:
+        cleaned = re.sub(
+            r'^(page\s+\d+|daily\s+current\s+affairs|current\s+affairs|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b',
+            '',
+            l,
+            flags=re.IGNORECASE
+        ).strip()
+        if len(cleaned) > 12 and not cleaned.isdigit():
+            title = cleaned[:180]
+            break
+    if not title:
+        title = filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
+
+    # 3. Detect Category
+    category = "National"
+    text_lower = full_text.lower()
+    cat_keywords = {
+        "Polity & Governance": ["parliament", "constitution", "supreme court", "governance", "bill", "act", "election", "judiciary", "article", "cabinet", "amendment"],
+        "Economy": ["gdp", "rbi", "inflation", "fiscal", "economy", "monetary", "repo rate", "banking", "finance", "trade", "export", "import", "budget", "tax"],
+        "Science & Technology": ["isro", "nasa", "ai", "artificial intelligence", "quantum", "biotechnology", "semiconductor", "cyber", "satellite", "5g", "supercomputer"],
+        "Environment & Ecology": ["climate", "cop28", "cop29", "biodiversity", "wildlife", "forest", "pollution", "renewable", "carbon", "tiger", "sanctuary", "environment"],
+        "Defence": ["drdo", "missile", "indian army", "navy", "air force", "defence", "exercise", "warship", "submarine", "frigate", "fighter jet"],
+        "Space": ["chandrayaan", "gaganyaan", "aditya", "space", "launch vehicle", "orbit", "payload", "telescope"],
+        "International": ["un", "united nations", "g20", "brics", "asean", "bilateral", "treaty", "foreign", "summit", "geopolitics", "who", "wto", "imf"],
+        "Government Schemes": ["yojana", "scheme", "pradhan mantri", "initiative", "mission", "portal", "subsidies", "welfare"],
+        "Reports & Indices": ["index", "ranking", "report", "survey", "published by", "scorecard", "rank"],
+        "Andhra Pradesh": ["andhra pradesh", "amaravati", "visakhapatnam", "ap cabinet", "appsc"],
+        "Telangana": ["telangana", "hyderabad", "tspsc", "kaleshwaram", "tg cabinet"],
+        "Social Issues": ["education", "health", "poverty", "gender", "tribal", "employment", "caste", "census"]
+    }
+    for cat_name, kws in cat_keywords.items():
+        if any(kw in text_lower for kw in kws):
+            category = cat_name
+            break
+
+    # 4. Extract Key Points / Bullets
+    key_points = []
+    bullet_regex = re.compile(r'^\s*([•\-\*■◆]|(?:\d+\.))\s+(.*)$')
+    for l in lines:
+        m = bullet_regex.match(l)
+        if m:
+            pt = m.group(2).strip()
+            if 15 < len(pt) < 300:
+                key_points.append(pt)
+        elif l.lower().startswith("key point") or l.lower().startswith("highlight") or l.lower().startswith("takeaway"):
+            continue
+
+    if not key_points:
+        sentences = [s.strip() for s in re.split(r'\.\s+', full_text) if 25 < len(s.strip()) < 250]
+        key_points = sentences[:5]
+    else:
+        key_points = key_points[:8]
+
+    # 5. Extract Important Facts & Figures
+    important_facts = []
+    for l in lines:
+        if any(kw in l.lower() for kw in ["percent", "%", "crore", "lakh", "billion", "million", "committee", "headed by", "established in", "target", "allocated", "ranked"]):
+            if 20 <= len(l) <= 220:
+                important_facts.append(l)
+    important_facts = important_facts[:6]
+
+    # 6. Extract Summary
+    paragraphs = [p.strip() for p in full_text.split("\n\n") if len(p.strip()) > 40]
+    if not paragraphs:
+        paragraphs = [p.strip() for p in full_text.splitlines() if len(p.strip()) > 40]
+
+    short_summary = ""
+    if paragraphs:
+        short_summary = " ".join(paragraphs[:2])
+        if len(short_summary) > 450:
+            short_summary = short_summary[:447] + "..."
+    else:
+        short_summary = full_text[:300]
+
+    detailed_body = "\n\n".join(paragraphs[2:8]) if len(paragraphs) > 2 else full_text[len(short_summary):2500].strip()
+
+    return {
+        "title": title,
+        "category": category,
+        "shortSummary": short_summary.strip(),
+        "detailedExplanation": detailed_body.strip(),
+        "keyPoints": key_points,
+        "importantFacts": important_facts,
+        "questions": extracted_questions,
+        "rawText": full_text[:12000]
+    }
 
 
 def _serialize(doc):
@@ -186,14 +399,17 @@ def get_article(article_id):
 
 @ca_engine_bp.route("/upload-attachment", methods=["POST"])
 def upload_ca_attachment():
-    """Upload article attachment file (PDF, DOCX, XLSX, TXT, EPUB, Images) and return static URL."""
+    """Upload article attachment file (PDF, DOCX, XLSX, TXT, EPUB, Images, RTF, PPTX, etc.) and return static URL."""
     file = request.files.get("file")
     if not file or not file.filename:
         return jsonify({"error": "No file uploaded"}), 400
 
     filename = secure_filename(file.filename)
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-    allowed = {"pdf", "doc", "docx", "xls", "xlsx", "csv", "ppt", "pptx", "txt", "epub", "json", "png", "jpg", "jpeg", "webp"}
+    allowed = {
+        "pdf", "doc", "docx", "xls", "xlsx", "csv", "ppt", "pptx", "txt", "epub",
+        "json", "png", "jpg", "jpeg", "webp", "bmp", "svg", "rtf", "odt", "ods", "odp", "tsv"
+    }
     if ext and ext not in allowed:
         return jsonify({"error": f"File type .{ext} is not supported"}), 400
 
@@ -211,6 +427,47 @@ def upload_ca_attachment():
             "type": file.mimetype or "application/octet-stream"
         }
     }), 201
+
+
+@ca_engine_bp.route("/parse-document", methods=["POST"])
+def parse_current_affairs_document():
+    """
+    Parse uploaded PDF / DOCX / TXT / etc. and extract:
+    - Structured Article Metadata (Title, Category, Summary, Detailed Body, Key Points, Important Facts)
+    - Any embedded MCQ practice questions with options and answer keys
+    - Static attachment reference for instant reading & download
+    """
+    file = request.files.get("file")
+    if not file or not file.filename:
+        return jsonify({"error": "No document uploaded"}), 400
+
+    filename = secure_filename(file.filename)
+    file_bytes = file.read()
+    if not file_bytes:
+        return jsonify({"error": "Uploaded file is empty"}), 400
+
+    # Save to attachments directory for instant static access
+    unique_name = f"{uuid.uuid4().hex}_{filename}"
+    save_path = UPLOAD_ATTACHMENTS_DIR / unique_name
+    with open(save_path, "wb") as f:
+        f.write(file_bytes)
+
+    file_url = f"/uploads/attachments/{unique_name}"
+    file_size = len(file_bytes)
+
+    # Extract text and structure
+    parsed_data = _extract_ca_content_from_file(file_bytes, filename)
+    parsed_data["attachment"] = {
+        "name": filename,
+        "url": file_url,
+        "size": file_size,
+        "type": file.mimetype or "application/octet-stream"
+    }
+
+    return jsonify({
+        "message": "Document parsed successfully",
+        "data": parsed_data
+    }), 200
 
 
 def _sanitize_attachments(attachments):
@@ -532,3 +789,159 @@ def list_quizzes():
 
     quizzes = list(db.current_affair_quizzes.find(query).sort("quizDate", -1).limit(30))
     return jsonify({"quizzes": to_jsonable([_serialize(q) for q in quizzes])})
+
+
+@ca_engine_bp.route("/quizzes/<quiz_id>", methods=["GET"])
+def get_quiz_detail(quiz_id):
+    """Retrieve details for a single current affairs quiz."""
+    db = get_db()
+    try:
+        oid = ObjectId(quiz_id)
+    except Exception:
+        return jsonify({"error": "Invalid quiz ID"}), 400
+
+    quiz = db.current_affair_quizzes.find_one({"_id": oid})
+    if not quiz:
+        return jsonify({"error": "Quiz not found"}), 404
+
+    return jsonify({"quiz": to_jsonable(_serialize(quiz))})
+
+
+@ca_engine_bp.route("/quizzes/<quiz_id>/submit", methods=["POST"])
+def submit_daily_quiz(quiz_id):
+    """
+    Student: Submit answers for a Daily Current Affairs Quiz.
+    Computes real score, accuracy, negative marks, saves candidate attempt,
+    and logs score so it directly impacts their performance telemetry.
+    """
+    db = get_db()
+    try:
+        oid = ObjectId(quiz_id)
+    except Exception:
+        return jsonify({"error": "Invalid quiz ID"}), 400
+
+    quiz = db.current_affair_quizzes.find_one({"_id": oid})
+    if not quiz:
+        return jsonify({"error": "Quiz not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+    user_id = str(data.get("userId", "")).strip() or "student"
+    answers = data.get("answers", {})
+    time_spent_secs = int(data.get("timeSpentSeconds", 0))
+
+    questions = quiz.get("questions", [])
+    total_q = len(questions)
+    correct_count = 0
+    incorrect_count = 0
+    unattempted_count = 0
+    total_marks = 0.0
+    mark_per_q = float(quiz.get("totalMarks", total_q * 2)) / max(1, total_q)
+    negative_marking = float(quiz.get("negativeMarking", 0.66))
+
+    review_list = []
+    for idx, q in enumerate(questions):
+        user_ans = answers.get(str(idx)) or answers.get(idx) or ""
+        correct_ans = str(q.get("correctAnswer", "")).strip()
+        options = q.get("options", [])
+        explanation = q.get("explanation", "") or q.get("solution", "")
+
+        is_correct = False
+        if not user_ans:
+            unattempted_count += 1
+            status = "unattempted"
+        else:
+            norm_user = str(user_ans).strip().lower()
+            norm_correct = correct_ans.lower()
+
+            if len(correct_ans) == 1 and correct_ans.upper() in ["A", "B", "C", "D", "E"]:
+                opt_idx = ord(correct_ans.upper()) - ord("A")
+                if 0 <= opt_idx < len(options):
+                    norm_correct = options[opt_idx].lower()
+
+            if norm_user == norm_correct or norm_user == correct_ans.lower():
+                is_correct = True
+                correct_count += 1
+                total_marks += mark_per_q
+                status = "correct"
+            else:
+                incorrect_count += 1
+                total_marks -= negative_marking
+                status = "incorrect"
+
+        review_list.append({
+            "questionIndex": idx,
+            "question": q.get("question", ""),
+            "options": options,
+            "userAnswer": user_ans,
+            "correctAnswer": correct_ans,
+            "isCorrect": is_correct,
+            "status": status,
+            "explanation": explanation
+        })
+
+    total_marks = max(0.0, round(total_marks, 2))
+    max_marks = float(quiz.get("totalMarks", total_q * 2))
+    percentage = max(0.0, min(100.0, round((total_marks / max(1.0, max_marks)) * 100, 1)))
+
+    now = datetime.utcnow().isoformat()
+    attempt_doc = {
+        "userId": user_id,
+        "quizId": oid,
+        "quizTitle": quiz.get("title", "Daily Current Affairs Quiz"),
+        "quizDate": quiz.get("quizDate", now[:10]),
+        "totalQuestions": total_q,
+        "correctCount": correct_count,
+        "incorrectCount": incorrect_count,
+        "unattemptedCount": unattempted_count,
+        "scoredMarks": total_marks,
+        "maxMarks": max_marks,
+        "percentage": percentage,
+        "timeSpentSeconds": time_spent_secs,
+        "answers": answers,
+        "review": review_list,
+        "submittedAt": now
+    }
+
+    res = db.current_affair_quiz_attempts.insert_one(attempt_doc)
+    attempt_doc["_id"] = res.inserted_id
+
+    log_audit_event("submit_ca_quiz", {
+        "quizId": str(oid),
+        "userId": user_id,
+        "score": total_marks,
+        "percentage": percentage
+    })
+
+    return jsonify({
+        "message": "Quiz submitted successfully",
+        "result": to_jsonable(_serialize(attempt_doc))
+    }), 200
+
+
+@ca_engine_bp.route("/quizzes/attempts", methods=["GET"])
+def get_user_quiz_attempts():
+    """Retrieve past quiz attempts for a candidate."""
+    db = get_db()
+    user_id = request.args.get("userId", "").strip()
+    if not user_id:
+        return jsonify({"error": "userId required"}), 400
+
+    attempts = list(db.current_affair_quiz_attempts.find({"userId": user_id}).sort("submittedAt", -1).limit(50))
+    return jsonify({"attempts": to_jsonable([_serialize(a) for a in attempts])})
+
+
+@ca_engine_bp.route("/quizzes/<quiz_id>", methods=["DELETE"])
+def delete_daily_quiz(quiz_id):
+    """Admin: Delete a Daily Current Affairs Quiz."""
+    db = get_db()
+    try:
+        oid = ObjectId(quiz_id)
+    except Exception:
+        return jsonify({"error": "Invalid quiz ID"}), 400
+
+    res = db.current_affair_quizzes.delete_one({"_id": oid})
+    if res.deleted_count == 0:
+        return jsonify({"error": "Quiz not found"}), 404
+
+    log_audit_event("delete_ca_quiz", {"quizId": quiz_id})
+    return jsonify({"message": "Quiz deleted successfully"})

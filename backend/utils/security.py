@@ -210,25 +210,27 @@ def add_security_headers(response):
     """
     Add standard HTTP security headers to a Flask response.
     Call this from an after_request hook or per-response.
-
-    Usage (in a blueprint or app):
-        @app.after_request
-        def security_headers(response):
-            return add_security_headers(response)
     """
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
+    path = request.path if request else ""
+    if not (path.startswith("/uploads") or path.startswith("/api/uploads")):
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+        response.headers["Pragma"] = "no-cache"
+    else:
+        response.headers.pop("X-Frame-Options", None)
+
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
-    response.headers["Pragma"] = "no-cache"
-    # Content Security Policy — adjust as needed for your CDN / assets
+
+    # Content Security Policy with frame-src support for PDFs & documents
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; "
+        "default-src 'self' 'unsafe-inline' data: blob: *; "
         "script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
-        "img-src 'self' data: blob:; "
-        "connect-src 'self';"
+        "img-src 'self' data: blob: https: *; "
+        "frame-src 'self' data: blob: https: *; "
+        "connect-src 'self' *;"
     )
     return response

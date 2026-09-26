@@ -593,10 +593,14 @@ function SeriesDetailModal({
         )}
 
         {/* Papers List */}
-        <div className="sts-paper-rows">
+        <div className="sts-paper-rows" style={{ flex: 1, overflowY: "auto" }}>
           {displayPapers.length === 0 ? (
-            <div className="sts-empty-sub">
-              <p>No papers match the current filter.</p>
+            <div className="sts-empty-sub" style={{ padding: "48px 20px", textAlign: "center" }}>
+              <div style={{ fontSize: 36, marginBottom: 10 }}>📚</div>
+              <h4 style={{ margin: "0 0 6px", color: "#0f172a", fontSize: "16px", fontWeight: 800 }}>No Exam Papers in this Test Series Yet</h4>
+              <p style={{ margin: 0, color: "#64748b", fontSize: "13px" }}>
+                Papers will appear here once published by the examination authority.
+              </p>
             </div>
           ) : (
             displayPapers.map(paper => {

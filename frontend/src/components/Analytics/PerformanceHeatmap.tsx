@@ -1,6 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { apiGet } from "../../services/api";
-import { AwardIcon, BarChartIcon, BookOpenIcon, CheckIcon, StarIcon, TagIcon } from "../common/EnterpriseIcons";
+import {
+  AwardIcon,
+  BarChartIcon,
+  BookOpenIcon,
+  CheckIcon,
+  ClockIcon,
+  LayersIcon,
+  StarIcon,
+  CrossIcon,
+} from "../common/EnterpriseIcons";
 import "./PerformanceHeatmap.css";
 
 interface TopicPerformance {
@@ -15,6 +24,57 @@ interface SubjectPerformance {
   overallPercentage: number;
   overallLevel: "Strong" | "Moderate" | "Weak";
   topics: TopicPerformance[];
+}
+
+interface TestReportItem {
+  id: string;
+  title: string;
+  type: "Mock Exam" | "Test Series" | "Daily CA Quiz" | string;
+  date: string;
+  scoredMarks: number;
+  maxMarks: number;
+  percentage: number;
+  accuracy: number;
+  correctCount: number;
+  incorrectCount: number;
+  negativeLost: number;
+  status: "Pass" | "Needs Review";
+}
+
+interface DrawbackItem {
+  id: string;
+  title: string;
+  severity: "High" | "Medium" | "Low";
+  category: string;
+  metric: string;
+  rootCause: string;
+  correctiveAction: string;
+}
+
+interface RecommendationItem {
+  priority: "Immediate" | "Daily" | "Weekly";
+  action: string;
+  impact: string;
+}
+
+interface PerformanceKPIs {
+  overallReadiness: number;
+  overallAccuracy: number;
+  totalTestsTaken: number;
+  totalQuestionsAttempted: number;
+  totalCorrect: number;
+  totalIncorrect: number;
+  totalUnattempted: number;
+  negativeMarksLost: number;
+  rankGrade: string;
+}
+
+interface AnalyticsResponse {
+  kpis: PerformanceKPIs;
+  heatmap: SubjectPerformance[];
+  drawbacks: DrawbackItem[];
+  testReports: TestReportItem[];
+  recommendations: RecommendationItem[];
 }
 
 interface RevisionQuestion {
@@ -33,11 +93,15 @@ interface Props {
 }
 
 export const PerformanceHeatmap: React.FC<Props> = ({ userName }) => {
-  const [heatmap, setHeatmap] = useState<SubjectPerformance[]>([]);
+  const [data, setData] = useState<AnalyticsResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [filterLevel, setFilterLevel] = useState<string>("ALL");
-  const [searchQuery, setSearchQuery] = useState<string>("");
   
+  // Tab and filter states
+  const [activeTab, setActiveTab] = useState<"overview" | "drawbacks" | "reports" | "matrix">("overview");
+  const [reportTypeFilter, setReportTypeFilter] = useState<string>("ALL");
+  const [matrixFilterLevel, setMatrixFilterLevel] = useState<string>("ALL");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+
   // Revision pool drawer state
   const [showRevisionModal, setShowRevisionModal] = useState<boolean>(false);
   const [revisionQuestions, setRevisionQuestions] = useState<RevisionQuestion[]>([]);
@@ -45,20 +109,42 @@ export const PerformanceHeatmap: React.FC<Props> = ({ userName }) => {
   const [selectedTopicDrill, setSelectedTopicDrill] = useState<string | null>(null);
 
   useEffect(() => {
-    loadHeatmap();
+    loadPerformanceAnalytics();
   }, [userName]);
 
-  const loadHeatmap = async () => {
+  const loadPerformanceAnalytics = async () => {
     try {
       setLoading(true);
-      const res = await apiGet<{ heatmap: SubjectPerformance[] }>(
-        `/answerer/learning-hub/performance/heatmap?userId=${encodeURIComponent(userName)}`
+      const res = await apiGet<AnalyticsResponse>(
+        `/answerer/learning-hub/performance/analytics?userId=${encodeURIComponent(userName)}`
       );
-      if (res && res.heatmap) {
-        setHeatmap(res.heatmap);
+      if (res && res.kpis) {
+        setData(res);
+      } else {
+        // Fallback
+        const hmRes = await apiGet<{ heatmap: SubjectPerformance[] }>(
+          `/answerer/learning-hub/performance/heatmap?userId=${encodeURIComponent(userName)}`
+        );
+        setData({
+          kpis: {
+            overallReadiness: 65,
+            overallAccuracy: 70,
+            totalTestsTaken: 0,
+            totalQuestionsAttempted: 0,
+            totalCorrect: 0,
+            totalIncorrect: 0,
+            totalUnattempted: 0,
+            negativeMarksLost: 0,
+            rankGrade: "Good Progress",
+          },
+          heatmap: hmRes?.heatmap || [],
+          drawbacks: [],
+          testReports: [],
+          recommendations: [],
+        });
       }
     } catch (err) {
-      console.error("Failed to load performance heatmap:", err);
+      console.error("Failed to load performance analytics:", err);
     } finally {
       setLoading(false);
     }
@@ -73,7 +159,17 @@ export const PerformanceHeatmap: React.FC<Props> = ({ userName }) => {
         `/answerer/learning-hub/revision/pool?userId=${encodeURIComponent(userName)}`
       );
       if (res && res.questions) {
-        setRevisionQuestions(res.questions);
+        let qs = res.questions;
+        if (topicName) {
+          const tLower = topicName.toLowerCase();
+          const filtered = qs.filter(
+            (q) =>
+              (q.subject && q.subject.toLowerCase().includes(tLower)) ||
+              (q.questionText && q.questionText.toLowerCase().includes(tLower))
+          );
+          qs = filtered.length > 0 ? filtered : qs;
+        }
+        setRevisionQuestions(qs);
       }
     } catch (err) {
       console.error("Failed to load revision pool:", err);
@@ -82,241 +178,594 @@ export const PerformanceHeatmap: React.FC<Props> = ({ userName }) => {
     }
   };
 
-  // Compute summary stats
+  const kpis = data?.kpis || {
+    overallReadiness: 0,
+    overallAccuracy: 0,
+    totalTestsTaken: 0,
+    totalQuestionsAttempted: 0,
+    totalCorrect: 0,
+    totalIncorrect: 0,
+    totalUnattempted: 0,
+    negativeMarksLost: 0,
+    rankGrade: "Getting Started",
+  };
+
+  const heatmap = data?.heatmap || [];
+  const drawbacks = data?.drawbacks || [];
+  const testReports = data?.testReports || [];
+  const recommendations = data?.recommendations || [];
+
+  // Filtered test reports
+  const filteredReports = useMemo(() => {
+    return testReports.filter((r) => {
+      if (reportTypeFilter !== "ALL" && r.type !== reportTypeFilter) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        return r.title.toLowerCase().includes(q) || r.type.toLowerCase().includes(q);
+      }
+      return true;
+    });
+  }, [testReports, reportTypeFilter, searchQuery]);
+
+  // Filtered heatmap
+  const filteredHeatmap = useMemo(() => {
+    return heatmap
+      .map((s) => {
+        let topics = s.topics || [];
+        if (matrixFilterLevel !== "ALL") {
+          topics = topics.filter((t) => t.level.toUpperCase() === matrixFilterLevel);
+        }
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          topics = topics.filter(
+            (t) => t.topic.toLowerCase().includes(q) || s.subject.toLowerCase().includes(q)
+          );
+        }
+        return { ...s, topics };
+      })
+      .filter((s) => s.topics.length > 0 || (searchQuery.trim() === "" && matrixFilterLevel === "ALL"));
+  }, [heatmap, matrixFilterLevel, searchQuery]);
+
+  // Stats computed from topics
   const allTopics = heatmap.flatMap((s) => s.topics || []);
   const strongCount = allTopics.filter((t) => t.level === "Strong").length;
   const modCount = allTopics.filter((t) => t.level === "Moderate").length;
   const weakCount = allTopics.filter((t) => t.level === "Weak").length;
-  const avgOverall = heatmap.length > 0
-    ? Math.round(heatmap.reduce((acc, s) => acc + s.overallPercentage, 0) / heatmap.length)
-    : 0;
-
-  // Filter subjects / topics
-  const filteredHeatmap = heatmap.map((s) => {
-    let topics = s.topics || [];
-    if (filterLevel !== "ALL") {
-      topics = topics.filter((t) => t.level.toUpperCase() === filterLevel);
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      topics = topics.filter((t) => t.topic.toLowerCase().includes(q) || s.subject.toLowerCase().includes(q));
-    }
-    return { ...s, topics };
-  }).filter((s) => s.topics.length > 0 || (searchQuery.trim() === "" && filterLevel === "ALL"));
 
   return (
-    <div className="perf-heatmap-container">
-      {/* Hero Banner */}
-      <div className="perf-hero-banner">
-        <div className="perf-hero-info">
-          <span className="perf-hero-kicker">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-            </svg>
-            Performance Diagnostics
-          </span>
-          <h2>Subject & Topic Focus Matrix</h2>
-          <p>
-            Key strengths and priority areas identified from your latest test attempts.
-          </p>
+    <div className="perf-hub-container">
+      {/* ─────────────────────────────────────────────────────────────────
+          1. HEADER BANNER & SIMPLE KPIS
+          ───────────────────────────────────────────────────────────────── */}
+      <div className="perf-hub-header">
+        <div className="perf-hub-title-block">
+          <div className="perf-hub-badge">
+            <BarChartIcon size={14} color="#2563eb" />
+            <span>Student Performance & Test Report</span>
+          </div>
+          <h2>My Test Performance & Progress</h2>
         </div>
 
-        <div className="perf-hero-stats">
-          <div className="perf-kpi-pill score">
-            <div className="perf-kpi-icon">
+        <div className="perf-hub-quick-actions">
+          <button
+            className="perf-btn-refresh"
+            onClick={loadPerformanceAnalytics}
+            title="Reload latest test data"
+          >
+            ↻ Refresh Data
+          </button>
+          <button
+            className="perf-btn-drill"
+            onClick={() => loadRevisionPool()}
+          >
+            <BookOpenIcon size={14} /> Practice Revision Questions
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Cards Grid */}
+      <div className="perf-kpi-grid">
+        {/* Overall Score */}
+        <div className="perf-kpi-card card-readiness">
+          <div className="perf-kpi-card-header">
+            <span className="perf-kpi-card-label">Overall Score</span>
+            <div className="perf-kpi-card-icon blue">
               <AwardIcon size={18} color="#2563eb" />
             </div>
-            <div className="perf-kpi-data">
-              <span>Readiness</span>
-              <strong>{avgOverall}%</strong>
-            </div>
           </div>
-          <div className="perf-kpi-pill weak">
-            <div className="perf-kpi-icon">
-              <BarChartIcon size={18} color="#e11d48" />
-            </div>
-            <div className="perf-kpi-data">
-              <span>Priority Focus</span>
-              <strong>{weakCount} Topics</strong>
-            </div>
+          <div className="perf-kpi-card-val">
+            <strong>{kpis.overallReadiness}%</strong>
+            <span className="perf-grade-tag">{kpis.rankGrade}</span>
           </div>
-          <div className="perf-kpi-pill strong">
-            <div className="perf-kpi-icon">
-              <StarIcon size={18} color="#059669" filled />
-            </div>
-            <div className="perf-kpi-data">
-              <span>Mastered</span>
-              <strong>{strongCount} Topics</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Toolbar & Filters */}
-      <div className="perf-toolbar">
-        <div className="perf-filter-group">
-          <button
-            className={`perf-filter-btn ${filterLevel === "ALL" ? "active" : ""}`}
-            onClick={() => setFilterLevel("ALL")}
-          >
-            All Areas ({allTopics.length})
-          </button>
-          <button
-            className={`perf-filter-btn weak ${filterLevel === "WEAK" ? "active" : ""}`}
-            onClick={() => setFilterLevel("WEAK")}
-          >
-            Priority Focus ({weakCount})
-          </button>
-          <button
-            className={`perf-filter-btn moderate ${filterLevel === "MODERATE" ? "active" : ""}`}
-            onClick={() => setFilterLevel("MODERATE")}
-          >
-            Moderate ({modCount})
-          </button>
-          <button
-            className={`perf-filter-btn strong ${filterLevel === "STRONG" ? "active" : ""}`}
-            onClick={() => setFilterLevel("STRONG")}
-          >
-            Mastered ({strongCount})
-          </button>
-        </div>
-
-        <div className="perf-actions">
-          <div className="perf-search-box">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="perf-search-icon">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search subject or topic..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="perf-search-input"
+          <div className="perf-kpi-card-progress">
+            <div
+              className="perf-kpi-progress-bar blue"
+              style={{ width: `${Math.min(100, Math.max(5, kpis.overallReadiness))}%` }}
             />
-            {searchQuery && (
-              <button
-                type="button"
-                className="perf-search-clear"
-                onClick={() => setSearchQuery("")}
-                title="Clear search"
-              >
-                ✕
-              </button>
-            )}
           </div>
-          <div className="perf-actions-buttons">
-            <button
-              className="perf-action-btn secondary"
-              onClick={() => loadHeatmap()}
-              title="Refresh Matrix"
-            >
-              Refresh
-            </button>
-            <button
-              className="perf-action-btn primary"
-              onClick={() => loadRevisionPool()}
-            >
-              <BookOpenIcon size={14} style={{ marginRight: 4 }} /> Personal Revision Pool
-            </button>
+          <span className="perf-kpi-subtext">Total marks scored across all tests</span>
+        </div>
+
+        {/* Accuracy */}
+        <div className="perf-kpi-card card-accuracy">
+          <div className="perf-kpi-card-header">
+            <span className="perf-kpi-card-label">Accuracy</span>
+            <div className="perf-kpi-card-icon green">
+              <CheckIcon size={18} color="#059669" />
+            </div>
           </div>
+          <div className="perf-kpi-card-val">
+            <strong>{kpis.overallAccuracy}%</strong>
+            <span className="perf-stat-pill green">
+              {kpis.totalCorrect} Correct
+            </span>
+          </div>
+          <div className="perf-kpi-card-progress">
+            <div
+              className="perf-kpi-progress-bar green"
+              style={{ width: `${Math.min(100, Math.max(5, kpis.overallAccuracy))}%` }}
+            />
+          </div>
+          <span className="perf-kpi-subtext">Correct answers vs attempted</span>
+        </div>
+
+        {/* Negative Marks Lost */}
+        <div className="perf-kpi-card card-negative">
+          <div className="perf-kpi-card-header">
+            <span className="perf-kpi-card-label">Negative Marks Lost</span>
+            <div className="perf-kpi-card-icon red">
+              <CrossIcon size={18} color="#e11d48" />
+            </div>
+          </div>
+          <div className="perf-kpi-card-val">
+            <strong style={{ color: "#e11d48" }}>-{kpis.negativeMarksLost}</strong>
+            <span className="perf-stat-pill red">
+              {kpis.totalIncorrect} Wrong
+            </span>
+          </div>
+          <div className="perf-kpi-card-progress">
+            <div
+              className="perf-kpi-progress-bar red"
+              style={{
+                width: `${Math.min(100, (kpis.totalIncorrect / Math.max(1, kpis.totalQuestionsAttempted)) * 100)}%`,
+              }}
+            />
+          </div>
+          <span className="perf-kpi-subtext">Marks cut due to wrong answers</span>
+        </div>
+
+        {/* Tests Taken */}
+        <div className="perf-kpi-card card-tests">
+          <div className="perf-kpi-card-header">
+            <span className="perf-kpi-card-label">Tests Taken</span>
+            <div className="perf-kpi-card-icon purple">
+              <LayersIcon size={18} color="#7c3aed" />
+            </div>
+          </div>
+          <div className="perf-kpi-card-val">
+            <strong>{kpis.totalTestsTaken}</strong>
+            <span className="perf-stat-pill purple">
+              {kpis.totalQuestionsAttempted} Questions
+            </span>
+          </div>
+          <div className="perf-kpi-card-progress">
+            <div
+              className="perf-kpi-progress-bar purple"
+              style={{ width: `${Math.min(100, kpis.totalTestsTaken * 8)}%` }}
+            />
+          </div>
+          <span className="perf-kpi-subtext">Completed tests and quizzes</span>
         </div>
       </div>
 
-      {/* Loading state */}
+      {/* ─────────────────────────────────────────────────────────────────
+          2. SIMPLE NAVIGATION TABS
+          ───────────────────────────────────────────────────────────────── */}
+      <div className="perf-nav-tabs">
+        <button
+          className={`perf-tab-btn ${activeTab === "overview" ? "active" : ""}`}
+          onClick={() => setActiveTab("overview")}
+        >
+          <BarChartIcon size={15} /> Overview
+        </button>
+        <button
+          className={`perf-tab-btn ${activeTab === "drawbacks" ? "active" : ""}`}
+          onClick={() => setActiveTab("drawbacks")}
+        >
+          <CrossIcon size={15} /> Weak Areas & Mistakes ({drawbacks.length})
+        </button>
+        <button
+          className={`perf-tab-btn ${activeTab === "reports" ? "active" : ""}`}
+          onClick={() => setActiveTab("reports")}
+        >
+          <LayersIcon size={15} /> Test History & Scores ({testReports.length})
+        </button>
+        <button
+          className={`perf-tab-btn ${activeTab === "matrix" ? "active" : ""}`}
+          onClick={() => setActiveTab("matrix")}
+        >
+          <StarIcon size={15} /> Subject & Topic Scores ({allTopics.length})
+        </button>
+      </div>
+
       {loading ? (
-        <div style={{ textAlign: "center", padding: "60px 0", color: "#64748b" }}>
-          <strong>Computing topic mastery telemetry...</strong>
-        </div>
-      ) : filteredHeatmap.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "60px 0", background: "#ffffff", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
-          <div style={{ marginBottom: "8px" }}>
-            <BarChartIcon size={32} color="#94a3b8" />
-          </div>
-          <h3 style={{ margin: "0 0 6px", color: "#0f172a" }}>No telemetry matching criteria</h3>
-          <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>
-            Attempt additional tests or clear your search filters.
-          </p>
+        <div className="perf-loading-state">
+          <div className="perf-spinner" />
+          <p>Loading your test results and performance report...</p>
         </div>
       ) : (
-        /* Matrix Grid */
-        <div className="perf-matrix-grid">
-          {filteredHeatmap.map((subj, sIdx) => {
-            const levelClass = subj.overallLevel.toLowerCase();
-            return (
-              <div key={sIdx} className="perf-subject-card">
-                <div className="perf-subject-header">
-                  <div className="perf-subject-meta">
-                    <h3 className="perf-subject-title">{subj.subject}</h3>
-                    <span className="perf-subject-count">
-                      {subj.topics.length} Evaluated Topics
-                    </span>
-                  </div>
-                  <span className={`perf-level-pill ${levelClass}`}>
-                    {subj.overallLevel} ({subj.overallPercentage}%)
+        <>
+          {/* ─────────────────────────────────────────────────────────────
+              TAB 1: OVERVIEW & WEAK AREAS
+              ───────────────────────────────────────────────────────────── */}
+          {(activeTab === "overview" || activeTab === "drawbacks") && (
+            <div className="perf-section-block">
+              <div className="perf-section-header">
+                <div>
+                  <h3 className="perf-section-title">
+                    <span className="perf-title-icon red">⚠️</span> Mistakes to Fix & Weak Topics
+                  </h3>
+                  <p className="perf-section-desc">
+                    Here are the areas where you are losing marks and simple steps to fix them.
+                  </p>
+                </div>
+                {drawbacks.length > 0 && (
+                  <span className="perf-badge-count red">
+                    {drawbacks.length} Area{drawbacks.length !== 1 ? "s" : ""} to Improve
                   </span>
-                </div>
+                )}
+              </div>
 
-                <div className="perf-progress-wrapper">
-                  <div className="perf-progress-labels">
-                    <span>Proficiency Index</span>
-                    <span>{subj.overallPercentage}%</span>
-                  </div>
-                  <div className="perf-progress-track">
-                    <div
-                      className={`perf-progress-fill ${levelClass}`}
-                      style={{ width: `${Math.min(100, Math.max(8, subj.overallPercentage))}%` }}
-                    />
-                  </div>
+              {drawbacks.length === 0 ? (
+                <div className="perf-empty-box">
+                  <span style={{ fontSize: "32px" }}>🎉</span>
+                  <h4>No Big Mistakes Detected!</h4>
+                  <p>You have high accuracy and very few wrong answers. Keep practicing to maintain your score!</p>
                 </div>
-
-                <div className="perf-topics-list">
-                  {subj.topics.map((top, tIdx) => {
-                    const topLevelClass = top.level.toLowerCase();
+              ) : (
+                <div className="perf-drawbacks-grid">
+                  {drawbacks.map((dbk) => {
+                    const sevClass = dbk.severity.toLowerCase();
                     return (
-                      <div key={tIdx} className="perf-topic-row">
-                        <div className="perf-topic-main">
-                          <span className="perf-topic-title" title={top.topic}>
-                            {top.topic}
-                          </span>
-                          <span className="perf-topic-sub">
-                            {top.attemptCount} drill{top.attemptCount !== 1 ? "s" : ""} recorded
-                          </span>
+                      <div key={dbk.id} className={`perf-drawback-card sev-${sevClass}`}>
+                        <div className="perf-drawback-top">
+                          <div className="perf-drawback-badge-group">
+                            <span className={`perf-sev-pill ${sevClass}`}>{dbk.severity} Priority</span>
+                            <span className="perf-cat-pill">{dbk.category}</span>
+                          </div>
+                          <span className="perf-drawback-metric">{dbk.metric}</span>
                         </div>
 
-                        <div className="perf-topic-metric">
-                          <div className="perf-topic-badges">
-                            <span className={`perf-level-pill ${topLevelClass}`} style={{ fontSize: "10px", padding: "2px 8px" }}>
-                              {top.level}
-                            </span>
-                            <span className="perf-topic-score">{top.percentage}%</span>
+                        <h4 className="perf-drawback-name">{dbk.title}</h4>
+
+                        <div className="perf-drawback-analysis">
+                          <div className="perf-analysis-item cause">
+                            <strong>Why marks were lost:</strong>
+                            <p>{dbk.rootCause}</p>
                           </div>
+                          <div className="perf-analysis-item fix">
+                            <strong>How to fix this:</strong>
+                            <p>{dbk.correctiveAction}</p>
+                          </div>
+                        </div>
+
+                        <div className="perf-drawback-footer">
                           <button
-                            className="perf-drill-btn"
-                            onClick={() => loadRevisionPool(top.topic)}
-                            title={`Practice ${top.topic}`}
+                            className="perf-fix-btn"
+                            onClick={() => loadRevisionPool(dbk.category !== "Test Strategy" ? dbk.category : undefined)}
                           >
-                            Drill →
+                            <BookOpenIcon size={13} /> Practice This Topic →
                           </button>
                         </div>
                       </div>
                     );
                   })}
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* Recommended Study Plan */}
+          {activeTab === "overview" && recommendations.length > 0 && (
+            <div className="perf-section-block">
+              <div className="perf-section-header">
+                <div>
+                  <h3 className="perf-section-title">
+                    <span className="perf-title-icon blue">🎯</span> Recommended Study Plan
+                  </h3>
+                  <p className="perf-section-desc">
+                    Daily and weekly practice tasks to help you score higher in exams.
+                  </p>
+                </div>
               </div>
-            );
-          })}
-        </div>
+
+              <div className="perf-recs-grid">
+                {recommendations.map((rec, rIdx) => (
+                  <div key={rIdx} className="perf-rec-card">
+                    <div className="perf-rec-header">
+                      <span className={`perf-rec-prio-tag ${rec.priority.toLowerCase()}`}>
+                        {rec.priority}
+                      </span>
+                      <span className="perf-rec-impact">⚡ {rec.impact}</span>
+                    </div>
+                    <p className="perf-rec-action">{rec.action}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ─────────────────────────────────────────────────────────────
+              TAB 2: RECENT TEST REPORTS & SCORES
+              ───────────────────────────────────────────────────────────── */}
+          {(activeTab === "overview" || activeTab === "reports") && (
+            <div className="perf-section-block">
+              <div className="perf-section-header">
+                <div>
+                  <h3 className="perf-section-title">
+                    <span className="perf-title-icon purple">📊</span> Recent Test Results & Scores
+                  </h3>
+                  <p className="perf-section-desc">
+                    Scores and accuracy breakdown from your completed mock exams and tests.
+                  </p>
+                </div>
+
+                <div className="perf-report-filters">
+                  <button
+                    className={`perf-chip-btn ${reportTypeFilter === "ALL" ? "active" : ""}`}
+                    onClick={() => setReportTypeFilter("ALL")}
+                  >
+                    All Tests ({testReports.length})
+                  </button>
+                  <button
+                    className={`perf-chip-btn ${reportTypeFilter === "Mock Exam" ? "active" : ""}`}
+                    onClick={() => setReportTypeFilter("Mock Exam")}
+                  >
+                    Mock Exams
+                  </button>
+                  <button
+                    className={`perf-chip-btn ${reportTypeFilter === "Test Series" ? "active" : ""}`}
+                    onClick={() => setReportTypeFilter("Test Series")}
+                  >
+                    Test Series
+                  </button>
+                  <button
+                    className={`perf-chip-btn ${reportTypeFilter === "Daily CA Quiz" ? "active" : ""}`}
+                    onClick={() => setReportTypeFilter("Daily CA Quiz")}
+                  >
+                    Quizzes
+                  </button>
+                </div>
+              </div>
+
+              {filteredReports.length === 0 ? (
+                <div className="perf-empty-box">
+                  <span style={{ fontSize: "32px" }}>📝</span>
+                  <h4>No Tests Taken Yet</h4>
+                  <p>Take full-length mock exams or quizzes to view your detailed scores and mistakes here.</p>
+                </div>
+              ) : (
+                <div className="perf-reports-table-wrap">
+                  <table className="perf-reports-table">
+                    <thead>
+                      <tr>
+                        <th>Test Name</th>
+                        <th>Type</th>
+                        <th>Date</th>
+                        <th>Marks Scored</th>
+                        <th>Accuracy</th>
+                        <th>Correct / Wrong</th>
+                        <th>Negative Marks</th>
+                        <th>Result</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredReports.map((rpt, idx) => (
+                        <tr key={rpt.id || idx}>
+                          <td className="perf-col-title">
+                            <strong>{rpt.title}</strong>
+                          </td>
+                          <td>
+                            <span className="perf-type-tag">{rpt.type}</span>
+                          </td>
+                          <td className="perf-col-date">
+                            <ClockIcon size={12} style={{ marginRight: 4 }} />
+                            {rpt.date}
+                          </td>
+                          <td>
+                            <div className="perf-score-cell">
+                              <strong>
+                                {rpt.scoredMarks} / {rpt.maxMarks}
+                              </strong>
+                              <span className="perf-pct-pill">{rpt.percentage}%</span>
+                            </div>
+                          </td>
+                          <td>
+                            <span className={`perf-acc-text ${rpt.accuracy >= 60 ? "good" : "warn"}`}>
+                              {rpt.accuracy}%
+                            </span>
+                          </td>
+                          <td>
+                            <div className="perf-breakdown-counts">
+                              <span className="count-c">+{rpt.correctCount}</span>
+                              <span className="count-w">-{rpt.incorrectCount}</span>
+                            </div>
+                          </td>
+                          <td>
+                            {rpt.negativeLost > 0 ? (
+                              <span className="perf-neg-badge">-{rpt.negativeLost}</span>
+                            ) : (
+                              <span style={{ color: "#94a3b8" }}>0.0</span>
+                            )}
+                          </td>
+                          <td>
+                            <span className={`perf-status-pill ${rpt.status === "Pass" ? "pass" : "review"}`}>
+                              {rpt.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ─────────────────────────────────────────────────────────────
+              TAB 3: SUBJECT & TOPIC PERFORMANCE
+              ───────────────────────────────────────────────────────────── */}
+          {(activeTab === "overview" || activeTab === "matrix") && (
+            <div className="perf-section-block">
+              <div className="perf-section-header">
+                <div>
+                  <h3 className="perf-section-title">
+                    <span className="perf-title-icon green">🗺️</span> Subject & Topic Scores
+                  </h3>
+                  <p className="perf-section-desc">
+                    Your score level and practice count for each subject and topic.
+                  </p>
+                </div>
+
+                <div className="perf-matrix-toolbar">
+                  <div className="perf-matrix-filters">
+                    <button
+                      className={`perf-chip-btn ${matrixFilterLevel === "ALL" ? "active" : ""}`}
+                      onClick={() => setMatrixFilterLevel("ALL")}
+                    >
+                      All ({allTopics.length})
+                    </button>
+                    <button
+                      className={`perf-chip-btn red ${matrixFilterLevel === "WEAK" ? "active" : ""}`}
+                      onClick={() => setMatrixFilterLevel("WEAK")}
+                    >
+                      Needs Practice ({weakCount})
+                    </button>
+                    <button
+                      className={`perf-chip-btn amber ${matrixFilterLevel === "MODERATE" ? "active" : ""}`}
+                      onClick={() => setMatrixFilterLevel("MODERATE")}
+                    >
+                      Medium ({modCount})
+                    </button>
+                    <button
+                      className={`perf-chip-btn green ${matrixFilterLevel === "STRONG" ? "active" : ""}`}
+                      onClick={() => setMatrixFilterLevel("STRONG")}
+                    >
+                      Good ({strongCount})
+                    </button>
+                  </div>
+
+                  <div className="perf-search-wrapper">
+                    <input
+                      type="text"
+                      placeholder="Search subject or topic..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="perf-search-field"
+                    />
+                    {searchQuery && (
+                      <button className="perf-search-clear-btn" onClick={() => setSearchQuery("")}>
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {filteredHeatmap.length === 0 ? (
+                <div className="perf-empty-box">
+                  <span style={{ fontSize: "32px" }}>🔍</span>
+                  <h4>No Topics Found</h4>
+                  <p>Try clearing your search or filter options.</p>
+                </div>
+              ) : (
+                <div className="perf-matrix-grid">
+                  {filteredHeatmap.map((subj, sIdx) => {
+                    const levelClass = subj.overallLevel.toLowerCase();
+                    return (
+                      <div key={sIdx} className="perf-subject-card">
+                        <div className="perf-subject-header">
+                          <div className="perf-subject-meta">
+                            <h4 className="perf-subject-title">{subj.subject}</h4>
+                            <span className="perf-subject-count">
+                              {subj.topics.length} Topic{subj.topics.length !== 1 ? "s" : ""}
+                            </span>
+                          </div>
+                          <span className={`perf-level-pill ${levelClass}`}>
+                            {subj.overallLevel} ({subj.overallPercentage}%)
+                          </span>
+                        </div>
+
+                        <div className="perf-progress-wrapper">
+                          <div className="perf-progress-labels">
+                            <span>Score Level</span>
+                            <span>{subj.overallPercentage}%</span>
+                          </div>
+                          <div className="perf-progress-track">
+                            <div
+                              className={`perf-progress-fill ${levelClass}`}
+                              style={{ width: `${Math.min(100, Math.max(8, subj.overallPercentage))}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="perf-topics-list">
+                          {subj.topics.map((top, tIdx) => {
+                            const topLevelClass = top.level.toLowerCase();
+                            return (
+                              <div key={tIdx} className="perf-topic-row">
+                                <div className="perf-topic-main">
+                                  <span className="perf-topic-title" title={top.topic}>
+                                    {top.topic}
+                                  </span>
+                                  <span className="perf-topic-sub">
+                                    {top.attemptCount} test{top.attemptCount !== 1 ? "s" : ""} taken
+                                  </span>
+                                </div>
+
+                                <div className="perf-topic-metric">
+                                  <div className="perf-topic-badges">
+                                    <span className={`perf-level-pill ${topLevelClass}`} style={{ fontSize: "10.5px", padding: "2px 8px" }}>
+                                      {top.level}
+                                    </span>
+                                    <span className="perf-topic-score">{top.percentage}%</span>
+                                  </div>
+                                  <button
+                                    className="perf-drill-btn"
+                                    onClick={() => loadRevisionPool(top.topic)}
+                                    title={`Practice ${top.topic}`}
+                                  >
+                                    Practice →
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
-      {/* Revision Pool Modal */}
+      {/* ─────────────────────────────────────────────────────────────────
+          4. PRACTICE REVISION MODAL
+          ───────────────────────────────────────────────────────────────── */}
       {showRevisionModal && (
         <div className="perf-modal-backdrop" onClick={() => setShowRevisionModal(false)}>
           <div className="perf-modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="perf-modal-header">
               <div>
-                <h3>Personal Revision Pool {selectedTopicDrill ? `— ${selectedTopicDrill}` : ""}</h3>
-                <p>Curated focus items from PYQs, past test attempts, and weak topic drills</p>
+                <h3>Practice Revision Questions</h3>
+                <p>
+                  {selectedTopicDrill
+                    ? `Topic: ${selectedTopicDrill}`
+                    : "Practice questions from your past mistakes, bookmarks, and previous exam papers"}
+                </p>
               </div>
               <button className="perf-modal-close" onClick={() => setShowRevisionModal(false)}>
                 ✕
@@ -326,11 +775,14 @@ export const PerformanceHeatmap: React.FC<Props> = ({ userName }) => {
             <div className="perf-modal-body">
               {loadingRevision ? (
                 <div style={{ textAlign: "center", padding: "40px 0", color: "#64748b" }}>
-                  ⏳ Loading practice questions...
+                  <div className="perf-spinner" style={{ margin: "0 auto 12px" }} />
+                  <p>Loading questions...</p>
                 </div>
               ) : revisionQuestions.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "40px 0", color: "#64748b" }}>
-                  🎉 No weak items in this pool! Your retention is solid.
+                  <span style={{ fontSize: "36px" }}>🎉</span>
+                  <h4 style={{ margin: "12px 0 4px", color: "#0f172a" }}>No Weak Questions Pending</h4>
+                  <p style={{ margin: 0, fontSize: "13px" }}>You have answered all questions correctly in this topic!</p>
                 </div>
               ) : (
                 revisionQuestions.map((q, idx) => (
@@ -341,12 +793,13 @@ export const PerformanceHeatmap: React.FC<Props> = ({ userName }) => {
                           🏛️ PYQ {q.pyqYear || ""}
                         </span>
                       )}
-                      <span style={{ color: "#64748b" }}>{q.subject || "General Studies"}</span>
+                      <span className="perf-subj-badge">{q.subject || "General Studies"}</span>
                       {q.difficulty && (
-                        <span style={{ textTransform: "capitalize", color: "#475569" }}>
-                          • {q.difficulty}
+                        <span className="perf-diff-badge">
+                          {q.difficulty}
                         </span>
                       )}
+                      <span className="perf-marks-badge">+{q.marks || 1} Marks</span>
                     </div>
                     <div className="perf-revision-qtext">
                       <strong>Q{idx + 1}.</strong> {q.questionText}
@@ -357,11 +810,14 @@ export const PerformanceHeatmap: React.FC<Props> = ({ userName }) => {
             </div>
 
             <div className="perf-modal-footer">
+              <span style={{ fontSize: "12px", color: "#64748b" }}>
+                {revisionQuestions.length} question{revisionQuestions.length !== 1 ? "s" : ""} available
+              </span>
               <button
-                className="perf-action-btn primary"
+                className="perf-modal-close-btn"
                 onClick={() => setShowRevisionModal(false)}
               >
-                Close Drill
+                Close Practice
               </button>
             </div>
           </div>

@@ -930,60 +930,108 @@
 
 .test-comparison > button {
   width: 100%;
-  display: grid;
-  grid-template-columns: minmax(180px, 1.2fr) 2fr 35px;
-  gap: 12px;
-  align-items: center;
-  margin: 13px 0;
-  border: 0;
-  background: transparent;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid #f1f5f9;
+  border-radius: 10px;
+  background: #f8fafc;
   text-align: left;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
-.test-comparison > button > span {
+.test-comparison > button:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.test-comp-top {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.test-comp-top span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
   font-weight: 700;
   color: #0f172a;
+  min-width: 0;
+  flex: 1;
 }
 
-.test-comparison > button > div {
-  height: 10px;
+.test-comp-top b {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #2563eb;
+  background: #dbeafe;
+  padding: 2px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.test-comp-bar {
+  width: 100%;
+  height: 6px;
   overflow: hidden;
-  border-radius: 8px;
-  background: #f1f5f9;
+  border-radius: 99px;
+  background: #e2e8f0;
 }
 
-.test-comparison > button i {
+.test-comp-bar i {
   display: block;
   height: 100%;
-  border-radius: 8px;
-  background: linear-gradient(90deg, #2563eb, #0284c7);
-}
-
-.test-comparison > button b {
-  font-size: 13px;
-  color: #0f172a;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #2563eb, #38bdf8);
 }
 
 .topper-leaderboard {
   grid-column: span 1;
 }
 
+.topper-leaderboard header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.topper-leaderboard header > span {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 99px;
+  background: #eff6ff;
+  color: #2563eb;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
 .topper-leaderboard > button {
   width: 100%;
-  height: 52px;
+  box-sizing: border-box;
+  min-height: 48px;
+  padding: 6px 8px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   border: 0;
   border-bottom: 1px solid #f1f5f9;
+  border-radius: 8px;
   background: #fff;
   text-align: left;
   cursor: pointer;
+  transition: background 0.15s ease;
 }
 
 .topper-leaderboard > button:hover {
@@ -991,34 +1039,43 @@
 }
 
 .topper-leaderboard em {
-  width: 20px;
+  width: 16px;
   color: #64748b;
-  font-size: 12px;
+  font-size: 11.5px;
   font-style: normal;
-  font-weight: 700;
+  font-weight: 800;
+  flex-shrink: 0;
+  text-align: center;
 }
 
 .topper-leaderboard > button > span {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
   border-radius: 50%;
   background: #eff6ff;
   color: #1d4ed8;
   font-weight: 800;
+  font-size: 11px;
+  flex-shrink: 0;
 }
 
 .topper-leaderboard > button > div {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .topper-leaderboard strong {
-  font-size: 13px;
+  font-size: 12.5px;
+  font-weight: 700;
   color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .topper-leaderboard small {
@@ -1026,17 +1083,31 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: #64748b;
-  font-size: 11px;
+  font-size: 10.5px;
+  font-weight: 500;
 }
 
 .topper-leaderboard > button > b {
   color: #166534;
-  font-size: 13px;
+  font-size: 12.5px;
+  font-weight: 800;
+  white-space: nowrap;
+  flex-shrink: 0;
+  text-align: right;
+  min-width: 44px;
 }
 
 .topper-leaderboard > button > i {
-  color: #2563eb;
+  color: #94a3b8;
   font-style: normal;
+  font-size: 11px;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+.topper-leaderboard > button:hover > i {
+  color: #2563eb;
+  transform: translateX(2px);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1175,9 +1246,17 @@
     flex: 1 1 100%;
   }
 
-  .analytics-kpis,
-  .analytics-kpis.overview {
+  .analytics-kpis {
     grid-template-columns: 1fr;
+  }
+
+  .analytics-kpis.overview {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .analytics-kpis.overview > .analytics-metric:last-child {
+    grid-column: span 2;
   }
 
   .distribution {
@@ -1191,14 +1270,14 @@
     gap: 10px;
   }
 
-  .test-comparison > button {
-    grid-template-columns: minmax(80px, 1fr) 1.2fr 30px;
-    gap: 8px;
-    font-size: 12px;
+  .topper-leaderboard > button {
+    padding: 6px 4px;
+    gap: 6px;
   }
 
-  .test-comparison > button > span {
-    font-size: 12px;
+  .topper-leaderboard > button > b {
+    min-width: 40px;
+    font-size: 11.5px;
   }
 
   .trend-bars {
@@ -2052,6 +2131,94 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-analytics {
+    padding: 16px 14px 100px 14px !important;
+  }
+
+  .analytics-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .analytics-head h1 {
+    font-size: 22px;
+  }
+
+  .analytics-kpis.overview {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px;
+  }
+
+  .analytics-kpis.overview > .analytics-metric:last-child {
+    grid-column: span 2;
+  }
+
+  .analytics-metric {
+    padding: 12px 14px;
+    border-radius: 10px;
+  }
+
+  .analytics-metric strong {
+    font-size: 20px;
+  }
+
+  .overview-visuals {
+    grid-template-columns: 1fr !important;
+    gap: 14px;
+  }
+
+  .analytics-card {
+    padding: 16px 14px !important;
+    border-radius: 12px;
+  }
+
+  .analytics-card header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .chart-badge-btn {
+    align-self: flex-start;
+    padding: 4px 8px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .vertical-chart {
+    gap: 4px;
+    height: 160px;
+  }
+
+  .vertical-chart button small {
+    font-size: 9px;
+    height: auto;
+    padding-top: 4px;
+  }
+
+  .admin-outcome-donut {
+    width: 140px !important;
+    height: 140px !important;
+    margin: 14px auto 10px !important;
+  }
+
+  .admin-outcome-donut > span {
+    width: 95px !important;
+    height: 95px !important;
+  }
+
+  .admin-outcome-donut strong {
+    font-size: 22px !important;
+  }
+
+  .outcome-legend {
+    flex-wrap: wrap;
+    gap: 8px 12px;
   }
 }
 

@@ -61,19 +61,16 @@ const CATEGORY_OPTIONS = [
 function resolveVideoEmbedUrl(url?: string): string {
   if (!url) return "";
   const clean = url.trim();
-  const shortsMatch = clean.match(/(?:youtube\.com\/shorts\/|youtu\.be\/shorts\/)([A-Za-z0-9_-]+)/i);
-  if (shortsMatch) {
-    const vid = shortsMatch[1].split("?")[0].split("&")[0];
-    return `https://www.youtube.com/embed/${vid}?rel=0&modestbranding=1&enablejsapi=1&autoplay=1`;
-  }
-  const ytMatch = clean.match(/(?:(?:www\.|m\.)?youtube\.com\/(?:watch\?v=|embed\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]+)/i);
+  const origin = typeof window !== "undefined" && window.location?.origin ? encodeURIComponent(window.location.origin) : "";
+
+  const ytMatch = clean.match(/(?:youtube\.com\/(?:shorts\/|watch\?v=|embed\/|live\/)|youtu\.be\/(?:shorts\/)?)([A-Za-z0-9_-]+)/i);
   if (ytMatch) {
     const vid = ytMatch[1].split("?")[0].split("&")[0];
-    return `https://www.youtube.com/embed/${vid}?rel=0&modestbranding=1&enablejsapi=1&autoplay=1`;
+    return `https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&rel=0&modestbranding=1&iv_load_policy=3&playsinline=1&enablejsapi=1&fs=1${origin ? `&origin=${origin}` : ""}`;
   }
   const vimeoMatch = clean.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
   if (vimeoMatch) {
-    return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1`;
+    return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&byline=0&portrait=0&title=0&dnt=1`;
   }
   return getMediaUrl(clean);
 }
