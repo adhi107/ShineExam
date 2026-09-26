@@ -50,14 +50,42 @@ def _get_user_courses(db, user_id: str):
     return [str(c["_id"]) for c in courses], course_types
 
 
-def _series_accessible(series, user_assigned_ids: set, user_course_types: list) -> bool:
-    """Check if the series is accessible to this student (assigned or course-type match)."""
-    if str(series["_id"]) in user_assigned_ids:
+def _series_accessible(series, user_assigned_ids: set, user_course_types: list, user_doc: dict = None) -> bool:
+    """Check if the series is accessible to this student (assigned, open to all, batch, or course-type match)."""
+    # 1. Directly assigned
+    if str(series.get("_id")) in user_assigned_ids:
         return True
+
+    # 2. Open to all students
+    assigned_to = series.get("assignedTo", "all")
+    if assigned_to in ("all", "All", None, "", []):
+        return True
+
+    # 3. User identifiers or batches
+    if user_doc:
+        uid = str(user_doc.get("userId", "")).strip()
+        nax = str(user_doc.get("naxUnid", "")).strip()
+        batch = str(user_doc.get("batch", "")).strip()
+        batches = [str(b).strip() for b in user_doc.get("batches", []) if str(b).strip()]
+
+        assigned_students = series.get("assignedStudentIds") or series.get("assignedUsers") or []
+        if isinstance(assigned_students, list) and (uid in assigned_students or nax in assigned_students):
+            return True
+
+        assigned_batches = series.get("assignedBatches") or []
+        if isinstance(assigned_batches, list) and (batch in assigned_batches or any(b in assigned_batches for b in batches)):
+            return True
+
+    # 4. Course types match
     series_course_types = series.get("courseTypes", [])
-    if not series_course_types:
-        return False  # Requires explicit assignment
-    return any(ct in series_course_types for ct in user_course_types)
+    if series_course_types and user_course_types:
+        if any(ct in series_course_types for ct in user_course_types):
+            return True
+
+    if not series_course_types and not series.get("assignedStudentIds"):
+        return True
+
+    return False
 
 
 def _attempt_status_for_paper(db, user_id: str, paper_id):
@@ -182,12 +210,20 @@ def list_accessible_series():
     # Get user's course enrollments
     _, user_course_types = _get_user_courses(db, user_id)
 
+    user_doc = db.users.find_one({"$or": [{"userId": user_id}, {"naxUnid": user_id}]})
+    user_ids = [user_id]
+    if user_doc:
+        if user_doc.get("userId"):
+            user_ids.append(str(user_doc.get("userId")).strip())
+        if user_doc.get("naxUnid"):
+            user_ids.append(str(user_doc.get("naxUnid")).strip())
+
     # Get series directly assigned to this student
-    assigned = list(db.series_assignments.find({"userId": user_id}, {"seriesId": 1}))
+    assigned = list(db.series_assignments.find({"userId": {"$in": user_ids}}, {"seriesId": 1}))
     assigned_series_ids = {str(a["seriesId"]) for a in assigned if a.get("seriesId")}
 
     # Fetch all active series for tenant
-    tenant_id = get_request_tenant_id()
+    tenant_id = get_request_tenant_id(user_doc)
     query = {"status": "active"}
     if tenant_id and tenant_id != "all":
         query["$or"] = [
@@ -202,7 +238,7 @@ def list_accessible_series():
 
     accessible = []
     for s in all_series:
-        if _series_accessible(s, assigned_series_ids, user_course_types):
+        if _series_accessible(s, assigned_series_ids, user_course_types, user_doc):
             papers = list(db.series_papers.find({"seriesId": s["_id"]}).sort("paperNumber", 1))
             accessible.append(_serialize_series_card(s, papers, user_id, db))
 
@@ -226,11 +262,19 @@ def get_series_detail(series_id):
     if not series:
         return jsonify({"error": "Series not found"}), 404
 
+    user_doc = db.users.find_one({"$or": [{"userId": user_id}, {"naxUnid": user_id}]})
+    user_ids = [user_id]
+    if user_doc:
+        if user_doc.get("userId"):
+            user_ids.append(str(user_doc.get("userId")).strip())
+        if user_doc.get("naxUnid"):
+            user_ids.append(str(user_doc.get("naxUnid")).strip())
+
     # Access check
     _, user_course_types = _get_user_courses(db, user_id)
-    assigned = db.series_assignments.find_one({"seriesId": oid, "userId": user_id})
+    assigned = db.series_assignments.find_one({"seriesId": oid, "userId": {"$in": user_ids}})
     assigned_ids = {series_id} if assigned else set()
-    if not _series_accessible(series, assigned_ids, user_course_types):
+    if not _series_accessible(series, assigned_ids, user_course_types, user_doc):
         return jsonify({"error": "You do not have access to this series"}), 403
 
     papers = list(db.series_papers.find({"seriesId": oid}).sort("paperNumber", 1))

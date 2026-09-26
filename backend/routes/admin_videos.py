@@ -547,14 +547,33 @@ def list_candidate_classes():
         tenant_id = get_request_tenant_id(user_doc)
         tenant_filter = build_tenant_filter(tenant_id)
 
-        # Videos assigned to 'all' or specifically including this user_id within the student's tenant
+        user_identifiers = [user_id] if user_id else []
+        if user_doc:
+            if user_doc.get("userId"):
+                user_identifiers.append(str(user_doc.get("userId")).strip())
+            if user_doc.get("naxUnid"):
+                user_identifiers.append(str(user_doc.get("naxUnid")).strip())
+            if user_doc.get("batch"):
+                user_identifiers.append(str(user_doc.get("batch")).strip())
+            if user_doc.get("batches") and isinstance(user_doc.get("batches"), list):
+                user_identifiers.extend([str(b).strip() for b in user_doc.get("batches") if str(b).strip()])
+
+        or_conditions = [
+            {"assignedTo": "all"},
+            {"assignedTo": "All"},
+            {"assignedTo": None},
+            {"assignedTo": ""},
+            {"assignedTo": []},
+            {"assignedTo": {"$exists": False}},
+        ]
+        for uid in set(user_identifiers):
+            if uid:
+                or_conditions.append({"assignedTo": uid})
+                or_conditions.append({"assignedTo": {"$in": [uid]}})
+
         query = {
             **tenant_filter,
-            "$or": [
-                {"assignedTo": "all"},
-                {"assignedTo": user_id},
-                {"assignedTo": {"$in": [user_id]}},
-            ]
+            "$or": or_conditions
         }
 
         if category and category.lower() != "all":

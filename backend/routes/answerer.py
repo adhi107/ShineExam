@@ -89,15 +89,77 @@ def enforce_candidate_active_status():
 
 
 
+def _parse_dt(val):
+    if not val:
+        return None
+    if isinstance(val, datetime):
+        return val
+    if isinstance(val, str):
+        val = val.strip().replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(val).replace(tzinfo=None)
+        except Exception:
+            try:
+                return datetime.strptime(val[:19], "%Y-%m-%dT%H:%M:%S")
+            except Exception:
+                try:
+                    return datetime.strptime(val[:10], "%Y-%m-%d")
+                except Exception:
+                    return None
+    return None
+
+
 def _exam_availability(exam, now=None):
     now = now or datetime.utcnow()
-    start = exam.get("availableFrom") or exam.get("createdAt")
-    end = exam.get("validUntil")
+    start = _parse_dt(exam.get("availableFrom")) or _parse_dt(exam.get("createdAt"))
+    end = _parse_dt(exam.get("validUntil"))
+
+    status = str(exam.get("status", "published")).lower()
+    if status in ("draft", "archived", "inactive"):
+        return "draft"
+
     if end and end < now:
         return "expired"
     if start and start > now:
         return "upcoming"
-    return exam.get("status", "draft")
+
+    return "active"
+
+
+def _is_exam_assigned_to_user(db, exam_oid, exam, user_id):
+    if not user_id:
+        return True
+    user_doc = db.users.find_one({"$or": [{"userId": user_id}, {"naxUnid": user_id}]})
+    user_ids = [user_id]
+    user_batch = None
+    if user_doc:
+        if user_doc.get("userId"):
+            user_ids.append(str(user_doc.get("userId")).strip())
+        if user_doc.get("naxUnid"):
+            user_ids.append(str(user_doc.get("naxUnid")).strip())
+        user_batch = user_doc.get("batch")
+
+    # 1. Direct assignment row in exam_assignments
+    if db.exam_assignments.find_one({"examId": exam_oid, "userId": {"$in": user_ids}}):
+        return True
+
+    # 2. Open to all or public
+    assigned_to = exam.get("assignedTo", "all")
+    if assigned_to in ("all", "All", None, "", []):
+        return True
+    if exam.get("isPublic"):
+        return True
+
+    # 3. Direct student list or batch list
+    assigned_students = exam.get("assignedStudentIds") or exam.get("assignedUsers") or []
+    if isinstance(assigned_students, list) and any(uid in assigned_students for uid in user_ids):
+        return True
+
+    assigned_batches = exam.get("assignedBatches") or []
+    if isinstance(assigned_batches, list) and user_batch and user_batch in assigned_batches:
+        return True
+
+    return False
 
 
 def _candidate_access_error(db, user_id):
@@ -469,10 +531,47 @@ def list_assigned_tests():
         return jsonify({"error": "userId is required"}), 400
 
     db = get_db()
-    assignments = list(db.exam_assignments.find({"userId": userId}))
-    exam_ids = [a.get("examId") for a in assignments if a.get("examId")]
+    from utils.tenant import get_request_tenant_id, build_tenant_filter
 
-    exams = list(db.exams.find({"_id": {"$in": exam_ids}})) if exam_ids else []
+    user_doc = db.users.find_one({"$or": [{"userId": userId}, {"naxUnid": userId}]})
+    user_ids = [userId]
+    if user_doc:
+        if user_doc.get("userId"):
+            user_ids.append(str(user_doc.get("userId")).strip())
+        if user_doc.get("naxUnid"):
+            user_ids.append(str(user_doc.get("naxUnid")).strip())
+
+    user_batch = user_doc.get("batch") if user_doc else None
+
+    # 1. Direct assignments in exam_assignments
+    assignments = list(db.exam_assignments.find({"userId": {"$in": user_ids}}))
+    assigned_exam_ids = [a.get("examId") for a in assignments if a.get("examId")]
+
+    # 2. Query exams: directly assigned OR open/assigned to all / batch / student
+    tenant_id = get_request_tenant_id(user_doc)
+    tenant_filter = build_tenant_filter(tenant_id)
+
+    or_clauses = [
+        {"_id": {"$in": assigned_exam_ids}},
+        {"assignedTo": "all"},
+        {"assignedTo": "All"},
+        {"assignedTo": {"$exists": False}},
+        {"assignedTo": None},
+        {"assignedTo": ""},
+        {"isPublic": True},
+        {"assignedStudentIds": {"$in": user_ids}},
+        {"assignedUsers": {"$in": user_ids}},
+    ]
+    if user_batch:
+        or_clauses.append({"assignedBatches": user_batch})
+        or_clauses.append({"batch": user_batch})
+
+    exam_query = {
+        **tenant_filter,
+        "status": {"$in": ["published", "active", "Ongoing", "Published", "Active"]},
+        "$or": or_clauses
+    }
+    exams = list(db.exams.find(exam_query).sort("createdAt", -1))
 
     out = []
     for e in exams:
@@ -688,8 +787,7 @@ def get_test_for_taker(exam_id: str):
     passing_percentage = int(exam.get("passingPercentage", 40))
 
     if userId:
-        assigned = db.exam_assignments.find_one({"examId": oid, "userId": userId})
-        if not assigned:
+        if not _is_exam_assigned_to_user(db, oid, exam, userId):
             return jsonify({"error": "Exam not assigned to this user"}), 403
 
     qs = list(db.questions.find({"examId": oid}))
@@ -826,7 +924,7 @@ def start_attempt():
 
 
     # Confirm the candidate is assigned to this test before starting.
-    if not db.exam_assignments.find_one({"examId": exam_oid, "userId": userId}):
+    if not _is_exam_assigned_to_user(db, exam_oid, exam, userId):
         return jsonify({"error": "Exam not assigned"}), 403
 
     # Prevent a candidate from starting a test they have already submitted.

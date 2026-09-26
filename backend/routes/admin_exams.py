@@ -613,20 +613,24 @@ def assign_exam(exam_id: str):
     filter_q = build_tenant_filter(tenant_id)
 
     target_user_ids = set(str(uid).strip() for uid in userIds if str(uid).strip())
+    clean_batches = [str(b).strip() for b in batches if str(b).strip()] if batches else []
 
     # If batches are provided, resolve all candidate user IDs in those batches
-    if batches:
-        clean_batches = [str(b).strip() for b in batches if str(b).strip()]
-        if clean_batches:
-            batch_users = list(db.users.find(
-                {**filter_q, "role": "answerer", "batch": {"$in": clean_batches}},
-                {"userId": 1}
-            ))
-            for bu in batch_users:
-                if bu.get("userId"):
-                    target_user_ids.add(str(bu["userId"]).strip())
+    if clean_batches:
+        batch_users = list(db.users.find(
+            {"role": "answerer", "$or": [
+                {"batch": {"$in": clean_batches}},
+                {"batches": {"$in": clean_batches}}
+            ]},
+            {"userId": 1, "naxUnid": 1}
+        ))
+        for bu in batch_users:
+            if bu.get("userId"):
+                target_user_ids.add(str(bu["userId"]).strip())
+            if bu.get("naxUnid"):
+                target_user_ids.add(str(bu["naxUnid"]).strip())
 
-    if not target_user_ids:
+    if not target_user_ids and not clean_batches:
         return jsonify({"error": "No students or batches selected to assign"}), 400
 
     now = datetime.utcnow()
@@ -639,9 +643,20 @@ def assign_exam(exam_id: str):
         )
         upserts += 1
 
+    # Also update the exam document itself
+    update_doc = {"$set": {"status": "published", "updatedAt": now}}
+    if target_user_ids:
+        update_doc["$addToSet"] = update_doc.get("$addToSet", {})
+        update_doc["$addToSet"]["assignedStudentIds"] = {"$each": list(target_user_ids)}
+    if clean_batches:
+        update_doc["$addToSet"] = update_doc.get("$addToSet", {})
+        update_doc["$addToSet"]["assignedBatches"] = {"$each": clean_batches}
+
+    db.exams.update_one({"_id": oid}, update_doc)
+
     return jsonify({
         "message": "Assigned successfully",
         "assigned": upserts,
-        "batches": batches,
+        "batches": clean_batches,
         "totalAssigned": upserts
     })

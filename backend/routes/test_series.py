@@ -630,11 +630,20 @@ def assign_series(series_id):
 
     # Batch-based
     if batches:
-        batch_users = db.users.find(
-            {"courseStream": {"$in": batches}, "role": "answerer"},
-            {"userId": 1}
-        )
-        new_ids.update(u["userId"] for u in batch_users if u.get("userId"))
+        clean_batches = [str(b).strip() for b in batches if str(b).strip()]
+        batch_users = list(db.users.find(
+            {"role": "answerer", "$or": [
+                {"batch": {"$in": clean_batches}},
+                {"batches": {"$in": clean_batches}},
+                {"courseStream": {"$in": clean_batches}}
+            ]},
+            {"userId": 1, "naxUnid": 1}
+        ))
+        for bu in batch_users:
+            if bu.get("userId"):
+                new_ids.add(str(bu["userId"]).strip())
+            if bu.get("naxUnid"):
+                new_ids.add(str(bu["naxUnid"]).strip())
 
     to_insert = [uid for uid in new_ids if uid not in already_assigned]
     if to_insert:
@@ -645,7 +654,10 @@ def assign_series(series_id):
         assigned_count = len(to_insert)
         db.test_series.update_one(
             {"_id": oid},
-            {"$inc": {"assignmentCount": assigned_count}}
+            {
+                "$inc": {"assignmentCount": assigned_count},
+                "$addToSet": {"assignedStudentIds": {"$each": list(new_ids)}}
+            }
         )
 
     return jsonify({"assigned": assigned_count, "alreadyAssigned": len(already_assigned)})

@@ -34,12 +34,15 @@ export function getMediaUrl(url?: string): string {
   if (url.startsWith("blob:") || url.startsWith("data:")) {
     return url;
   }
-  if (url.startsWith("http://") || url.startsWith("https://")) {
-    return url.replace(/\/uploads\//g, "/api/uploads/");
+  // Strip hardcoded localhost / 127.0.0.1 origins saved in legacy DB records
+  let cleanUrl = url.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i, "");
+
+  if (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) {
+    return cleanUrl.replace(/\/uploads\//g, "/api/uploads/");
   }
   const base = getApiBase();
   const rootBase = base.replace(/\/api$/, "");
-  let cleanPath = url.startsWith("/") ? url : `/${url}`;
+  let cleanPath = cleanUrl.startsWith("/") ? cleanUrl : `/${cleanUrl}`;
   if (cleanPath.startsWith("/uploads/")) {
     cleanPath = `/api${cleanPath}`;
   }
