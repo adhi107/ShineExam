@@ -245,6 +245,20 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadPortal(); }, [userName]);
+  // When user switches to Reports view, reload history if it's empty
+  useEffect(() => {
+    if (view === "report" && history.length === 0) {
+      apiGet<{ history: TestHistoryItem[] }>(`/answerer/history?userId=${encodeURIComponent(userName)}`)
+        .then(res => {
+          const h = res.history || [];
+          setHistory(h);
+          if (h.length && !selectedReport) setSelectedReport(h[0]);
+        }).catch(() => {});
+    }
+  }, [view, userName]);
+  useEffect(() => {
+    if (history.length && !selectedReport) setSelectedReport(history[0]);
+  }, [history]);
   useEffect(() => {
     if (!selectedReport?.attemptId) { setReportDetail(null); return; }
     apiGet<{ result: ResultDetail }>(`/answerer/results/${selectedReport.attemptId}`)
@@ -648,7 +662,7 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
               >
                 <span className="test-tab-icon">{tab === "active" ? "◉" : tab === "upcoming" ? "◷" : tab === "missed" ? "⊘" : "✓"}</span>
                 <span className="test-tab-label">{tab[0].toUpperCase()+tab.slice(1)}</span>
-                <i className="test-tab-badge">{selectedExamPage ? scopedTests(tab).length : tab === "completed" ? history.length : tests.filter(t => categoryFor(t) === tab).length}</i>
+                <i className="test-tab-badge">{selectedExamPage ? scopedTests(tab).length : tests.filter(t => categoryFor(t) === tab).length}</i>
               </button>
             ))}
           </div>

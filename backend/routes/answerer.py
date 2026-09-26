@@ -567,10 +567,45 @@ def list_assigned_tests():
         or_clauses.append({"assignedBatches": user_batch})
         or_clauses.append({"batch": user_batch})
 
+    # Batch-load all submitted/in-progress attempts and results for this user
+    # so we don't do N+1 DB hits inside the exam loop.
+    submitted_exam_ids = set()
+    in_progress_map = {}  # examId(str) -> attempt doc
+
+    for attempt in db.attempts.find({"userId": {"$in": user_ids}}):
+        eid = str(attempt.get("examId") or "")
+        status = attempt.get("status", "")
+        if status == "submitted":
+            submitted_exam_ids.add(eid)
+        elif status == "in_progress":
+            # keep the most recent in-progress
+            existing = in_progress_map.get(eid)
+            if not existing or (attempt.get("updatedAt") or attempt.get("createdAt")) > (existing.get("updatedAt") or existing.get("createdAt")):
+                in_progress_map[eid] = attempt
+
+    # Also check results collection for attempts not in db.attempts (re-seeded DBs)
+    for result in db.results.find({"userId": {"$in": user_ids}}, {"examId": 1}):
+        eid = str(result.get("examId") or "")
+        if eid:
+            submitted_exam_ids.add(eid)
+
+    # Convert submitted examIds to ObjectIds for query
+    from bson import ObjectId as BsonObjectId
+    submitted_oid_list = []
+    for eid in submitted_exam_ids:
+        try:
+            submitted_oid_list.append(BsonObjectId(eid))
+        except Exception:
+            pass
+
+    # Include completed exams (attempted ones) in addition to active ones
+    attempted_clause = [{"_id": {"$in": submitted_oid_list}}] if submitted_oid_list else []
     exam_query = {
         **tenant_filter,
-        "status": {"$in": ["published", "active", "Ongoing", "Published", "Active"]},
-        "$or": or_clauses
+        "$or": [
+            {"$and": [{"status": {"$in": ["published", "active", "Ongoing", "Published", "Active"]}}, {"$or": or_clauses}]},
+            *attempted_clause,
+        ]
     }
     exams = list(db.exams.find(exam_query).sort("createdAt", -1))
 
@@ -604,21 +639,13 @@ def list_assigned_tests():
         
         question_types_str = ", ".join(sorted(question_types)) if question_types else "Mixed"
 
-        # Check candidate attempts for this exam
-        submitted_attempt = db.attempts.find_one({
-            "examId": e["_id"],
-            "userId": userId,
-            "status": "submitted"
-        })
-        in_progress_attempt = db.attempts.find_one({
-            "examId": e["_id"],
-            "userId": userId,
-            "status": "in_progress"
-        })
+        # Use the batch-loaded attempt data (no N+1 queries)
+        exam_id_str = str(e["_id"])
+        has_attempted = exam_id_str in submitted_exam_ids
+        in_progress_attempt = in_progress_map.get(exam_id_str)
 
-        has_attempted = submitted_attempt is not None
-        attempt_status = "submitted" if submitted_attempt else ("in_progress" if in_progress_attempt else "not_started")
-        
+        attempt_status = "submitted" if has_attempted else ("in_progress" if in_progress_attempt else "not_started")
+
         answered_count = 0
         in_progress_id = None
         time_spent_sec = 0
