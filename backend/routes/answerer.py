@@ -439,6 +439,7 @@ def get_history():
     if not userId:
         return jsonify({"error": "userId is required"}), 400
 
+    db = get_db()
     import re
     identities = {userId, userId.lower(), userId.upper(), userId.capitalize()}
     try:

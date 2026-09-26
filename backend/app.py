@@ -290,9 +290,16 @@ def create_app() -> Flask:
         print(f"[{ts}] [ERROR 500] {request.method} {request.path}\n{err_tb}", flush=True)
         return jsonify({"error": "Internal server error"}), 500
 
-    @app.errorhandler(413)
-    def request_entity_too_large(_):
-        return jsonify({"error": "File too large. Maximum upload size is 2 GB."}), 413
+    # Auto-seed master database on fresh initialization if empty
+    try:
+        from config.db import get_db
+        _db = get_db()
+        if _db.exams.count_documents({}) == 0:
+            import threading
+            from seed import seed_db
+            threading.Thread(target=seed_db, kwargs={"drop": False}, daemon=True).start()
+    except Exception as _e:
+        print(f"[INIT] Database auto-seed check skipped: {_e}", flush=True)
 
     return app
 

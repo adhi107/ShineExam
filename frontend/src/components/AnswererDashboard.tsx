@@ -212,18 +212,20 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
   const loadPortal = async () => {
     setLoading(true);
     try {
-      const [testRes, historyRes] = await Promise.all([
+      const [testRes, historyRes] = await Promise.allSettled([
         apiGet<{ tests: AssignedTest[] }>(`/answerer/tests?userId=${encodeURIComponent(userName)}`),
         apiGet<{ history: TestHistoryItem[] }>(`/answerer/history?userId=${encodeURIComponent(userName)}`),
       ]);
-      setTests(testRes.tests || []);
-      setHistory(historyRes.history || []);
+      const loadedTests = testRes.status === "fulfilled" ? (testRes.value?.tests || []) : [];
+      const loadedHistory = historyRes.status === "fulfilled" ? (historyRes.value?.history || []) : [];
+      setTests(loadedTests);
+      setHistory(loadedHistory);
       apiGet<{categories:CategoryData[]}>(`/answerer/exam-categories?userId=${encodeURIComponent(userName)}`).then(res=>setCategoryData(res.categories||[])).catch(()=>setCategoryData([]));
       apiGet<{ notifications: PortalNotification[] }>(`/answerer/notifications?userId=${encodeURIComponent(userName)}`)
         .then(res => setNotifications(res.notifications || [])).catch(() => setNotifications([]));
       apiGet<{ bookmarks: CandidateBookmark[] }>(`/answerer/bookmarks?userId=${encodeURIComponent(userName)}`)
         .then(res => setBookmarks(res.bookmarks || [])).catch(() => setBookmarks([]));
-      if (!selectedReport && historyRes.history?.length) setSelectedReport(historyRes.history[0]);
+      if (!selectedReport && loadedHistory.length) setSelectedReport(loadedHistory[0]);
     } catch (error) {
       console.error(error);
     } finally { setLoading(false); }
