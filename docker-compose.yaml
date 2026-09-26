@@ -5,23 +5,18 @@ services:
     build: ./backend
     container_name: exam_app_backend
     restart: always
-    ports:
-      - "5001:5001"
+    network_mode: "host"
     env_file:
       - ./backend/.env
     volumes:
       # Persistent host-bind mount: all uploaded videos, PDFs, and handouts stay permanently on the host disk
       - ./backend/uploads:/app/uploads
-    extra_hosts:
-      # Allows backend container to connect directly to the host machine's MongoDB instance
-      - "host.docker.internal:host-gateway"
 
   exam-portal-frontend:
     build: ./frontend
     container_name: exam_app_frontend
     restart: always
-    ports:
-      - "3001:3001"
+    network_mode: "host"
     env_file:
       - ./frontend/.env
     depends_on:
