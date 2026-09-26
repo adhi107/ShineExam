@@ -434,7 +434,7 @@ def upload_ca_attachment():
     file.save(save_path)
     file_size = save_path.stat().st_size
 
-    file_url = f"/uploads/attachments/{unique_name}"
+    file_url = f"/api/uploads/attachments/{unique_name}"
     return jsonify({
         "attachment": {
             "name": filename,
@@ -468,7 +468,7 @@ def parse_current_affairs_document():
     with open(save_path, "wb") as f:
         f.write(file_bytes)
 
-    file_url = f"/uploads/attachments/{unique_name}"
+    file_url = f"/api/uploads/attachments/{unique_name}"
     file_size = len(file_bytes)
 
     # Extract text and structure
@@ -647,8 +647,8 @@ def delete_article(article_id):
     attachments = doc.get("attachments", [])
     for att in attachments:
         url = att.get("url", "")
-        if url.startswith("/uploads/attachments/"):
-            fname = url.split("/")[-1]
+        if "/attachments/" in url:
+            fname = url.split("/attachments/")[-1].split("?")[0]
             fpath = UPLOAD_ATTACHMENTS_DIR / fname
             if fpath.exists():
                 try:
@@ -691,8 +691,8 @@ def delete_article_attachment(article_id, attachment_name):
         else:
             new_attachments.append(att)
 
-    if removed_url and removed_url.startswith("/uploads/attachments/"):
-        fname = removed_url.split("/")[-1]
+    if removed_url and "/attachments/" in removed_url:
+        fname = removed_url.split("/attachments/")[-1].split("?")[0]
         fpath = UPLOAD_ATTACHMENTS_DIR / fname
         if fpath.exists():
             try:

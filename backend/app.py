@@ -78,10 +78,51 @@ def create_app() -> Flask:
             video_file = clean_name.split("videos/", 1)[-1]
             from routes.admin_videos import stream_video
             return stream_video(video_file)
+
         uploads_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
-        resp = send_from_directory(uploads_dir, filename)
+        file_path = os.path.join(uploads_dir, filename)
+
+        if not os.path.exists(file_path):
+            return jsonify({"error": "File not found"}), 404
+
+        import mimetypes
+        from flask import send_file
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        mime, _ = mimetypes.guess_type(file_path)
+        if not mime:
+            mime_map = {
+                "pdf": "application/pdf",
+                "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "doc": "application/msword",
+                "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "xls": "application/vnd.ms-excel",
+                "csv": "text/csv",
+                "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                "ppt": "application/vnd.ms-powerpoint",
+                "txt": "text/plain",
+                "epub": "application/epub+zip",
+                "png": "image/png",
+                "jpg": "image/jpeg",
+                "jpeg": "image/jpeg",
+                "webp": "image/webp",
+            }
+            mime = mime_map.get(ext, "application/octet-stream")
+
+        as_attachment = request.args.get("download") in ("1", "true")
+        download_name = request.args.get("filename") or os.path.basename(filename)
+
+        resp = send_file(
+            file_path,
+            mimetype=mime,
+            as_attachment=as_attachment,
+            download_name=download_name,
+            conditional=True
+        )
         resp.headers["Access-Control-Allow-Origin"] = "*"
         resp.headers["Access-Control-Allow-Methods"] = "GET, HEAD, OPTIONS"
+        resp.headers["Access-Control-Expose-Headers"] = "Content-Disposition, Content-Type, Content-Length, Accept-Ranges"
+        resp.headers["Accept-Ranges"] = "bytes"
+        resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         resp.headers.pop("X-Frame-Options", None)
         return resp
 

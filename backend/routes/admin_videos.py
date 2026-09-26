@@ -324,6 +324,13 @@ def complete_chunked_upload():
                 with open(part_path, "rb", buffering=4 * 1024 * 1024) as f_in:
                     shutil.copyfileobj(f_in, f_out, length=4 * 1024 * 1024)
 
+        # Optimize MP4 container with FastStart (moves moov atom to the front for instant 0-delay playback)
+        try:
+            from utils.mp4_faststart import optimize_mp4_faststart
+            optimize_mp4_faststart(final_path)
+        except Exception:
+            pass
+
         # Asynchronous cleanup so client response is not delayed by disk deletions
         def async_cleanup(p):
             shutil.rmtree(p, ignore_errors=True)
@@ -660,78 +667,19 @@ def stream_video(filename: str):
             resp.headers["Access-Control-Expose-Headers"] = "Content-Range, Content-Length, Accept-Ranges, ETag, Content-Type"
             return resp
 
-        # 4MB burst chunk window for instant frame-1 start and ultra-smooth seeking
-        CHUNK_SIZE = 4 * 1024 * 1024
-        BUFFER_SIZE = 262144  # 256KB buffer for optimal disk-to-socket throughput
-
-        range_header = request.headers.get("Range", None)
-
-        if range_header:
-            match = re.search(r"bytes=(\d+)-(\d*)", range_header)
-            if match:
-                start = int(match.group(1))
-                end_group = match.group(2)
-                if end_group:
-                    end = int(end_group)
-                else:
-                    # Burst first chunk or sequential window
-                    end = min(start + CHUNK_SIZE - 1, total_size - 1)
-                
-                if start >= total_size:
-                    return Response(
-                        status=416,
-                        headers={"Content-Range": f"bytes */{total_size}"}
-                    )
-                end = min(end, total_size - 1)
-                content_length = end - start + 1
-
-                def generate_range():
-                    with open(video_path, "rb", buffering=BUFFER_SIZE) as f:
-                        f.seek(start)
-                        remaining = content_length
-                        while remaining > 0:
-                            chunk = f.read(min(BUFFER_SIZE, remaining))
-                            if not chunk:
-                                break
-                            remaining -= len(chunk)
-                            yield chunk
-
-                resp = Response(
-                    generate_range(),
-                    status=206,
-                    mimetype=mime,
-                    direct_passthrough=True
-                )
-                resp.headers["Content-Range"] = f"bytes {start}-{end}/{total_size}"
-                resp.headers["Content-Length"] = str(content_length)
-                resp.headers["Accept-Ranges"] = "bytes"
-                resp.headers["ETag"] = etag
-                resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
-                resp.headers["Access-Control-Allow-Origin"] = "*"
-                resp.headers["Access-Control-Expose-Headers"] = "Content-Range, Content-Length, Accept-Ranges, ETag, Content-Type"
-                return resp
-
-        # Default streaming generator
-        def generate_full():
-            with open(video_path, "rb", buffering=BUFFER_SIZE) as f:
-                while True:
-                    chunk = f.read(BUFFER_SIZE)
-                    if not chunk:
-                        break
-                    yield chunk
-
-        resp = Response(
-            generate_full(),
-            status=200,
+        # Native high-performance conditional send_file with OS-level kernel file wrapper
+        resp = send_file(
+            video_path,
             mimetype=mime,
-            direct_passthrough=True
+            as_attachment=False,
+            conditional=True,
+            etag=etag
         )
-        resp.headers["Content-Length"] = str(total_size)
         resp.headers["Accept-Ranges"] = "bytes"
-        resp.headers["ETag"] = etag
         resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         resp.headers["Access-Control-Allow-Origin"] = "*"
         resp.headers["Access-Control-Expose-Headers"] = "Content-Range, Content-Length, Accept-Ranges, ETag, Content-Type"
+        resp.headers.pop("X-Frame-Options", None)
         return resp
 
     except Exception as e:

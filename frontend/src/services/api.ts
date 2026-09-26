@@ -31,11 +31,18 @@ export function buildUrl(path: string): string {
 
 export function getMediaUrl(url?: string): string {
   if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:") || url.startsWith("data:")) {
+  if (url.startsWith("blob:") || url.startsWith("data:")) {
     return url;
   }
-  const rootBase = getApiBase().replace(/\/api$/, "");
-  const cleanPath = url.startsWith("/") ? url : `/${url}`;
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url.replace(/\/uploads\//g, "/api/uploads/");
+  }
+  const base = getApiBase();
+  const rootBase = base.replace(/\/api$/, "");
+  let cleanPath = url.startsWith("/") ? url : `/${url}`;
+  if (cleanPath.startsWith("/uploads/")) {
+    cleanPath = `/api${cleanPath}`;
+  }
   return `${rootBase}${cleanPath}`;
 }
 

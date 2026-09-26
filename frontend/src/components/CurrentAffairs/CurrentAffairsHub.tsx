@@ -201,6 +201,44 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
     };
   }, [previewDoc?.url]);
 
+  const handleDownloadFile = async (url: string, fileName: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!url) return;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Fetch failed");
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = blobUrl;
+      a.download = fileName || "document";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(blobUrl);
+      }, 1000);
+    } catch {
+      const downloadUrl = url.includes("?")
+        ? `${url}&download=1&filename=${encodeURIComponent(fileName)}`
+        : `${url}?download=1&filename=${encodeURIComponent(fileName)}`;
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = downloadUrl;
+      a.download = fileName;
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+      }, 1000);
+    }
+  };
+
   // Admin authoring state
   const [createModal, setCreateModal] = useState(false);
   const [editingArticleId, setEditingArticleId] = useState<string | null>(null);
@@ -1160,16 +1198,14 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
                           >
                             View
                           </button>
-                          <a
+                          <button
+                            type="button"
                             className="ca-btn ca-btn-secondary"
-                            href={fullUrl || "#"}
-                            download={att.name}
-                            target="_blank"
-                            rel="noreferrer"
+                            onClick={(e) => handleDownloadFile(fullUrl, att.name, e)}
                             title="Download Document"
                           >
                             <DownloadIcon size={13} style={{ marginRight: 3 }} /> Download
-                          </a>
+                          </button>
                           {isAdmin && (
                             <button
                               type="button"
@@ -1588,16 +1624,14 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
                 >
                   ↗ Full Tab
                 </a>
-                <a
+                <button
+                  type="button"
                   className="ca-btn ca-btn-sm ca-btn-secondary"
-                  href={docBlobUrl || previewDoc.url}
-                  download={previewDoc.name}
-                  target="_blank"
-                  rel="noreferrer"
+                  onClick={(e) => handleDownloadFile(docBlobUrl || previewDoc.url, previewDoc.name, e)}
                   title="Download Document"
                 >
                   <DownloadIcon size={13} style={{ marginRight: 4 }} /> Download
-                </a>
+                </button>
                 <button className="ca-modal-close" onClick={() => setPreviewDoc(null)} title="Close preview">
                   ✕
                 </button>
@@ -1624,15 +1658,13 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
                   <p style={{ color: "#64748b", maxWidth: 360, margin: "0 0 18px", fontSize: "0.88rem" }}>
                     This study document format can be opened directly or downloaded to your device.
                   </p>
-                  <a
+                  <button
+                    type="button"
                     className="ca-btn ca-btn-primary"
-                    href={docBlobUrl || previewDoc.url}
-                    download={previewDoc.name}
-                    target="_blank"
-                    rel="noreferrer"
+                    onClick={(e) => handleDownloadFile(docBlobUrl || previewDoc.url, previewDoc.name, e)}
                   >
-                    <DownloadIcon size={14} style={{ marginRight: 6 }} /> Open / Download File
-                  </a>
+                    <DownloadIcon size={14} style={{ marginRight: 6 }} /> Download File
+                  </button>
                 </div>
               )}
             </div>
