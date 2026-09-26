@@ -729,21 +729,6 @@ export const StudentClasses: React.FC<StudentClassesProps> = ({ userId }) => {
                   </div>
                 </div>
               )}
-
-              {/* Lecture Overview & Keyboard Cheatsheet */}
-              <div className="student-player-footer">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
-                  <div>
-                    <strong>Lecture Overview:</strong>
-                    <p style={{ margin: "4px 0 0", color: "#475569", fontSize: "0.85rem" }}>
-                      {activeClass.description || "Assigned conceptual video lecture."}
-                    </p>
-                  </div>
-                  <div className="player-shortcuts-hint">
-                    <small>⌨️ Shortcuts: Space (Play/Pause) • J/L (Seek 10s) • M (Mute) • F (Fullscreen)</small>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         )}

@@ -94,30 +94,39 @@ def list_current_affairs():
     """List Current Affairs articles and practice items."""
     db = get_db()
     tenant_id = get_request_tenant_id()
-    query = {}
+    and_conditions = []
+
     if tenant_id and tenant_id != "all":
-        query["$or"] = [
-            {"tenantId": tenant_id},
-            {"tenantId": {"$exists": False}},
-            {"tenantId": None},
-        ]
+        and_conditions.append({
+            "$or": [
+                {"tenantId": tenant_id},
+                {"tenantId": {"$exists": False}},
+                {"tenantId": None},
+            ]
+        })
 
     category = request.args.get("category")
     month = request.args.get("month")
     search = request.args.get("search", "").strip()
 
-    if category:
-        query["category"] = category
+    if category and category.lower() != "all":
+        and_conditions.append({"category": category})
     if month:
-        query["month"] = month
+        and_conditions.append({"month": month})
     if search:
-        query["$or"] = [
-            {"title": {"$regex": search, "$options": "i"}},
-            {"summary": {"$regex": search, "$options": "i"}},
-            {"tags": {"$regex": search, "$options": "i"}}
-        ]
+        and_conditions.append({
+            "$or": [
+                {"title": {"$regex": search, "$options": "i"}},
+                {"shortSummary": {"$regex": search, "$options": "i"}},
+                {"summary": {"$regex": search, "$options": "i"}},
+                {"detailedExplanation": {"$regex": search, "$options": "i"}},
+                {"tags": {"$regex": search, "$options": "i"}},
+            ]
+        })
 
-    items = list(db.current_affairs.find(query).sort("publishDate", -1).limit(50))
+    query = {"$and": and_conditions} if and_conditions else {}
+
+    items = list(db.current_affairs.find(query).sort("publishDate", -1).limit(100))
     return jsonify({
         "categories": CA_CATEGORIES,
         "currentAffairs": to_jsonable([_serialize_doc(i) for i in items])

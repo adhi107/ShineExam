@@ -211,14 +211,23 @@ def add_security_headers(response):
     Add standard HTTP security headers to a Flask response.
     Call this from an after_request hook or per-response.
     """
-    response.headers["X-Content-Type-Options"] = "nosniff"
     path = request.path if request else ""
-    if not (path.startswith("/uploads") or path.startswith("/api/uploads")):
+    is_media = (
+        path.startswith("/uploads")
+        or path.startswith("/api/uploads")
+        or "/stream/" in path
+        or "/classes/stream" in path
+    )
+    if not is_media:
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
         response.headers["Pragma"] = "no-cache"
     else:
         response.headers.pop("X-Frame-Options", None)
+        if "Cache-Control" not in response.headers:
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        if "Pragma" in response.headers:
+            response.headers.pop("Pragma", None)
 
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"

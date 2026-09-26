@@ -655,14 +655,14 @@ def stream_video(filename: str):
             resp.headers["Content-Length"] = str(total_size)
             resp.headers["Accept-Ranges"] = "bytes"
             resp.headers["ETag"] = etag
-            resp.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=604800"
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
             resp.headers["Access-Control-Allow-Origin"] = "*"
             resp.headers["Access-Control-Expose-Headers"] = "Content-Range, Content-Length, Accept-Ranges, ETag, Content-Type"
             return resp
 
-        # 2MB burst chunk window for lightning-fast initial start and smooth seeking
-        CHUNK_SIZE = 2 * 1024 * 1024
-        BUFFER_SIZE = 131072  # 128KB buffer for optimal disk-to-socket throughput
+        # 4MB burst chunk window for instant frame-1 start and ultra-smooth seeking
+        CHUNK_SIZE = 4 * 1024 * 1024
+        BUFFER_SIZE = 262144  # 256KB buffer for optimal disk-to-socket throughput
 
         range_header = request.headers.get("Range", None)
 
@@ -706,7 +706,7 @@ def stream_video(filename: str):
                 resp.headers["Content-Length"] = str(content_length)
                 resp.headers["Accept-Ranges"] = "bytes"
                 resp.headers["ETag"] = etag
-                resp.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=604800"
+                resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
                 resp.headers["Access-Control-Allow-Origin"] = "*"
                 resp.headers["Access-Control-Expose-Headers"] = "Content-Range, Content-Length, Accept-Ranges, ETag, Content-Type"
                 return resp
@@ -729,7 +729,7 @@ def stream_video(filename: str):
         resp.headers["Content-Length"] = str(total_size)
         resp.headers["Accept-Ranges"] = "bytes"
         resp.headers["ETag"] = etag
-        resp.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=604800"
+        resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         resp.headers["Access-Control-Allow-Origin"] = "*"
         resp.headers["Access-Control-Expose-Headers"] = "Content-Range, Content-Length, Accept-Ranges, ETag, Content-Type"
         return resp

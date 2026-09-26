@@ -323,16 +323,19 @@ def get_admin_ca_dashboard_stats():
 
 @ca_engine_bp.route("/articles", methods=["GET"])
 def list_articles():
-    """List current affairs with advanced filters."""
+    """List current affairs with advanced compound filters."""
     db = get_db()
     tenant_id = get_request_tenant_id()
-    query = {}
+    and_conditions = []
+
     if tenant_id and tenant_id != "all":
-        query["$or"] = [
-            {"tenantId": tenant_id},
-            {"tenantId": {"$exists": False}},
-            {"tenantId": None},
-        ]
+        and_conditions.append({
+            "$or": [
+                {"tenantId": tenant_id},
+                {"tenantId": {"$exists": False}},
+                {"tenantId": None},
+            ]
+        })
 
     category = request.args.get("category")
     status = request.args.get("status")
@@ -344,25 +347,38 @@ def list_articles():
     is_important = request.args.get("isImportant")
     search = request.args.get("search", "").strip()
 
-    if category: query["category"] = category
-    if status: query["status"] = status
-    if exam: query["applicableExams"] = exam
-    if stage: query["examRelevance"] = stage
-    if priority: query["priority"] = priority
-    if date: query["publishDate"] = date
-    if month: query["month"] = month
-    if is_important is not None: query["isHighlyImportant"] = is_important.lower() in ("true", "1")
+    if category and category.lower() != "all":
+        and_conditions.append({"category": category})
+    if status:
+        and_conditions.append({"status": status})
+    if exam:
+        and_conditions.append({"applicableExams": exam})
+    if stage:
+        and_conditions.append({"examRelevance": stage})
+    if priority:
+        and_conditions.append({"priority": priority})
+    if date:
+        and_conditions.append({"publishDate": date})
+    if month:
+        and_conditions.append({"month": month})
+    if is_important is not None:
+        and_conditions.append({"isHighlyImportant": is_important.lower() in ("true", "1")})
     if search:
-        query["$or"] = [
-            {"title": {"$regex": search, "$options": "i"}},
-            {"shortSummary": {"$regex": search, "$options": "i"}},
-            {"detailedExplanation": {"$regex": search, "$options": "i"}},
-            {"tags": {"$regex": search, "$options": "i"}},
-            {"keywords": {"$regex": search, "$options": "i"}},
-        ]
+        and_conditions.append({
+            "$or": [
+                {"title": {"$regex": search, "$options": "i"}},
+                {"shortSummary": {"$regex": search, "$options": "i"}},
+                {"detailedExplanation": {"$regex": search, "$options": "i"}},
+                {"category": {"$regex": search, "$options": "i"}},
+                {"tags": {"$regex": search, "$options": "i"}},
+                {"keywords": {"$regex": search, "$options": "i"}},
+            ]
+        })
+
+    query = {"$and": and_conditions} if and_conditions else {}
 
     page = max(1, int(request.args.get("page", 1)))
-    limit = min(200, max(1, int(request.args.get("limit", 30))))
+    limit = min(200, max(1, int(request.args.get("limit", 50))))
     skip = (page - 1) * limit
 
     total = db.current_affairs.count_documents(query)
@@ -525,6 +541,7 @@ def create_article():
         "detailedExplanation": str(data.get("detailedExplanation", "")).strip(),
         "keyPoints": data.get("keyPoints", []),
         "importantFacts": data.get("importantFacts", []),
+        "mcqPracticeQuestions": data.get("mcqPracticeQuestions", []),
         "publishDate": pub_date,
         "month": data.get("month", pub_date[:7]),
         "scheduledAt": data.get("scheduledAt"),
@@ -576,7 +593,7 @@ def create_article():
 
 @ca_engine_bp.route("/articles/<article_id>", methods=["PUT"])
 def update_article(article_id):
-    """Admin: Update an existing article."""
+    """Admin: Update an existing article or published document."""
     db = get_db()
     try:
         oid = ObjectId(article_id)
@@ -588,10 +605,10 @@ def update_article(article_id):
 
     allowed = [
         "title", "shortSummary", "detailedExplanation", "keyPoints", "importantFacts",
-        "publishDate", "month", "scheduledAt", "category", "subcategory", "priority",
-        "isHighlyImportant", "examRelevance", "applicableExams", "relatedSyllabusTopics",
-        "relatedSubjects", "targetAudience", "assignedBatches", "assignedStudentIds",
-        "source", "attachments", "pdfUrl", "imageUrl", "tags",
+        "mcqPracticeQuestions", "publishDate", "month", "scheduledAt", "category",
+        "subcategory", "priority", "isHighlyImportant", "examRelevance", "applicableExams",
+        "relatedSyllabusTopics", "relatedSubjects", "targetAudience", "assignedBatches",
+        "assignedStudentIds", "source", "attachments", "pdfUrl", "imageUrl", "tags",
         "keywords", "status"
     ]
     updates = {k: data[k] for k in allowed if k in data}
@@ -615,19 +632,83 @@ def update_article(article_id):
 
 @ca_engine_bp.route("/articles/<article_id>", methods=["DELETE"])
 def delete_article(article_id):
-    """Admin: Delete article."""
+    """Admin: Delete published article and its associated attachment files."""
     db = get_db()
     try:
         oid = ObjectId(article_id)
     except Exception:
         return jsonify({"error": "Invalid article ID"}), 400
 
+    doc = db.current_affairs.find_one({"_id": oid})
+    if not doc:
+        return jsonify({"error": "Article not found"}), 404
+
+    # Remove physical attachments from disk if they reside in UPLOAD_ATTACHMENTS_DIR
+    attachments = doc.get("attachments", [])
+    for att in attachments:
+        url = att.get("url", "")
+        if url.startswith("/uploads/attachments/"):
+            fname = url.split("/")[-1]
+            fpath = UPLOAD_ATTACHMENTS_DIR / fname
+            if fpath.exists():
+                try:
+                    fpath.unlink()
+                except Exception:
+                    pass
+
     res = db.current_affairs.delete_one({"_id": oid})
     if res.deleted_count == 0:
         return jsonify({"error": "Article not found"}), 404
 
-    log_audit_event("delete_current_affairs", {"articleId": article_id})
-    return jsonify({"message": "Article deleted successfully"})
+    # Clean up associated bookmarks & notes
+    db.current_affair_bookmarks.delete_many({"articleId": article_id})
+    db.current_affair_notes.delete_many({"articleId": article_id})
+
+    log_audit_event("delete_current_affairs", {"articleId": article_id, "title": doc.get("title")})
+    return jsonify({"message": "Current affairs document deleted successfully", "id": article_id})
+
+
+@ca_engine_bp.route("/articles/<article_id>/attachments/<path:attachment_name>", methods=["DELETE"])
+def delete_article_attachment(article_id, attachment_name):
+    """Admin: Delete a specific attached document from a published article."""
+    db = get_db()
+    try:
+        oid = ObjectId(article_id)
+    except Exception:
+        return jsonify({"error": "Invalid article ID"}), 400
+
+    doc = db.current_affairs.find_one({"_id": oid})
+    if not doc:
+        return jsonify({"error": "Article not found"}), 404
+
+    attachments = doc.get("attachments", [])
+    new_attachments = []
+    removed_url = None
+
+    for att in attachments:
+        if att.get("name") == attachment_name or att.get("url", "").endswith(attachment_name):
+            removed_url = att.get("url", "")
+        else:
+            new_attachments.append(att)
+
+    if removed_url and removed_url.startswith("/uploads/attachments/"):
+        fname = removed_url.split("/")[-1]
+        fpath = UPLOAD_ATTACHMENTS_DIR / fname
+        if fpath.exists():
+            try:
+                fpath.unlink()
+            except Exception:
+                pass
+
+    db.current_affairs.update_one(
+        {"_id": oid},
+        {"$set": {"attachments": new_attachments, "updatedAt": datetime.utcnow().isoformat()}}
+    )
+
+    return jsonify({
+        "message": "Attachment removed successfully",
+        "attachments": new_attachments
+    })
 
 
 # ────────────────────────────────────────────────────────────────

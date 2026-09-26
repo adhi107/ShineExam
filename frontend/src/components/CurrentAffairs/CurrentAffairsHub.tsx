@@ -203,6 +203,9 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
 
   // Admin authoring state
   const [createModal, setCreateModal] = useState(false);
+  const [editingArticleId, setEditingArticleId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ articleId: string; title: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [batches, setBatches] = useState<BatchOption[]>([]);
   const [students, setStudents] = useState<StudentOption[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -588,6 +591,113 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
     });
   };
 
+  const handleOpenCreateModal = () => {
+    setEditingArticleId(null);
+    setArticleForm({
+      title: "",
+      category: "Polity & Governance",
+      shortSummary: "",
+      detailedExplanation: "",
+      keyPoints: [],
+      importantFacts: [],
+      priority: "High",
+      isHighlyImportant: true,
+      sourceName: "The Hindu / PIB",
+      sourceUrl: "",
+      examRelevance: ["Prelims", "Mains"],
+      applicableExams: ["UPSC", "APPSC", "TSPSC"],
+      targetAudience: "all",
+      assignedBatches: [],
+      assignedStudentIds: [],
+      attachments: [],
+      mcqPracticeQuestions: []
+    });
+    setCreateModal(true);
+  };
+
+  const handleOpenEditModal = (art: CurrentAffairItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingArticleId(art.id);
+    setArticleForm({
+      title: art.title || "",
+      category: art.category || "Polity & Governance",
+      shortSummary: art.shortSummary || "",
+      detailedExplanation: art.detailedExplanation || "",
+      keyPoints: art.keyPoints || [],
+      importantFacts: art.importantFacts || [],
+      priority: art.priority || "High",
+      isHighlyImportant: Boolean(art.isHighlyImportant),
+      sourceName: art.source?.name || "The Hindu / PIB",
+      sourceUrl: art.source?.url || "",
+      examRelevance: art.examRelevance || ["Prelims", "Mains"],
+      applicableExams: art.applicableExams || ["UPSC", "APPSC", "TSPSC"],
+      targetAudience: art.targetAudience || "all",
+      assignedBatches: art.assignedBatches || [],
+      assignedStudentIds: art.assignedStudentIds || [],
+      attachments: art.attachments || [],
+      mcqPracticeQuestions: art.mcqPracticeQuestions || []
+    });
+    setCreateModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await apiDelete(`/admin/current-affairs/articles/${deleteTarget.articleId}`);
+      setArticles((prev) => prev.filter((a) => a.id !== deleteTarget.articleId));
+      if (activeArticle?.id === deleteTarget.articleId) {
+        setActiveArticle(null);
+      }
+      setAlertState({
+        isOpen: true,
+        title: "Document Deleted",
+        message: `"${deleteTarget.title}" has been permanently removed from current affairs.`,
+        variant: "success"
+      });
+      setDeleteTarget(null);
+      if (isAdmin) loadAdminStats();
+    } catch (err: any) {
+      setAlertState({
+        isOpen: true,
+        title: "Delete Failed",
+        message: err?.message || "Could not delete current affairs document.",
+        variant: "danger"
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDeleteHandout = async (articleId: string, attName: string) => {
+    try {
+      const res = await apiDelete<{ message: string; attachments: AttachmentItem[] }>(
+        `/admin/current-affairs/articles/${articleId}/attachments/${encodeURIComponent(attName)}`
+      );
+      if (res?.attachments) {
+        if (activeArticle && activeArticle.id === articleId) {
+          setActiveArticle({ ...activeArticle, attachments: res.attachments });
+        }
+        setArticles((prev) =>
+          prev.map((a) => (a.id === articleId ? { ...a, attachments: res.attachments } : a))
+        );
+      }
+      setAlertState({
+        isOpen: true,
+        title: "Handout Removed",
+        message: `Attached document "${attName}" removed from article.`,
+        variant: "success"
+      });
+    } catch (err: any) {
+      setAlertState({
+        isOpen: true,
+        title: "Removal Failed",
+        message: err?.message || "Could not remove handout.",
+        variant: "danger"
+      });
+    }
+  };
+
   const handleCreateArticle = async () => {
     if (!articleForm.title.trim() || !articleForm.shortSummary.trim()) {
       setAlertState({
@@ -600,8 +710,40 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
     }
 
     try {
-      await apiPost("/admin/current-affairs/articles", articleForm);
-      setCreateModal(false);
+      if (editingArticleId) {
+        const res = await apiPut<{ message: string; article: CurrentAffairItem }>(
+          `/admin/current-affairs/articles/${editingArticleId}`,
+          articleForm
+        );
+        if (res?.article) {
+          setArticles((prev) =>
+            prev.map((a) => (a.id === editingArticleId ? { ...a, ...res.article } : a))
+          );
+          if (activeArticle?.id === editingArticleId) {
+            setActiveArticle(res.article);
+          }
+        }
+        setCreateModal(false);
+        setEditingArticleId(null);
+        setAlertState({
+          isOpen: true,
+          title: "Article Updated",
+          message: "Current affairs document and attachments updated successfully.",
+          variant: "success"
+        });
+        loadArticles();
+      } else {
+        await apiPost("/admin/current-affairs/articles", articleForm);
+        setCreateModal(false);
+        setAlertState({
+          isOpen: true,
+          title: "Article Published",
+          message: "Current Affairs article with handouts & questions published successfully.",
+          variant: "success"
+        });
+        loadArticles();
+      }
+
       setArticleForm({
         title: "",
         category: "Polity & Governance",
@@ -621,19 +763,12 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
         attachments: [],
         mcqPracticeQuestions: []
       });
-      setAlertState({
-        isOpen: true,
-        title: "Article Published",
-        message: "Current Affairs article with handouts & questions published successfully.",
-        variant: "success"
-      });
-      loadArticles();
       if (isAdmin) loadAdminStats();
     } catch (err: any) {
       setAlertState({
         isOpen: true,
-        title: "Publishing Failed",
-        message: err?.message || "Could not publish article.",
+        title: editingArticleId ? "Update Failed" : "Publishing Failed",
+        message: err?.message || "Could not save article.",
         variant: "danger"
       });
     }
@@ -738,7 +873,7 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
             <button className="ca-btn ca-btn-secondary" onClick={() => setCreateQuizModal(true)}>
               <PlusIcon size={15} style={{ marginRight: 4 }} /> Create Daily Quiz
             </button>
-            <button className="ca-btn ca-btn-primary" onClick={() => setCreateModal(true)}>
+            <button className="ca-btn ca-btn-primary" onClick={handleOpenCreateModal}>
               <PlusIcon size={15} style={{ marginRight: 4 }} /> Publish Article
             </button>
           </div>
@@ -855,7 +990,30 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
                 ← Back to Articles
               </button>
 
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                {isAdmin && (
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <button
+                      type="button"
+                      className="ca-card-action-btn edit"
+                      onClick={() => handleOpenEditModal(activeArticle)}
+                      title="Edit Article / Document"
+                      style={{ padding: "6px 12px", fontSize: "0.8rem" }}
+                    >
+                      <EditIcon size={13} style={{ marginRight: 4 }} /> Edit Article
+                    </button>
+                    <button
+                      type="button"
+                      className="ca-card-action-btn delete"
+                      onClick={() => setDeleteTarget({ articleId: activeArticle.id, title: activeArticle.title })}
+                      title="Delete Published Document"
+                      style={{ padding: "6px 12px", fontSize: "0.8rem" }}
+                    >
+                      <TrashIcon size={13} style={{ marginRight: 4 }} /> Delete Document
+                    </button>
+                  </div>
+                )}
+
                 <div style={{ display: "flex", background: "#f1f5f9", borderRadius: 8, padding: 3, gap: 2 }}>
                   <button
                     style={{
@@ -993,7 +1151,7 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
                           </div>
                           <span className="ca-attach-meta">{formatFileSize(att.size)}</span>
                         </div>
-                        <div className="ca-attach-actions">
+                        <div className="ca-attach-actions" style={{ gridTemplateColumns: isAdmin ? "repeat(3, minmax(0, 1fr))" : "repeat(2, minmax(0, 1fr))" }}>
                           <button
                             type="button"
                             className="ca-btn ca-btn-primary"
@@ -1012,6 +1170,17 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
                           >
                             <DownloadIcon size={13} style={{ marginRight: 3 }} /> Download
                           </a>
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              className="ca-card-action-btn delete"
+                              onClick={() => handleDeleteHandout(activeArticle.id, att.name)}
+                              title="Delete this handout file"
+                              style={{ justifyContent: "center", height: "100%", borderRadius: 8 }}
+                            >
+                              <TrashIcon size={12} style={{ marginRight: 3 }} /> Remove
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -1158,8 +1327,33 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
                     onClick={() => setActiveArticle(art)}
                   >
                     <div className="ca-card-meta">
-                      <span className="ca-card-cat">{art.category}</span>
-                      <span>{art.publishDate}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span className="ca-card-cat">{art.category}</span>
+                        <span>{art.publishDate}</span>
+                      </div>
+                      {isAdmin && (
+                        <div className="ca-card-admin-actions" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            className="ca-card-action-btn edit"
+                            onClick={(e) => handleOpenEditModal(art, e)}
+                            title="Edit Article / Document"
+                          >
+                            <EditIcon size={12} /> Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="ca-card-action-btn delete"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget({ articleId: art.id, title: art.title });
+                            }}
+                            title="Delete Published Document"
+                          >
+                            <TrashIcon size={12} /> Delete
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <h3 className="ca-card-title">{art.title}</h3>
@@ -1456,7 +1650,7 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
         >
           <div className="ca-modal">
             <div className="ca-modal-header">
-              <h3>Publish Daily Current Affairs & Handouts</h3>
+              <h3>{editingArticleId ? "Edit Published Current Affairs Document" : "Publish Daily Current Affairs & Handouts"}</h3>
               <button className="ca-modal-close" onClick={() => setCreateModal(false)}>
                 ✕
               </button>
@@ -1702,11 +1896,64 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
             </div>
 
             <div className="ca-modal-footer">
-              <button className="ca-btn ca-btn-secondary" onClick={() => setCreateModal(false)}>
+              <button
+                type="button"
+                className="ca-btn ca-btn-secondary"
+                onClick={() => {
+                  setCreateModal(false);
+                  setEditingArticleId(null);
+                }}
+              >
                 Cancel
               </button>
-              <button className="ca-btn ca-btn-primary" onClick={handleCreateArticle}>
-                Publish Article
+              <button type="button" className="ca-btn ca-btn-primary" onClick={handleCreateArticle}>
+                {editingArticleId ? "Save Changes" : "Publish Article"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── DELETE CONFIRMATION MODAL ─────────────────────────────────── */}
+      {deleteTarget && (
+        <div className="ca-modal-overlay" onClick={() => !isDeleting && setDeleteTarget(null)}>
+          <div className="ca-modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+            <div className="ca-modal-header" style={{ borderBottom: "1px solid #fee2e2", background: "#fef2f2" }}>
+              <h3 style={{ color: "#991b1b", display: "flex", alignItems: "center", gap: 8 }}>
+                <TrashIcon size={18} color="#dc2626" />
+                Delete Published Document?
+              </h3>
+              <button className="ca-modal-close" onClick={() => !isDeleting && setDeleteTarget(null)}>
+                ✕
+              </button>
+            </div>
+            <div className="ca-modal-body" style={{ padding: "20px 24px" }}>
+              <p style={{ margin: "0 0 12px", color: "#1e293b", fontSize: "0.92rem", lineHeight: 1.5 }}>
+                Are you sure you want to permanently delete this published current affairs document?
+              </p>
+              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", fontWeight: 700, color: "#0f172a", fontSize: "0.88rem" }}>
+                📄 {deleteTarget.title}
+              </div>
+              <p style={{ margin: "14px 0 0", color: "#64748b", fontSize: "0.8rem" }}>
+                ⚠️ This will remove the article, all attached handouts, and student revision bookmarks. This action cannot be undone.
+              </p>
+            </div>
+            <div className="ca-modal-footer">
+              <button
+                type="button"
+                className="ca-btn ca-btn-secondary"
+                onClick={() => setDeleteTarget(null)}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="ca-btn ca-btn-danger"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? "Deleting..." : "Permanently Delete"}
               </button>
             </div>
           </div>
