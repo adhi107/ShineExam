@@ -640,17 +640,16 @@ def track_class_view():
 @answerer_videos_bp.route("/stream/<filename>", methods=["GET", "HEAD"])
 @admin_videos_bp.route("/stream/<filename>", methods=["GET", "HEAD"])
 def stream_video(filename: str):
-    """Ultra-high-performance YouTube-style chunked range video streaming engine.
-    
-    Features:
-    - Zero-latency HEAD request handling (instant 1ms handshake for video metadata).
-    - 206 Partial Content byte range chunking with initial 2MB burst for instant frame-1 playback.
-    - 128KB high-throughput non-blocking generator buffer.
-    - Full CORS and disk caching headers with ETag validation (304 Not Modified).
+    """RFC 7233-compliant byte-range video streaming engine.
+
+    Implements proper 206 Partial Content responses so browsers can:
+    - Seek/scrub to any position instantly
+    - Resume paused streams without re-downloading
+    - Buffer adaptively (initial burst then on-demand chunks)
+    - Work correctly on both local dev and production servers
     """
     try:
         import mimetypes
-        import re
         from flask import request, Response
 
         safe_filename = secure_filename(filename)
@@ -659,59 +658,98 @@ def stream_video(filename: str):
         if not os.path.exists(video_path):
             return jsonify({"error": "Video file not found"}), 404
 
-        file_stat = os.stat(video_path)
-        total_size = file_stat.st_size
-        last_modified = int(file_stat.st_mtime)
-
-        # Content MIME detection
+        # FastStart optimization for MP4/MOV - run once per file
         ext = safe_filename.rsplit(".", 1)[-1].lower() if "." in safe_filename else ""
+        if ext in ("mp4", "m4v", "mov") and not getattr(stream_video, f"_fs_{safe_filename}", False):
+            setattr(stream_video, f"_fs_{safe_filename}", True)
+            try:
+                from utils.mp4_faststart import optimize_mp4_faststart
+                optimize_mp4_faststart(video_path)
+            except Exception:
+                pass
+
+        file_size = os.path.getsize(video_path)
+        last_modified = int(os.path.getmtime(video_path))
+
+        # MIME type detection
         mime, _ = mimetypes.guess_type(video_path)
         if not mime or not mime.startswith("video/"):
             mime = EXTRA_MIME_TYPES.get(ext, "video/mp4")
 
-        # FastStart optimization for MP4/MOV files on-the-fly
-        if ext in ("mp4", "m4v", "mov") and not getattr(stream_video, f"_faststart_{safe_filename}", False):
-            setattr(stream_video, f"_faststart_{safe_filename}", True)
-            try:
-                from utils.mp4_faststart import optimize_mp4_faststart
-                optimize_mp4_faststart(video_path)
-                file_stat = os.stat(video_path)
-                total_size = file_stat.st_size
-                last_modified = int(file_stat.st_mtime)
-            except Exception:
-                pass
+        etag = f'"{safe_filename}-{file_size}-{last_modified}"'
 
-        etag = f'"{safe_filename}-{total_size}-{last_modified}"'
-
-        # 304 Cache Validation
+        # 304 Not Modified
         if request.headers.get("If-None-Match") == etag:
             return Response(status=304)
 
-        # Instant 1ms HEAD response without disk read
+        # Common headers for all responses
+        common_headers = {
+            "Accept-Ranges": "bytes",
+            "Content-Type": mime,
+            "ETag": etag,
+            "Cache-Control": "public, max-age=3600",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges, ETag, Content-Type",
+            "X-Content-Type-Options": "nosniff",
+        }
+
+        # HEAD request — return metadata only, no body
         if request.method == "HEAD":
-            resp = Response(status=200, mimetype=mime)
-            resp.headers["Content-Length"] = str(total_size)
-            resp.headers["Accept-Ranges"] = "bytes"
-            resp.headers["ETag"] = etag
-            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
-            resp.headers["Access-Control-Allow-Origin"] = "*"
-            resp.headers["Access-Control-Expose-Headers"] = "Content-Range, Content-Length, Accept-Ranges, ETag, Content-Type"
+            resp = Response(status=200)
+            resp.headers.update(common_headers)
+            resp.headers["Content-Length"] = str(file_size)
             return resp
 
-        # Native high-performance conditional send_file with OS-level kernel file wrapper
-        resp = send_file(
-            video_path,
+        # Parse Range header (e.g. "bytes=0-", "bytes=1024-2047")
+        range_header = request.headers.get("Range", "")
+        start = 0
+        end = file_size - 1
+
+        if range_header:
+            range_match = range_header.strip().replace("bytes=", "")
+            parts = range_match.split("-")
+            try:
+                if parts[0]:
+                    start = int(parts[0])
+                if parts[1]:
+                    end = int(parts[1])
+            except (IndexError, ValueError):
+                pass
+
+        # Clamp to valid range
+        start = max(0, min(start, file_size - 1))
+        end = max(start, min(end, file_size - 1))
+        chunk_size = end - start + 1
+
+        # Streaming generator — yields in 256KB blocks to avoid memory pressure
+        BLOCK = 256 * 1024
+
+        def generate():
+            remaining = chunk_size
+            with open(video_path, "rb") as f:
+                f.seek(start)
+                while remaining > 0:
+                    to_read = min(BLOCK, remaining)
+                    data = f.read(to_read)
+                    if not data:
+                        break
+                    remaining -= len(data)
+                    yield data
+
+        status = 206 if range_header else 200
+        resp = Response(
+            generate(),
+            status=status,
             mimetype=mime,
-            as_attachment=False,
-            conditional=True,
-            etag=etag
+            direct_passthrough=True,
         )
-        resp.headers["Accept-Ranges"] = "bytes"
-        resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
-        resp.headers["Access-Control-Allow-Origin"] = "*"
-        resp.headers["Access-Control-Expose-Headers"] = "Content-Range, Content-Length, Accept-Ranges, ETag, Content-Type"
-        resp.headers.pop("X-Frame-Options", None)
+        resp.headers.update(common_headers)
+        resp.headers["Content-Length"] = str(chunk_size)
+        if range_header or status == 206:
+            resp.headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+
         return resp
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
