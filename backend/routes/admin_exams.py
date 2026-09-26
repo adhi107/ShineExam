@@ -641,6 +641,8 @@ def assign_exam(exam_id: str):
             {"$setOnInsert": {"createdAt": now}, "$set": {"status": "assigned", "updatedAt": now}},
             upsert=True,
         )
+        # Clear past submitted attempts on explicit admin assignment/re-assignment
+        db.attempts.delete_many({"examId": oid, "userId": uid})
         upserts += 1
 
     # Also update the exam document itself
