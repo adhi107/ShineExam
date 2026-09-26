@@ -2,7 +2,7 @@ import os
 import re
 import uuid
 from datetime import datetime
-from flask import Blueprint, request, jsonify, send_from_directory, current_app, Response
+from flask import Blueprint, request, jsonify, send_from_directory, current_app, Response, send_file
 from werkzeug.utils import secure_filename
 from config.db import get_db
 from utils.tenant import get_request_tenant_id, build_tenant_filter, DEFAULT_TENANT_ID
@@ -649,6 +649,18 @@ def stream_video(filename: str):
         mime, _ = mimetypes.guess_type(video_path)
         if not mime or not mime.startswith("video/"):
             mime = EXTRA_MIME_TYPES.get(ext, "video/mp4")
+
+        # FastStart optimization for MP4/MOV files on-the-fly
+        if ext in ("mp4", "m4v", "mov") and not getattr(stream_video, f"_faststart_{safe_filename}", False):
+            setattr(stream_video, f"_faststart_{safe_filename}", True)
+            try:
+                from utils.mp4_faststart import optimize_mp4_faststart
+                optimize_mp4_faststart(video_path)
+                file_stat = os.stat(video_path)
+                total_size = file_stat.st_size
+                last_modified = int(file_stat.st_mtime)
+            except Exception:
+                pass
 
         etag = f'"{safe_filename}-{total_size}-{last_modified}"'
 

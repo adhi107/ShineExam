@@ -181,7 +181,9 @@ def create_app() -> Flask:
             or path.startswith("/api/super-admin")
             or path.startswith("/api/public")
             or path.startswith("/api/answerer/classes/stream")
+            or path.startswith("/api/admin/videos/stream")
             or path.startswith("/uploads")
+            or path.startswith("/api/uploads")
             or path == "/"
             or path == "/api/auth/login"
             or path == "/api/security/violation/block"
