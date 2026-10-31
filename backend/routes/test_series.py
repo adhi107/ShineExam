@@ -750,28 +750,43 @@ def list_submissions():
     paper_id = str(request.args.get("paperId", "")).strip()
     paper_type_param = str(request.args.get("paperType", "")).strip()
 
-    q = {**tenant_filter}
+    # Build conditions list to safely merge tenant $or with other filters using $and
+    conditions = []
+
+    if tenant_filter:
+        conditions.append(tenant_filter)
+
     if status_filter:
         if status_filter == "pending":
-            q["status"] = {"$in": ["pending", "submitted", "under_evaluation"]}
+            conditions.append({"status": {"$in": ["pending", "submitted", "under_evaluation"]}})
         elif status_filter == "evaluated":
-            q["status"] = "evaluated"
+            conditions.append({"status": "evaluated"})
         elif status_filter == "published":
-            q["status"] = "published"
+            conditions.append({"status": "published"})
         elif status_filter != "all":
-            q["status"] = status_filter
+            conditions.append({"status": status_filter})
+
     if series_id:
         try:
-            q["seriesId"] = ObjectId(series_id)
+            conditions.append({"seriesId": ObjectId(series_id)})
         except Exception:
-            q["seriesId"] = series_id
+            conditions.append({"seriesId": series_id})
+
     if paper_id:
         try:
-            q["paperId"] = ObjectId(paper_id)
+            conditions.append({"paperId": ObjectId(paper_id)})
         except Exception:
-            q["paperId"] = paper_id
+            conditions.append({"paperId": paper_id})
+
     if paper_type_param and paper_type_param != "all":
-        q["paperType"] = paper_type_param
+        conditions.append({"paperType": paper_type_param})
+
+    if len(conditions) == 0:
+        q = {}
+    elif len(conditions) == 1:
+        q = conditions[0]
+    else:
+        q = {"$and": conditions}
 
     subs = list(db.series_attempts.find(q).sort("submittedAt", -1))
 
@@ -1001,6 +1016,93 @@ def series_results_overview():
 
 
 # ────────────────────────────────────────────────────────────────
+
+
+@test_series_bp.route("/<series_id>/leaderboard", methods=["GET"])
+def series_leaderboard(series_id):
+    """Admin: Get leaderboard for a series (alias for results overview)."""
+    db = get_db()
+    try:
+        series_oid = ObjectId(series_id)
+    except Exception:
+        return jsonify({"error": "Invalid series ID"}), 400
+
+    series = db.test_series.find_one({"_id": series_oid})
+    if not series:
+        return jsonify({"error": "Series not found"}), 404
+
+    papers = list(db.series_papers.find({"seriesId": series_oid}).sort("paperNumber", 1))
+    paper_map = {str(p["_id"]): p for p in papers}
+    attempts = list(db.series_attempts.find({"seriesId": series_oid}))
+
+    student_scores = {}
+    for attempt in attempts:
+        uid = attempt.get("userId", "")
+        pid = str(attempt.get("paperId", ""))
+        score = attempt.get("score") if attempt.get("score") is not None else attempt.get("scoredMarks")
+        max_m = attempt.get("maxMarks") or attempt.get("totalMarks")
+        if uid not in student_scores:
+            student_scores[uid] = {}
+        student_scores[uid][pid] = {
+            "score": score,
+            "maxMarks": max_m,
+            "status": attempt.get("status", "pending"),
+            "paperName": paper_map.get(pid, {}).get("paperName", ""),
+            "paperType": attempt.get("paperType", ""),
+        }
+
+    user_ids = list(student_scores.keys())
+    users = {u["userId"]: u for u in db.users.find({"userId": {"$in": user_ids}})}
+
+    leaderboard = []
+    for uid, paper_scores in student_scores.items():
+        total_scored = sum(
+            v["score"] for v in paper_scores.values() if v.get("score") is not None
+        )
+        total_max = sum(
+            v["maxMarks"] for v in paper_scores.values() if v.get("maxMarks") is not None
+        )
+        u = users.get(uid, {})
+        leaderboard.append({
+            "userId": uid,
+            "name": u.get("name", uid),
+            "email": u.get("email", ""),
+            "totalScored": total_scored,
+            "totalMax": total_max,
+            "percentage": round(total_scored / total_max * 100, 2) if total_max else 0,
+            "paperScores": paper_scores,
+        })
+
+    leaderboard.sort(key=lambda x: x["totalScored"], reverse=True)
+    for i, row in enumerate(leaderboard):
+        row["rank"] = i + 1
+
+    return jsonify({"leaderboard": to_jsonable(leaderboard)})
+
+
+@test_series_bp.route("/<series_id>/publish-all", methods=["POST"])
+def publish_all_results(series_id):
+    """Admin: Publish all evaluated (but not yet published) results for a series."""
+    db = get_db()
+    try:
+        series_oid = ObjectId(series_id)
+    except Exception:
+        return jsonify({"error": "Invalid series ID"}), 400
+
+    now = datetime.utcnow()
+    result = db.series_attempts.update_many(
+        {"seriesId": series_oid, "status": "evaluated"},
+        {"$set": {"status": "published", "publishedAt": now}}
+    )
+    db.series_evaluations.update_many(
+        {"seriesId": series_oid, "published": {"$ne": True}},
+        {"$set": {"published": True, "publishedAt": now}}
+    )
+    return jsonify({
+        "message": f"Published {result.modified_count} result(s) for this series.",
+        "published": result.modified_count,
+    })
+
 # Helpers
 # ────────────────────────────────────────────────────────────────
 
