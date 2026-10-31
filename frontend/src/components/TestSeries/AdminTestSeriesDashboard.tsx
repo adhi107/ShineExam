@@ -1214,10 +1214,10 @@ function SubmissionsView() {
 
   const filtered = useMemo(() =>
     submissions.filter(s =>
-      s.userName.toLowerCase().includes(search.toLowerCase()) ||
-      s.userId.toLowerCase().includes(search.toLowerCase()) ||
-      s.seriesName.toLowerCase().includes(search.toLowerCase()) ||
-      s.paperName.toLowerCase().includes(search.toLowerCase())
+      (s.userName || "").toLowerCase().includes(search.toLowerCase()) ||
+      (s.userId || "").toLowerCase().includes(search.toLowerCase()) ||
+      (s.seriesName || "").toLowerCase().includes(search.toLowerCase()) ||
+      (s.paperName || "").toLowerCase().includes(search.toLowerCase())
     ), [submissions, search]);
 
   const handleEvalSaved = (updated: Submission) => {

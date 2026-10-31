@@ -354,6 +354,29 @@ def start_mcq_paper(series_id, paper_id):
         return jsonify({"error": "You have already submitted this paper"}), 400
 
     series = db.test_series.find_one({"_id": series_oid})
+    series_tenant_id = (series.get("tenantId") if series else None) or paper.get("tenantId") or DEFAULT_TENANT_ID
+
+    now = datetime.utcnow()
+    if not existing:
+        new_att = {
+            "seriesId": series_oid,
+            "paperId": paper_oid,
+            "seriesName": series.get("name", "") if series else "",
+            "paperName": paper.get("paperName", ""),
+            "paperType": "mcq",
+            "userId": user_id,
+            "tenantId": series_tenant_id,
+            "status": "in_progress",
+            "answers": {},
+            "startedAt": now,
+            "submittedAt": None,
+            "score": None,
+            "totalMarks": paper.get("totalMarks", 100),
+            "maxMarks": paper.get("totalMarks", 100),
+        }
+        res = db.series_attempts.insert_one(new_att)
+        existing = {"_id": res.inserted_id, "answers": {}}
+
     return jsonify({
         "exam": to_jsonable({
             "id": str(paper_oid),
@@ -420,7 +443,7 @@ def submit_mcq_paper(series_id, paper_id):
         "sectionWise": result.get("sectionWise", {}),
         "status": "submitted",
         "submittedAt": now,
-        "tenantId": paper.get("tenantId", DEFAULT_TENANT_ID),
+        "tenantId": (series.get("tenantId") if series else None) or paper.get("tenantId") or DEFAULT_TENANT_ID,
     }
 
     # Check existing attempt
@@ -530,7 +553,7 @@ def upload_descriptive(series_id, paper_id):
         "score": None,
         "maxMarks": paper.get("totalMarks", 100),
         "feedback": "",
-        "tenantId": paper.get("tenantId", DEFAULT_TENANT_ID),
+        "tenantId": (series.get("tenantId") if series else None) or paper.get("tenantId") or DEFAULT_TENANT_ID,
     }
 
     if existing:

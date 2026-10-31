@@ -160,47 +160,46 @@ def _serialize_paper(paper):
 
 
 def _serialize_submission(sub, user=None):
-    raw_status = sub.get("status", "pending")
-    # For UI display: pending, evaluated, published
+    raw_status = str(sub.get("status") or "pending")
     display_status = "pending" if raw_status in ("submitted", "pending", "under_evaluation") else raw_status
     score = sub.get("score") if sub.get("score") is not None else sub.get("scoredMarks")
     max_marks = sub.get("maxMarks") or sub.get("totalMarks") or 100
     user_name = ""
     user_email = ""
     if user:
-        user_name = user.get("name") or user.get("username") or str(user.get("userId", ""))
-        user_email = user.get("email", "")
+        user_name = user.get("name") or user.get("username") or str(user.get("userId") or "")
+        user_email = user.get("email") or ""
     if not user_name:
-        user_name = str(sub.get("userId", ""))
+        user_name = str(sub.get("userId") or "Student")
 
     return {
-        "id": str(sub["_id"]),
-        "seriesId": str(sub.get("seriesId", "")),
-        "paperId": str(sub.get("paperId", "")),
-        "seriesName": sub.get("seriesName", ""),
-        "paperName": sub.get("paperName", ""),
-        "paperType": sub.get("paperType", "mcq"),
-        "userId": str(sub.get("userId", "")),
-        "userName": user_name,
-        "userEmail": user_email,
+        "id": str(sub.get("_id") or ""),
+        "seriesId": str(sub.get("seriesId") or ""),
+        "paperId": str(sub.get("paperId") or ""),
+        "seriesName": str(sub.get("seriesName") or "Test Series"),
+        "paperName": str(sub.get("paperName") or "Paper"),
+        "paperType": str(sub.get("paperType") or "mcq"),
+        "userId": str(sub.get("userId") or ""),
+        "userName": str(user_name),
+        "userEmail": str(user_email),
         "submittedAt": sub.get("submittedAt"),
         "status": display_status,
         "rawStatus": raw_status,
-        "filename": sub.get("filename", ""),
-        "originalName": sub.get("originalName", ""),
+        "filename": str(sub.get("filename") or ""),
+        "originalName": str(sub.get("originalName") or ""),
         "wordCount": sub.get("wordCount"),
         "pageCount": sub.get("pageCount"),
         # Evaluation fields
         "score": score,
         "maxMarks": max_marks,
-        "feedback": sub.get("feedback", ""),
-        "improvementSuggestions": sub.get("improvementSuggestions", ""),
-        "strengths": sub.get("strengths", ""),
+        "feedback": str(sub.get("feedback") or ""),
+        "improvementSuggestions": str(sub.get("improvementSuggestions") or ""),
+        "strengths": str(sub.get("strengths") or ""),
         "evaluatedAt": sub.get("evaluatedAt"),
-        "evaluatedBy": sub.get("evaluatedBy", ""),
+        "evaluatedBy": str(sub.get("evaluatedBy") or ""),
         "publishedAt": sub.get("publishedAt"),
-        "questionReview": sub.get("questionReview", []),
-        "answers": sub.get("answers", []),
+        "questionReview": sub.get("questionReview") or [],
+        "answers": sub.get("answers") or [],
     }
 
 
@@ -405,6 +404,7 @@ def add_paper(series_id):
         "questionFileUrl": str(data.get("questionFileUrl", "")).strip(),
         "questionCount": len(questions),
         "status": data.get("status", "draft"),
+        "tenantId": (db.test_series.find_one({"_id": oid}) or {}).get("tenantId", DEFAULT_TENANT_ID),
         "createdAt": now,
         "updatedAt": now,
     }
@@ -743,18 +743,38 @@ def list_submissions():
     """Admin: List all test series submissions (MCQ, descriptive, essay) for evaluation."""
     db = get_db()
     tenant_id = get_request_tenant_id()
-    tenant_filter = build_tenant_filter(tenant_id)
 
     status_filter = str(request.args.get("status", "")).strip()
     series_id = str(request.args.get("seriesId", "")).strip()
     paper_id = str(request.args.get("paperId", "")).strip()
     paper_type_param = str(request.args.get("paperType", "")).strip()
 
-    # Build conditions list to safely merge tenant $or with other filters using $and
+    # Identify test series owned by or accessible to this tenant
+    series_filter = build_tenant_filter(tenant_id)
+    tenant_series = list(db.test_series.find(series_filter, {"_id": 1, "name": 1, "tenantId": 1}))
+    allowed_series_ids = []
+    series_title_map = {}
+    for s in tenant_series:
+        allowed_series_ids.append(s["_id"])
+        allowed_series_ids.append(str(s["_id"]))
+        series_title_map[str(s["_id"])] = s.get("name", "")
+
+    # Build query conditions
     conditions = []
 
-    if tenant_filter:
-        conditions.append(tenant_filter)
+    # Tenant condition: match attempt's tenantId OR match any series owned by this tenant
+    if tenant_id and tenant_id != "all":
+        tenant_match_list = [
+            {"tenantId": tenant_id},
+            {"seriesId": {"$in": allowed_series_ids}},
+        ]
+        if tenant_id == DEFAULT_TENANT_ID:
+            tenant_match_list.extend([
+                {"tenantId": {"$exists": False}},
+                {"tenantId": None},
+                {"tenantId": ""},
+            ])
+        conditions.append({"$or": tenant_match_list})
 
     if status_filter:
         if status_filter == "pending":
@@ -767,16 +787,16 @@ def list_submissions():
             conditions.append({"status": status_filter})
 
     if series_id:
-        try:
-            conditions.append({"seriesId": ObjectId(series_id)})
-        except Exception:
-            conditions.append({"seriesId": series_id})
+        s_matches = [series_id]
+        if ObjectId.is_valid(series_id):
+            s_matches.append(ObjectId(series_id))
+        conditions.append({"seriesId": {"$in": s_matches}})
 
     if paper_id:
-        try:
-            conditions.append({"paperId": ObjectId(paper_id)})
-        except Exception:
-            conditions.append({"paperId": paper_id})
+        p_matches = [paper_id]
+        if ObjectId.is_valid(paper_id):
+            p_matches.append(ObjectId(paper_id))
+        conditions.append({"paperId": {"$in": p_matches}})
 
     if paper_type_param and paper_type_param != "all":
         conditions.append({"paperType": paper_type_param})
@@ -789,6 +809,55 @@ def list_submissions():
         q = {"$and": conditions}
 
     subs = list(db.series_attempts.find(q).sort("submittedAt", -1))
+
+    # Also check if any completed series attempts exist in db.results that should be synced
+    seen_attempt_ids = {str(s["_id"]) for s in subs}
+    results_filter = {"isSeries": True}
+    if allowed_series_ids:
+        results_filter["seriesId"] = {"$in": allowed_series_ids}
+    elif tenant_id and tenant_id != "all":
+        results_filter["tenantId"] = tenant_id
+
+    for r in db.results.find(results_filter).sort("submittedAt", -1):
+        r_att_id = str(r.get("attemptId") or r.get("_id"))
+        if r_att_id not in seen_attempt_ids:
+            s_oid = r.get("seriesId")
+            try:
+                s_obj_id = ObjectId(s_oid) if ObjectId.is_valid(str(s_oid)) else s_oid
+            except Exception:
+                s_obj_id = s_oid
+            p_oid = r.get("paperId")
+            try:
+                p_obj_id = ObjectId(p_oid) if ObjectId.is_valid(str(p_oid)) else p_oid
+            except Exception:
+                p_obj_id = p_oid
+
+            synced_doc = {
+                "_id": ObjectId(r_att_id) if ObjectId.is_valid(r_att_id) else r.get("_id"),
+                "seriesId": s_obj_id,
+                "paperId": p_obj_id,
+                "seriesName": str(r.get("seriesName") or series_title_map.get(str(s_oid), "Test Series")),
+                "paperName": str(r.get("paperName") or "Paper"),
+                "paperType": "mcq",
+                "userId": str(r.get("userId") or ""),
+                "tenantId": r.get("tenantId", tenant_id),
+                "status": "submitted",
+                "submittedAt": r.get("submittedAt"),
+                "scoredMarks": r.get("scoredMarks", 0),
+                "totalMarks": r.get("totalMarks", 0),
+                "score": r.get("scoredMarks", 0),
+                "maxMarks": r.get("totalMarks", 0),
+                "percentage": r.get("percentage", 0),
+                "passed": r.get("passed", False),
+                "questionReview": r.get("questionReview", []),
+                "sectionWise": r.get("sectionWise", {}),
+            }
+            try:
+                db.series_attempts.update_one({"_id": synced_doc["_id"]}, {"$set": synced_doc}, upsert=True)
+            except Exception:
+                pass
+            subs.append(synced_doc)
+            seen_attempt_ids.add(r_att_id)
 
     user_ids = list(set(str(s.get("userId", "")) for s in subs if s.get("userId")))
     user_oids = [ObjectId(u) for u in user_ids if ObjectId.is_valid(u)]

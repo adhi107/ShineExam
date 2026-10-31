@@ -1334,7 +1334,13 @@ def submit_attempt(attempt_id):
 
         # Update attempt record and link with evaluation queue
         if is_series:
+            resolved_series_id = (series_paper.get("seriesId") if series_paper else None) or attempt.get("seriesId")
+            resolved_paper_id = (series_paper.get("_id") if series_paper else None) or attempt.get("paperId")
             series_att_update = {
+                "seriesId": resolved_series_id,
+                "paperId": resolved_paper_id,
+                "userId": str(attempt.get("userId", user_id)),
+                "tenantId": (series_doc.get("tenantId") if series_doc else None) or res_tenant_id,
                 "status": "submitted",
                 "questionTimes": question_times,
                 "timeSpentSec": time_spent,
@@ -1352,10 +1358,18 @@ def submit_attempt(attempt_id):
                 "seriesName": series_doc.get("name", "") if series_doc else attempt.get("seriesName", ""),
                 "paperName": series_paper.get("paperName", "") if series_paper else attempt.get("paperName", ""),
             }
-            db.series_attempts.update_one(
+            # Upsert into series_attempts by attempt _id or by seriesId+paperId+userId
+            res_up = db.series_attempts.update_one(
                 {"_id": attempt["_id"]},
-                {"$set": series_att_update}
+                {"$set": series_att_update},
+                upsert=True
             )
+            if resolved_series_id and resolved_paper_id:
+                db.series_attempts.update_one(
+                    {"seriesId": resolved_series_id, "paperId": resolved_paper_id, "userId": str(attempt.get("userId", user_id))},
+                    {"$set": series_att_update},
+                    upsert=True
+                )
             # Upsert into series_evaluations collection for Admin Review workflow
             db.series_evaluations.update_one(
                 {"attemptId": attempt["_id"]},
