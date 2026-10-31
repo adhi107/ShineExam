@@ -872,25 +872,98 @@ def list_submissions():
 
 
 @test_series_bp.route("/submissions/<attempt_id>/download", methods=["GET"])
+@test_series_bp.route("/submissions/<attempt_id>/view", methods=["GET"])
 def download_submission(attempt_id):
-    """Download a student's descriptive submission file."""
+    """Download or view a student's descriptive submission file in browser."""
     db = get_db()
+    attempt = None
     try:
-        oid = ObjectId(attempt_id)
+        if ObjectId.is_valid(attempt_id):
+            attempt = db.series_attempts.find_one({"_id": ObjectId(attempt_id)})
     except Exception:
-        return jsonify({"error": "Invalid attempt ID"}), 400
+        pass
 
-    attempt = db.series_attempts.find_one({"_id": oid})
+    if not attempt:
+        attempt = db.series_attempts.find_one({"_id": attempt_id})
+    if not attempt:
+        attempt = db.results.find_one({"$or": [{"attemptId": attempt_id}, {"_id": attempt_id}]})
+    if not attempt and ObjectId.is_valid(attempt_id):
+        attempt = db.results.find_one({"_id": ObjectId(attempt_id)})
+    if not attempt:
+        attempt = db.attempts.find_one({"_id": attempt_id})
+    if not attempt and ObjectId.is_valid(attempt_id):
+        attempt = db.attempts.find_one({"_id": ObjectId(attempt_id)})
+
     if not attempt:
         return jsonify({"error": "Submission not found"}), 404
 
-    filename = attempt.get("filename", "")
-    file_path = SUBMISSIONS_DIR / filename
-    if not file_path.is_file():
-        return jsonify({"error": "File not found on server"}), 404
+    filename = str(attempt.get("filename") or attempt.get("submittedFile") or attempt.get("file") or "").strip()
+    if not filename:
+        return jsonify({"error": "No file attached to this submission"}), 404
 
-    original_name = attempt.get("originalName", filename)
-    return send_file(str(file_path), download_name=original_name, as_attachment=True)
+    clean_name = filename.replace("\\", "/").split("/")[-1]
+    backend_dir = Path(__file__).resolve().parents[1]
+
+    candidates = [
+        SUBMISSIONS_DIR / clean_name,
+        SUBMISSIONS_DIR / filename,
+        backend_dir / "uploads" / "series_submissions" / clean_name,
+        backend_dir / "uploads" / clean_name,
+        backend_dir / "uploads" / filename,
+        backend_dir / "uploads" / "attachments" / clean_name,
+        backend_dir / "uploads" / "documents" / clean_name,
+    ]
+
+    target_file = None
+    for cand in candidates:
+        if cand and cand.is_file():
+            target_file = cand
+            break
+
+    # Fallback search in SUBMISSIONS_DIR if clean_name didn't match directly
+    if not target_file and SUBMISSIONS_DIR.is_dir():
+        uid = str(attempt.get("userId") or "").strip()
+        for f in SUBMISSIONS_DIR.glob("*"):
+            if f.is_file() and (clean_name in f.name or (uid and f"_{uid}_" in f.name)):
+                target_file = f
+                break
+
+    if not target_file:
+        return jsonify({
+            "error": "Submission file not found on server",
+            "filename": filename,
+            "searched": [str(c) for c in candidates[:3]]
+        }), 404
+
+    is_view = request.args.get("view") in ("1", "true") or request.path.endswith("/view")
+    original_name = attempt.get("originalName") or clean_name or "submission.pdf"
+
+    ext = target_file.suffix.lower().lstrip(".")
+    mime_types = {
+        "pdf": "application/pdf",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "png": "image/png",
+        "webp": "image/webp",
+        "heic": "image/heic",
+        "doc": "application/msword",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "txt": "text/plain",
+    }
+    mimetype = mime_types.get(ext, "application/octet-stream")
+
+    resp = send_file(
+        str(target_file),
+        mimetype=mimetype,
+        as_attachment=not is_view,
+        download_name=original_name,
+        conditional=True
+    )
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, HEAD, OPTIONS"
+    resp.headers["Access-Control-Expose-Headers"] = "Content-Disposition, Content-Type, Content-Length"
+    resp.headers.pop("X-Frame-Options", None)
+    return resp
 
 
 @test_series_bp.route("/submissions/<attempt_id>/evaluate", methods=["POST"])

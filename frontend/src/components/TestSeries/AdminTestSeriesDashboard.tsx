@@ -1013,6 +1013,7 @@ function EvalModal({ submission, onClose, onSaved }: {
   onClose: () => void;
   onSaved: (s: Submission) => void;
 }) {
+  const [showDocPreview, setShowDocPreview] = useState(false);
   const [score, setScore] = useState<string>(submission.score != null ? String(submission.score) : "");
   const [maxMarks, setMaxMarks] = useState<string>(submission.maxMarks != null ? String(submission.maxMarks) : "100");
   const [feedback, setFeedback] = useState(submission.feedback || "");
@@ -1087,9 +1088,27 @@ function EvalModal({ submission, onClose, onSaved }: {
                 <div style={{ fontSize: "0.74rem", color: "#94a3b8", marginTop: 2 }}>Submitted: {fmtTime(submission.submittedAt)}</div>
               </div>
               {submission.filename ? (
-                <a href={downloadUrl} target="_blank" rel="noreferrer" className="ats-btn ats-btn-primary ats-btn-sm" style={{ textDecoration: "none", flexShrink: 0 }}>
-                  <DownloadIcon size={14} style={{ marginRight: 5 }} /> Download Sheet
-                </a>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    className={`ats-btn ats-btn-sm ${showDocPreview ? "ats-btn-primary" : "ats-btn-secondary"}`}
+                    onClick={() => setShowDocPreview(!showDocPreview)}
+                    title="Toggle preview of candidate answer sheet"
+                  >
+                    <EyeIcon size={14} style={{ marginRight: 4 }} />
+                    {showDocPreview ? "Hide Preview" : "View Sheet"}
+                  </button>
+                  <a
+                    href={downloadUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ats-btn ats-btn-primary ats-btn-sm"
+                    style={{ textDecoration: "none" }}
+                    title="Download original submission file"
+                  >
+                    <DownloadIcon size={14} style={{ marginRight: 5 }} /> Download Sheet
+                  </a>
+                </div>
               ) : (
                 <span className="ats-eval-tag" style={{ fontWeight: 700, color: "#2563eb", background: "#eff6ff" }}>
                   💻 Online Attempt
@@ -1111,6 +1130,33 @@ function EvalModal({ submission, onClose, onSaved }: {
               </div>
             )}
           </div>
+
+          {showDocPreview && submission.filename && (
+            <div className="ats-inline-preview-box">
+              <div className="ats-preview-header">
+                <span>📄 Candidate Submission: {submission.originalName || submission.filename}</span>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <a
+                    href={buildUrl(`/admin/test-series/submissions/${submission.id}/download?view=1`)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ats-btn ats-btn-secondary ats-btn-sm"
+                    style={{ textDecoration: "none" }}
+                  >
+                    ↗ Open Full Page
+                  </a>
+                  <button type="button" className="ats-btn ats-btn-secondary ats-btn-sm" onClick={() => setShowDocPreview(false)}>
+                    ✕ Close
+                  </button>
+                </div>
+              </div>
+              <iframe
+                src={buildUrl(`/admin/test-series/submissions/${submission.id}/download?view=1`)}
+                className="ats-preview-iframe"
+                title="Candidate Answer Sheet Preview"
+              />
+            </div>
+          )}
 
           <div className="ats-form-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", marginTop: 16 }}>
             <div className="ats-field">
@@ -1275,6 +1321,30 @@ function SubmissionsView() {
                 </div>
               </div>
               <div className="ats-eval-actions">
+                {sub.filename ? (
+                  <>
+                    <a
+                      href={buildUrl(`/admin/test-series/submissions/${sub.id}/download?view=1`)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="ats-btn ats-btn-secondary ats-btn-sm"
+                      style={{ textDecoration: "none" }}
+                      title="View student answer sheet in new tab"
+                    >
+                      <EyeIcon size={13} style={{ marginRight: 4 }} /> View
+                    </a>
+                    <a
+                      href={buildUrl(`/admin/test-series/submissions/${sub.id}/download`)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="ats-btn ats-btn-secondary ats-btn-sm"
+                      style={{ textDecoration: "none" }}
+                      title="Download answer sheet"
+                    >
+                      <DownloadIcon size={13} style={{ marginRight: 4 }} /> Download
+                    </a>
+                  </>
+                ) : null}
                 <button className="ats-btn ats-btn-primary ats-btn-sm" onClick={() => setEvalTarget(sub)}>
                   <EditIcon size={13} style={{ marginRight: 4 }} />
                   {sub.status === "pending" ? "Evaluate" : "Re-Evaluate"}

@@ -1410,3 +1410,156 @@
 .ats-table tr:hover {
   background: #f8fafc;
 }
+
+
+/* ── Evaluation Queue Cards & Grid ───────────────────────────── */
+.ats-eval-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ats-eval-card {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 18px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.ats-eval-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.07);
+  transform: translateY(-1px);
+}
+
+.ats-eval-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  color: #4f46e5;
+  font-weight: 800;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid #c7d2fe;
+}
+
+.ats-eval-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.ats-eval-info h4 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.ats-eval-info p {
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #4f46e5;
+}
+
+.ats-eval-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.ats-eval-status {
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ats-eval-status.pending {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.ats-eval-status.evaluated {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.ats-eval-status.published {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.ats-eval-tag {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  padding: 2.5px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  color: #475569;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.ats-eval-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ats-card-actions-menu {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Inline Sheet Preview ────────────────────────────────────── */
+.ats-inline-preview-box {
+  margin: 16px 0 20px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.ats-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #334155;
+}
+
+.ats-preview-iframe {
+  width: 100%;
+  height: 520px;
+  border: none;
+  background: #ffffff;
+  display: block;
+}
