@@ -92,8 +92,8 @@ export const ParserPreviewModal: React.FC<ParserPreviewModalProps> = ({
         {/* Modal Header */}
         <div className="parser-modal-header">
           <div className="parser-modal-title">
-            <span>✨ AI Multimodal Document Parser Preview</span>
-            <span style={{ fontSize: '0.85rem', opacity: 0.8, fontWeight: 400 }}>({filename})</span>
+            <span className="parser-title-main">✨ AI Document Parser Preview</span>
+            {filename && <span className="parser-title-filename" title={filename}>({filename})</span>}
           </div>
           <button type="button" className="parser-modal-close-btn" onClick={onClose} title="Close Preview">
             ✕
@@ -281,22 +281,21 @@ export const ParserPreviewModal: React.FC<ParserPreviewModalProps> = ({
 
         {/* Footer */}
         <div className="parser-modal-footer">
-          <div style={{ fontSize: '0.85rem', color: '#475569' }}>
+          <div className="parser-footer-summary">
             <span>
               Ready to import <strong>{totalQuestionsCount}</strong> questions across <strong>{sections.length}</strong> section(s).
             </span>
           </div>
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <button type="button" className="secondary-btn" onClick={onClose} style={{ padding: '0.5rem 1.25rem' }}>
+          <div className="parser-footer-actions">
+            <button type="button" className="secondary-btn parser-footer-cancel" onClick={onClose}>
               Cancel
             </button>
             <button
               type="button"
-              className="primary-btn"
+              className="primary-btn parser-footer-approve"
               onClick={() => onApprove(questions)}
-              style={{ padding: '0.5rem 1.5rem', fontWeight: 700 }}
             >
-              ✨ Populate Test Form ({totalQuestionsCount} Questions)
+              ✨ Import {totalQuestionsCount} Questions
             </button>
           </div>
         </div>

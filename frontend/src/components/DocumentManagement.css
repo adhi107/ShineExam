@@ -1726,3 +1726,409 @@
   background: #fee2e2;
   color: #dc2626;
 }
+
+
+/* ==========================================================================
+   Admin Document View & Preview Modal
+   ========================================================================== */
+
+.btn-doc-view {
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid #93c5fd;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.12);
+  transition: all 0.18s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.btn-doc-view:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+  transform: translateY(-1px);
+}
+
+.doc-preview-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(8px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.doc-preview-modal-card {
+  background: #ffffff;
+  border-radius: 18px;
+  width: 95%;
+  max-width: 1100px;
+  height: 90vh;
+  max-height: calc(100dvh - 32px);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.doc-preview-modal-header {
+  padding: 14px 20px;
+  border-bottom: 1.5px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f8fafc;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.doc-preview-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.doc-preview-pill {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #2563eb;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.doc-preview-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.doc-preview-sub {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.doc-preview-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.doc-preview-action-btn {
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+}
+
+.doc-preview-action-btn.secondary {
+  background: #ffffff;
+  color: #2563eb;
+  border: 1.5px solid #cbd5e1;
+}
+
+.doc-preview-action-btn.secondary:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.doc-preview-action-btn.primary {
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+}
+
+.doc-preview-action-btn.primary:hover {
+  background: #1d4ed8;
+}
+
+.doc-preview-close-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: none;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.doc-preview-close-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.doc-preview-modal-body {
+  flex: 1 1 auto;
+  padding: 0;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: auto !important;
+  background: #525659;
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 60px);
+  min-height: 0;
+  width: 100%;
+}
+
+.doc-preview-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #ffffff;
+  gap: 14px;
+}
+
+.doc-preview-pdf-wrap {
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.doc-preview-frame {
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+  min-height: 100%;
+  border: none;
+  background: #525659;
+  display: block;
+  touch-action: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+.doc-preview-img-wrap {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background: #1e293b;
+  overflow: auto;
+}
+
+.doc-preview-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.doc-preview-fallback {
+  padding: 40px 24px;
+  text-align: center;
+  background: #ffffff;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.fallback-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.doc-preview-fallback h4 {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 1.15rem;
+}
+
+.doc-preview-fallback p {
+  color: #64748b;
+  max-width: 360px;
+  margin: 0 0 20px;
+  font-size: 0.9rem;
+}
+
+/* ==========================================================================
+   Mobile Responsiveness for Admin Document Management
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  .document-admin {
+    padding: 14px !important;
+  }
+
+  .document-header h1 {
+    font-size: 1.5rem !important;
+  }
+
+  .document-upload-card {
+    padding: 16px 14px !important;
+    border-radius: 14px !important;
+  }
+
+  .document-fields-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .upload-action-row {
+    flex-direction: column !important;
+    gap: 12px !important;
+    align-items: stretch !important;
+  }
+
+  .btn-upload-submit {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .document-filters-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 12px 14px !important;
+    gap: 10px !important;
+  }
+
+  .doc-search-wrapper {
+    max-width: 100% !important;
+  }
+
+  .doc-filter-dropdowns {
+    flex-direction: column !important;
+    width: 100% !important;
+    gap: 8px !important;
+  }
+
+  .doc-select-wrap {
+    width: 100% !important;
+  }
+
+  .doc-select-wrap select {
+    width: 100% !important;
+  }
+
+  .document-card-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 16px 14px !important;
+    gap: 14px !important;
+    border-radius: 14px !important;
+  }
+
+  .doc-details-col {
+    width: 100% !important;
+  }
+
+  .doc-title-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 6px !important;
+  }
+
+  .doc-filename-badge {
+    max-width: 100% !important;
+  }
+
+  .doc-assigned-stat-box {
+    border: none !important;
+    border-top: 1px solid #f1f5f9 !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+    padding: 8px 0 !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+    align-items: baseline !important;
+    justify-content: flex-start !important;
+  }
+
+  .doc-stat-num {
+    font-size: 18px !important;
+  }
+
+  .doc-row-actions {
+    width: 100% !important;
+    display: flex !important;
+    gap: 8px !important;
+  }
+
+  .btn-doc-view,
+  .btn-doc-assign,
+  .btn-doc-delete {
+    flex: 1 1 0% !important;
+    height: 42px !important;
+    justify-content: center !important;
+    font-size: 13px !important;
+    padding: 0 4px !important;
+  }
+
+  .doc-preview-modal-backdrop {
+    padding: 0 !important;
+  }
+
+  .doc-preview-modal-card {
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+  }
+
+  .doc-preview-modal-header {
+    padding: 10px 12px !important;
+    flex-wrap: wrap !important;
+  }
+
+  .doc-preview-title {
+    max-width: 200px !important;
+    font-size: 0.92rem !important;
+  }
+
+  .doc-preview-modal-body {
+    touch-action: auto !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .doc-preview-frame {
+    touch-action: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+}

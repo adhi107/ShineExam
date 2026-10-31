@@ -278,8 +278,10 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
         e.preventDefault();
       }}
     >
-      {/* ── Protected content (unmounted only when shielded or suspended) ── */}
-      {!isShielded && children}
+      {/* ── Protected content (preserved in memory with display hidden when shielded to prevent state destruction and blank screens on resume) ── */}
+      <div style={isShielded ? { display: 'none' } : undefined}>
+        {children}
+      </div>
 
       {/* ── Anti-capture GPU compositing overlay ── */}
       {!isShielded && isModuleProtected && (
@@ -418,6 +420,9 @@ const SensitiveContent: React.FC<SensitiveContentProps> = ({
               onClick={(e) => {
                 e.stopPropagation();
                 setUserDismissedShield(true);
+                try {
+                  window.focus();
+                } catch {}
               }}
             >
               ▶ Resume Exam

@@ -32,6 +32,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
 
 .parser-modal-title {
@@ -41,6 +42,21 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.parser-title-main {
+  font-weight: 700;
+}
+
+.parser-title-filename {
+  font-size: 0.85rem;
+  opacity: 0.8;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .parser-modal-close-btn {
@@ -55,6 +71,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
 }
 
 .parser-modal-close-btn:hover {
@@ -68,6 +86,12 @@
   padding: 0.75rem 1.75rem;
   gap: 0.5rem;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.parser-steps-bar::-webkit-scrollbar {
+  display: none;
 }
 
 .parser-step-chip {
@@ -81,6 +105,7 @@
   background: #e2e8f0;
   color: #64748b;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .parser-step-chip.completed {
@@ -155,6 +180,14 @@
 .filter-tabs {
   display: flex;
   gap: 0.5rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  width: 100%;
+}
+
+.filter-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .filter-tab-btn {
@@ -166,6 +199,14 @@
   background: #ffffff;
   color: #475569;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.filter-tab-btn:hover {
+  border-color: #94a3b8;
+  color: #0f172a;
 }
 
 .filter-tab-btn.active {
@@ -182,6 +223,7 @@
   flex-direction: column;
   gap: 1.25rem;
   background: #f8fafc;
+  min-height: 0;
 }
 
 .preview-question-card {
@@ -190,7 +232,6 @@
   border-radius: 0.75rem;
   padding: 1.25rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-
 }
 
 .preview-question-card.failed {
@@ -262,6 +303,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  word-break: break-word;
 }
 
 .preview-option-item.correct {
@@ -271,6 +313,7 @@
   color: #166534;
 }
 
+/* Modal Footer */
 .parser-modal-footer {
   padding: 1rem 1.75rem;
   background: #ffffff;
@@ -278,4 +321,198 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+
+.parser-footer-summary {
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.parser-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.parser-footer-cancel {
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.parser-footer-cancel:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.parser-footer-approve {
+  padding: 0.5rem 1.5rem;
+  border-radius: 0.5rem;
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+  transition: all 0.15s ease;
+}
+
+.parser-footer-approve:hover {
+  background: #1d4ed8;
+}
+
+/* ====================================================================
+   MOBILE RESPONSIVENESS (SMARTPHONES & TABLETS <= 860px)
+   ==================================================================== */
+@media (max-width: 860px) {
+  .parser-preview-overlay {
+    padding: 0 !important;
+    align-items: stretch !important;
+  }
+
+  .parser-preview-modal {
+    max-width: 100vw !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+  }
+
+  .parser-modal-header {
+    padding: 10px 14px !important;
+    min-height: 48px;
+  }
+
+  .parser-modal-title {
+    font-size: 0.95rem !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 2px !important;
+  }
+
+  .parser-title-filename {
+    max-width: 220px !important;
+    font-size: 0.72rem !important;
+    opacity: 0.7 !important;
+  }
+
+  .parser-steps-bar {
+    padding: 6px 12px !important;
+    gap: 6px !important;
+  }
+
+  .parser-step-chip {
+    font-size: 0.68rem !important;
+    padding: 3px 8px !important;
+  }
+
+  .parser-stats-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
+    padding: 8px 12px !important;
+  }
+
+  .stat-card {
+    padding: 6px 4px !important;
+    border-radius: 6px !important;
+  }
+
+  .stat-number {
+    font-size: 1.15rem !important;
+  }
+
+  .stat-label {
+    font-size: 0.62rem !important;
+  }
+
+  .parser-filters-row {
+    padding: 6px 12px !important;
+  }
+
+  .filter-tabs {
+    gap: 6px !important;
+  }
+
+  .filter-tab-btn {
+    padding: 5px 10px !important;
+    font-size: 0.75rem !important;
+  }
+
+  .parser-questions-scroll {
+    padding: 10px 12px !important;
+    gap: 10px !important;
+  }
+
+  .preview-question-card {
+    padding: 12px !important;
+    border-radius: 8px !important;
+  }
+
+  .preview-option-item {
+    padding: 8px 10px !important;
+    font-size: 0.8rem !important;
+  }
+
+  /* Responsive bottom bar - Both Cancel & Approve buttons fully visible! */
+  .parser-modal-footer {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)) 12px !important;
+    gap: 8px !important;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08) !important;
+    background: #ffffff !important;
+  }
+
+  .parser-footer-summary {
+    text-align: center !important;
+    font-size: 0.78rem !important;
+  }
+
+  .parser-footer-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    gap: 8px !important;
+  }
+
+  .parser-footer-cancel {
+    flex: 1 1 35% !important;
+    min-height: 44px !important;
+    height: 44px !important;
+    font-size: 0.9rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 8px !important;
+  }
+
+  .parser-footer-approve {
+    flex: 2 1 65% !important;
+    min-height: 44px !important;
+    height: 44px !important;
+    font-size: 0.85rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    padding: 0 10px !important;
+    white-space: normal !important;
+    border-radius: 8px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .parser-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .parser-title-filename {
+    max-width: 160px !important;
+  }
 }

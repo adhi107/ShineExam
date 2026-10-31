@@ -66,6 +66,30 @@ def documents_collection():
     return jsonify({"document": to_jsonable(_document_json(doc))}), 201
 
 
+@admin_documents_bp.get("/<document_id>/view")
+def admin_view_document(document_id):
+    db = get_db()
+    try: oid = ObjectId(document_id)
+    except Exception: return jsonify({"error": "Invalid document id"}), 400
+    doc = db.documents.find_one({"_id": oid})
+    if not doc: return jsonify({"error": "Document not found"}), 404
+    path = UPLOAD_DIR / doc.get("filename", "")
+    if not path.is_file(): return jsonify({"error": "Document file is missing"}), 404
+    return send_file(path, as_attachment=False, download_name=doc.get("originalName") or path.name, mimetype=doc.get("mimeType"))
+
+
+@admin_documents_bp.get("/<document_id>/download")
+def admin_download_document(document_id):
+    db = get_db()
+    try: oid = ObjectId(document_id)
+    except Exception: return jsonify({"error": "Invalid document id"}), 400
+    doc = db.documents.find_one({"_id": oid})
+    if not doc: return jsonify({"error": "Document not found"}), 404
+    path = UPLOAD_DIR / doc.get("filename", "")
+    if not path.is_file(): return jsonify({"error": "Document file is missing"}), 404
+    return send_file(path, as_attachment=True, download_name=doc.get("originalName") or path.name, mimetype=doc.get("mimeType"))
+
+
 @admin_documents_bp.delete("/<document_id>")
 def delete_document(document_id):
     db = get_db()

@@ -42,6 +42,12 @@ interface ExamForTaking {
   passingPercentage?: number; questions: any[];
   timerMode?: "overall" | "sectional";
   sectionConfig?: Array<{ name: string; duration: number; questionCount: number; marks: number }>;
+  negativeMarkingScheme?: string;
+  negativeMarks?: number;
+  isSeries?: boolean;
+  seriesId?: string;
+  paperId?: string;
+  customInstructions?: string;
 }
 interface TestHistoryItem {
   attemptId: string; examId: string; testName: string; submittedAt: string;
@@ -314,6 +320,10 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
     setStartingId(examId);
     try {
       const res = await apiGet<{ test: ExamForTaking }>(`/answerer/tests/${examId}?userId=${encodeURIComponent(userName)}`);
+      if (!res.test.questions || res.test.questions.length === 0) {
+        alert("This test has no questions configured yet. Please contact your administrator.");
+        return;
+      }
       setActiveExam(res.test);
       navigate("/dashboard/tests");
     } catch (error) {
@@ -378,10 +388,23 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
   const isDesktopCollapsed = studentSidebarCollapsed && !studentMobileOpen;
 
   if (activeExam) return (
-    <TestInterface userId={userName} examId={activeExam.id} testName={activeExam.testName}
-      duration={activeExam.duration} passingPercentage={activeExam.passingPercentage}
-      timerMode={activeExam.timerMode} sectionConfig={activeExam.sectionConfig}
-      questions={activeExam.questions} onExit={exitExam} />
+    <TestInterface
+      userId={userName}
+      examId={activeExam.id}
+      testName={activeExam.testName}
+      duration={activeExam.duration}
+      passingPercentage={activeExam.passingPercentage}
+      timerMode={activeExam.timerMode}
+      sectionConfig={activeExam.sectionConfig}
+      questions={activeExam.questions}
+      negativeMarkingScheme={activeExam.negativeMarkingScheme}
+      negativeMarks={activeExam.negativeMarks}
+      isSeries={activeExam.isSeries}
+      seriesId={activeExam.seriesId}
+      paperId={activeExam.paperId}
+      customInstructions={activeExam.customInstructions}
+      onExit={exitExam}
+    />
   );
 
   const currentReport = selectedReport || history[0];
@@ -824,6 +847,13 @@ const AnswererDashboard: React.FC<Props> = ({ userName, onLogout }) => {
                 passingPercentage: examData.passingPercentage,
                 questions: examData.questions || [],
                 timerMode: examData.timerMode || "overall",
+                sectionConfig: examData.sectionConfig || [],
+                negativeMarkingScheme: examData.negativeMarkingScheme || "quarter",
+                negativeMarks: examData.negativeMarks,
+                isSeries: true,
+                seriesId: examData.seriesId,
+                paperId: examData.paperId || examData.id,
+                customInstructions: examData.instructions || examData.customInstructions,
               });
               navigate("/dashboard/tests");
             }}

@@ -1454,12 +1454,50 @@
   flex-shrink: 0;
 }
 
+.ca-pdf-embed-wrapper {
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ca-mobile-pdf-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: #1e293b;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-bottom: 1px solid #334155;
+  flex-shrink: 0;
+}
+
+.ca-mobile-pdf-open-btn {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  padding: 4px 10px;
+  border-radius: 6px;
+  text-decoration: none;
+  font-size: 0.78rem;
+  font-weight: 700;
+  transition: all 0.15s ease;
+}
+
+.ca-mobile-pdf-open-btn:hover {
+  background: rgba(56, 189, 248, 0.25);
+  color: #ffffff;
+}
+
 .ca-doc-preview-body {
   flex: 1 1 auto;
   padding: 0;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y pinch-zoom;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: auto !important;
   background: #525659;
   display: flex;
   flex-direction: column;

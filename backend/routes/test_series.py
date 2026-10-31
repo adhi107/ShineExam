@@ -160,28 +160,47 @@ def _serialize_paper(paper):
 
 
 def _serialize_submission(sub, user=None):
+    raw_status = sub.get("status", "pending")
+    # For UI display: pending, evaluated, published
+    display_status = "pending" if raw_status in ("submitted", "pending", "under_evaluation") else raw_status
+    score = sub.get("score") if sub.get("score") is not None else sub.get("scoredMarks")
+    max_marks = sub.get("maxMarks") or sub.get("totalMarks") or 100
+    user_name = ""
+    user_email = ""
+    if user:
+        user_name = user.get("name") or user.get("username") or str(user.get("userId", ""))
+        user_email = user.get("email", "")
+    if not user_name:
+        user_name = str(sub.get("userId", ""))
+
     return {
         "id": str(sub["_id"]),
         "seriesId": str(sub.get("seriesId", "")),
         "paperId": str(sub.get("paperId", "")),
         "seriesName": sub.get("seriesName", ""),
         "paperName": sub.get("paperName", ""),
-        "userId": sub.get("userId", ""),
-        "userName": user.get("name", sub.get("userId", "")) if user else sub.get("userId", ""),
-        "userEmail": user.get("email", "") if user else "",
+        "paperType": sub.get("paperType", "mcq"),
+        "userId": str(sub.get("userId", "")),
+        "userName": user_name,
+        "userEmail": user_email,
         "submittedAt": sub.get("submittedAt"),
-        "status": sub.get("status", "pending"),  # pending | evaluated | published
+        "status": display_status,
+        "rawStatus": raw_status,
         "filename": sub.get("filename", ""),
         "originalName": sub.get("originalName", ""),
         "wordCount": sub.get("wordCount"),
         "pageCount": sub.get("pageCount"),
         # Evaluation fields
-        "score": sub.get("score"),
-        "maxMarks": sub.get("maxMarks"),
+        "score": score,
+        "maxMarks": max_marks,
         "feedback": sub.get("feedback", ""),
+        "improvementSuggestions": sub.get("improvementSuggestions", ""),
+        "strengths": sub.get("strengths", ""),
         "evaluatedAt": sub.get("evaluatedAt"),
         "evaluatedBy": sub.get("evaluatedBy", ""),
         "publishedAt": sub.get("publishedAt"),
+        "questionReview": sub.get("questionReview", []),
+        "answers": sub.get("answers", []),
     }
 
 
@@ -721,37 +740,50 @@ def get_assigned_students(series_id):
 
 @test_series_bp.route("/submissions", methods=["GET"])
 def list_submissions():
-    """Admin: List all descriptive/essay submissions for evaluation."""
+    """Admin: List all test series submissions (MCQ, descriptive, essay) for evaluation."""
     db = get_db()
     tenant_id = get_request_tenant_id()
     tenant_filter = build_tenant_filter(tenant_id)
 
-    status_filter = request.args.get("status", "")
-    series_id = request.args.get("seriesId", "")
-    paper_id = request.args.get("paperId", "")
+    status_filter = str(request.args.get("status", "")).strip()
+    series_id = str(request.args.get("seriesId", "")).strip()
+    paper_id = str(request.args.get("paperId", "")).strip()
+    paper_type_param = str(request.args.get("paperType", "")).strip()
 
     q = {**tenant_filter}
     if status_filter:
-        q["status"] = status_filter
+        if status_filter == "pending":
+            q["status"] = {"$in": ["pending", "submitted", "under_evaluation"]}
+        elif status_filter == "evaluated":
+            q["status"] = "evaluated"
+        elif status_filter == "published":
+            q["status"] = "published"
+        elif status_filter != "all":
+            q["status"] = status_filter
     if series_id:
         try:
             q["seriesId"] = ObjectId(series_id)
         except Exception:
-            pass
+            q["seriesId"] = series_id
     if paper_id:
         try:
             q["paperId"] = ObjectId(paper_id)
         except Exception:
-            pass
+            q["paperId"] = paper_id
+    if paper_type_param and paper_type_param != "all":
+        q["paperType"] = paper_type_param
 
-    subs = list(db.series_attempts.find(
-        {**q, "paperType": {"$in": ["descriptive", "essay"]}}
-    ).sort("submittedAt", -1))
+    subs = list(db.series_attempts.find(q).sort("submittedAt", -1))
 
-    user_ids = list(set(s.get("userId", "") for s in subs))
-    users = {u["userId"]: u for u in db.users.find({"userId": {"$in": user_ids}})}
+    user_ids = list(set(str(s.get("userId", "")) for s in subs if s.get("userId")))
+    user_oids = [ObjectId(u) for u in user_ids if ObjectId.is_valid(u)]
+    users_by_uid = {str(u.get("userId", "")): u for u in db.users.find({"userId": {"$in": user_ids}})}
+    users_by_oid = {str(u["_id"]): u for u in db.users.find({"_id": {"$in": user_oids}})}
 
-    result = [_serialize_submission(s, users.get(s.get("userId", ""))) for s in subs]
+    def resolve_user(uid):
+        return users_by_uid.get(uid) or users_by_oid.get(uid)
+
+    result = [_serialize_submission(s, resolve_user(str(s.get("userId", "")))) for s in subs]
     return jsonify({"submissions": to_jsonable(result)})
 
 
@@ -825,6 +857,20 @@ def evaluate_submission(attempt_id):
         update["publishedAt"] = now
 
     db.series_attempts.update_one({"_id": oid}, {"$set": update})
+
+    # Also update db.results if a result record exists for this attempt
+    db.results.update_one(
+        {"$or": [{"attemptId": str(oid)}, {"attemptId": oid}]},
+        {"$set": {
+            "score": score,
+            "scoredMarks": score,
+            "maxMarks": max_marks,
+            "percentage": pct,
+            "feedback": feedback,
+            "evaluatedBy": evaluated_by,
+            "evaluatedAt": now,
+        }}
+    )
 
     # Upsert into evaluations collection for quick querying
     db.series_evaluations.update_one(

@@ -149,6 +149,7 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
   const [categories, setCategories] = useState<string[]>(CATEGORIES);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [search, setSearch] = useState("");
+  const [selectedDate, setSelectedDate] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [viewTab, setViewTab] = useState<"articles" | "reader" | "bookmarks" | "quiz" | "revision">("articles");
   const [activeArticle, setActiveArticle] = useState<CurrentAffairItem | null>(null);
@@ -328,6 +329,8 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
       const params = new URLSearchParams();
       if (selectedCategory !== "All") params.set("category", selectedCategory);
       if (search) params.set("search", search);
+      if (selectedDate) params.set("date", selectedDate);
+      if (!isAdmin) params.set("status", "published");
       const res = await apiGet<{ articles: CurrentAffairItem[]; categories: string[] }>(
         `/admin/current-affairs/articles?${params}`
       );
@@ -340,7 +343,7 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
     } finally {
       setLoading(false);
     }
-  }, [selectedCategory, search]);
+  }, [selectedCategory, search, selectedDate, isAdmin]);
 
   const loadAdminStats = useCallback(async () => {
     if (!isAdmin) return;
@@ -988,13 +991,41 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
           </button>
         </div>
 
-        <div className="ca-search-box">
+        <div className="ca-search-box" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <input
             className="ca-search-input"
+            style={{ flex: "1 1 240px", minWidth: 200 }}
             placeholder="Search current affairs, schemes, committee reports..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              title="Filter by publish date"
+              style={{
+                height: 38,
+                padding: "0 10px",
+                border: "1px solid #cbd5e1",
+                borderRadius: 8,
+                fontSize: "0.85rem",
+                background: "#ffffff",
+                color: "#1e293b",
+              }}
+            />
+            {selectedDate && (
+              <button
+                className="ats-btn ats-btn-secondary ats-btn-sm"
+                onClick={() => setSelectedDate("")}
+                title="Clear date filter"
+                style={{ height: 38, padding: "0 10px", fontSize: "0.8rem" }}
+              >
+                ✕ Clear
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1644,13 +1675,32 @@ export const CurrentAffairsHub: React.FC<Props> = ({ isAdmin = false, userName =
                   <span style={{ fontSize: "0.95rem", fontWeight: 600 }}>Opening Study Document...</span>
                 </div>
               ) : previewDoc.url.toLowerCase().endsWith(".pdf") || previewDoc.url.includes("pdf") ? (
-                <iframe
-                  src={`${docBlobUrl || previewDoc.url}#view=FitH&toolbar=1&navpanes=0`}
-                  title={previewDoc.name}
-                  className="ca-doc-preview-iframe"
-                  tabIndex={0}
-                  style={{ border: "none", width: "100%", height: "100%", minHeight: "100%", background: "#525659" }}
-                />
+                <div className="ca-pdf-embed-wrapper">
+                  <div className="ca-mobile-pdf-bar">
+                    <span>💡 Mobile PDF View:</span>
+                    <a
+                      href={docBlobUrl || previewDoc.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="ca-mobile-pdf-open-btn"
+                    >
+                      Open Full Reader ↗
+                    </a>
+                  </div>
+                  <object
+                    data={`${docBlobUrl || previewDoc.url}#view=FitH&toolbar=1&navpanes=0`}
+                    type="application/pdf"
+                    className="ca-doc-preview-iframe"
+                  >
+                    <iframe
+                      src={`${docBlobUrl || previewDoc.url}#view=FitH&toolbar=1&navpanes=0`}
+                      title={previewDoc.name}
+                      className="ca-doc-preview-iframe"
+                      tabIndex={0}
+                      scrolling="yes"
+                    />
+                  </object>
+                </div>
               ) : (
                 <div style={{ padding: 32, textAlign: "center", background: "#ffffff", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", borderRadius: 8 }}>
                   <div style={{ fontSize: 48, marginBottom: 12 }}>📁</div>

@@ -116,11 +116,13 @@ export interface Submission {
   paperId: string;
   seriesName: string;
   paperName: string;
+  paperType?: string;
   userId: string;
   userName: string;
   userEmail: string;
   submittedAt?: string;
   status: "pending" | "evaluated" | "published";
+  rawStatus?: string;
   filename: string;
   originalName: string;
   wordCount?: number;
@@ -133,6 +135,16 @@ export interface Submission {
   evaluatedAt?: string;
   evaluatedBy?: string;
   publishedAt?: string;
+  questionReview?: Array<{
+    questionId: string;
+    question?: string;
+    userAnswer?: any;
+    correctAnswer?: any;
+    isCorrect?: boolean;
+    marks?: number;
+    section?: string;
+  }>;
+  answers?: any;
 }
 
 export interface Student {
@@ -1074,9 +1086,15 @@ function EvalModal({ submission, onClose, onSaved }: {
                 <div style={{ fontSize: "0.78rem", color: "#4f46e5", fontWeight: 700, marginTop: 4 }}>{submission.seriesName} — {submission.paperName}</div>
                 <div style={{ fontSize: "0.74rem", color: "#94a3b8", marginTop: 2 }}>Submitted: {fmtTime(submission.submittedAt)}</div>
               </div>
-              <a href={downloadUrl} target="_blank" rel="noreferrer" className="ats-btn ats-btn-primary ats-btn-sm" style={{ textDecoration: "none", flexShrink: 0 }}>
-                <DownloadIcon size={14} style={{ marginRight: 5 }} /> Download Sheet
-              </a>
+              {submission.filename ? (
+                <a href={downloadUrl} target="_blank" rel="noreferrer" className="ats-btn ats-btn-primary ats-btn-sm" style={{ textDecoration: "none", flexShrink: 0 }}>
+                  <DownloadIcon size={14} style={{ marginRight: 5 }} /> Download Sheet
+                </a>
+              ) : (
+                <span className="ats-eval-tag" style={{ fontWeight: 700, color: "#2563eb", background: "#eff6ff" }}>
+                  💻 Online Attempt
+                </span>
+              )}
             </div>
             {(submission.wordCount || submission.pageCount) && (
               <div style={{ marginTop: 12, display: "flex", gap: 12, fontSize: "0.76rem" }}>
@@ -1237,7 +1255,7 @@ function SubmissionsView() {
             <FileTextIcon size={36} color="#94a3b8" />
           </div>
           <h3>No submissions found</h3>
-          <p>Descriptive and essay submissions will appear here once students upload their papers.</p>
+          <p>Candidate test series submissions will appear here once students attempt papers or upload sheets.</p>
         </div>
       ) : (
         <div className="ats-eval-grid">
@@ -1249,6 +1267,9 @@ function SubmissionsView() {
                 <p>{sub.seriesName} — {sub.paperName}</p>
                 <div className="ats-eval-meta">
                   <span className={`ats-eval-status ${sub.status}`}>{sub.status}</span>
+                  <span className="ats-eval-tag" style={{ textTransform: "uppercase", fontWeight: 700, fontSize: "0.7rem", color: "#475569" }}>
+                    {sub.paperType || "mcq"}
+                  </span>
                   {sub.score != null && <span style={{ fontWeight: 700, color: "#16a34a" }}>🎯 {sub.score} / {sub.maxMarks}</span>}
                   <span>Submitted: {fmtTime(sub.submittedAt)}</span>
                 </div>

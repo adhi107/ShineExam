@@ -323,7 +323,7 @@ def get_admin_ca_dashboard_stats():
 
 @ca_engine_bp.route("/articles", methods=["GET"])
 def list_articles():
-    """List current affairs with advanced compound filters."""
+    """List current affairs with advanced compound filters and role-aware status defaults."""
     db = get_db()
     tenant_id = get_request_tenant_id()
     and_conditions = []
@@ -347,10 +347,18 @@ def list_articles():
     is_important = request.args.get("isImportant")
     search = request.args.get("search", "").strip()
 
+    # Role-aware status check: non-admin students should ONLY see published articles
+    user_role = (request.headers.get("X-User-Role") or "").lower().strip()
+    is_admin = user_role in ("admin", "super_admin") or "/admin/" in request.path
+
     if category and category.lower() != "all":
-        and_conditions.append({"category": category})
+        and_conditions.append({"category": {"$regex": f"^{re.escape(category)}$", "$options": "i"}})
     if status:
         and_conditions.append({"status": status})
+    elif not is_admin:
+        # Default to published for candidates
+        and_conditions.append({"status": "published"})
+
     if exam:
         and_conditions.append({"applicableExams": exam})
     if stage:
@@ -358,9 +366,21 @@ def list_articles():
     if priority:
         and_conditions.append({"priority": priority})
     if date:
-        and_conditions.append({"publishDate": date})
+        clean_date = date.strip().split("T")[0]
+        and_conditions.append({
+            "$or": [
+                {"publishDate": clean_date},
+                {"publishDate": {"$regex": f"^{re.escape(clean_date)}"}},
+            ]
+        })
     if month:
-        and_conditions.append({"month": month})
+        clean_month = month.strip()
+        and_conditions.append({
+            "$or": [
+                {"month": clean_month},
+                {"publishDate": {"$regex": f"^{re.escape(clean_month)}"}},
+            ]
+        })
     if is_important is not None:
         and_conditions.append({"isHighlyImportant": is_important.lower() in ("true", "1")})
     if search:

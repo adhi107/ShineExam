@@ -9,6 +9,7 @@ interface TestDetailsProps {
   passingPercentage: number;
   onContinue: () => void;
   onBack?: () => void;
+  userName?: string;
 }
 
 const TestDetails: React.FC<TestDetailsProps> = ({
@@ -18,12 +19,27 @@ const TestDetails: React.FC<TestDetailsProps> = ({
   passingPercentage,
   onContinue,
   onBack,
+  userName,
 }) => {
   return (
     <div className="test-details-root">
       {/* ===== TOP BAR ===== */}
       <header className="test-header">
         <div className="test-header-left">
+          {onBack && (
+            <button
+              type="button"
+              className="test-header-back-btn"
+              onClick={onBack}
+              title="Back to Dashboard"
+              aria-label="Back to Dashboard"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+              </svg>
+            </button>
+          )}
           <ShineLogo inverse />
           <span className="test-portal-title">System Check</span>
         </div>
@@ -33,7 +49,7 @@ const TestDetails: React.FC<TestDetailsProps> = ({
             day: "2-digit",
             year: "numeric",
           })}{" "}
-          | Logged in as : Sample
+          {userName ? `| Logged in as : ${userName}` : "| Candidate Portal"}
         </div>
       </header>
 
@@ -72,8 +88,13 @@ const TestDetails: React.FC<TestDetailsProps> = ({
             </div>
           </div>
           <div className="details-actions">
+            {onBack && (
+              <button type="button" className="details-back-btn" onClick={onBack}>
+                ← Back to Dashboard
+              </button>
+            )}
             <button className="primary-btn large" onClick={onContinue}>
-              Continue to Instructions
+              Continue to Instructions →
             </button>
           </div>
         </div>

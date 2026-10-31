@@ -57,6 +57,12 @@ interface TestInterfaceProps {
   questions: Question[];
   timerMode?: "overall" | "sectional";
   sectionConfig?: Array<{ name: string; duration: number; questionCount: number; marks: number }>;
+  negativeMarkingScheme?: string;
+  negativeMarks?: number;
+  isSeries?: boolean;
+  seriesId?: string;
+  paperId?: string;
+  customInstructions?: string;
   onExit: () => void;
 }
 
@@ -69,6 +75,12 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
   questions,
   timerMode = "overall",
   sectionConfig = [],
+  negativeMarkingScheme = "quarter",
+  negativeMarks = 0.25,
+  isSeries = false,
+  seriesId,
+  paperId,
+  customInstructions,
   onExit,
 }) => {
   // ── Unique storage key per exam + user ──────────────────────────────────
@@ -189,7 +201,8 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
           if (res.questionTimes && typeof res.questionTimes === 'object') {
             setQuestionTimes(res.questionTimes);
           }
-          const restoredIdx = Math.min(Math.max(0, res.currentQuestionIndex || 0), questions.length - 1);
+          const maxIdx = Math.max(0, (questions?.length || 1) - 1);
+          const restoredIdx = Math.min(Math.max(0, res.currentQuestionIndex || 0), maxIdx);
           setCurrentQuestionIndex(restoredIdx);
           if (res.currentSection) {
             setCurrentSection(res.currentSection);
@@ -243,6 +256,9 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
         apiPost("/answerer/attempts/save", {
           attemptId: attemptId || "current",
           examId,
+          paperId: paperId || examId,
+          seriesId,
+          isSeries,
           userId,
           answers,
           timeSpentSec: duration * 60 - timeLeft,
@@ -374,6 +390,9 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
       const res = await apiPost<any>("/answerer/attempts/submit", {
         userId,
         examId,
+        paperId: paperId || examId,
+        seriesId,
+        isSeries,
         answers,
         timeSpentSec: duration * 60 - timeLeft,
         questionTimes,
@@ -421,7 +440,12 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
     }
   };
 
-  const activeQuestion = questions[currentQuestionIndex];
+  const safeQuestionIndex = (questions && questions.length > 0)
+    ? Math.min(Math.max(0, currentQuestionIndex), questions.length - 1)
+    : 0;
+  const activeQuestion = (questions && questions.length > 0)
+    ? (questions[safeQuestionIndex] || questions[0])
+    : null;
   const activeAnswer = answers.find((a) => a.questionId === activeQuestion?.id);
 
   const isLastSection = isSectional
@@ -512,7 +536,9 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
           duration={duration}
           questionCount={questions.length}
           passingPercentage={passingPercentage}
+          userName={userId}
           onContinue={() => setTestStep("instructions")}
+          onBack={onExit}
         />
       )}
 
@@ -523,9 +549,63 @@ const TestInterface: React.FC<TestInterfaceProps> = ({
           duration={duration}
           timerMode={timerMode}
           sectionConfig={sectionConfig}
+          questions={questions}
+          negativeMarkingScheme={negativeMarkingScheme}
+          negativeMarks={negativeMarks}
+          passingPercentage={passingPercentage}
+          customInstructions={customInstructions}
+          isSeries={isSeries}
           onStart={() => setTestStep("exam")}
           onBack={() => setTestStep("details")}
         />
+      )}
+
+      {testStep === "exam" && (!activeQuestion || !questions || questions.length === 0) && (
+        <div style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#f0f4f9',
+          padding: '24px'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '16px',
+            padding: '36px 32px',
+            maxWidth: '540px',
+            width: '100%',
+            textAlign: 'center',
+            boxShadow: '0 10px 30px rgba(15, 39, 76, 0.08)',
+            border: '1px solid #cbd5e1'
+          }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '16px' }}>📋</div>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a', marginBottom: '10px' }}>
+              No Questions Configured
+            </h2>
+            <p style={{ color: '#64748b', fontSize: '0.95rem', lineHeight: 1.5, marginBottom: '28px' }}>
+              This assessment ({testName}) does not have any active questions available at this time. Please contact your administrator.
+            </p>
+            <button
+              type="button"
+              className="primary-btn large"
+              onClick={onExit}
+              style={{
+                width: '100%',
+                height: '48px',
+                borderRadius: '10px',
+                background: '#2b78c4',
+                color: '#ffffff',
+                border: 'none',
+                fontWeight: 700,
+                fontSize: '1rem',
+                cursor: 'pointer'
+              }}
+            >
+              ← Return to Dashboard
+            </button>
+          </div>
+        </div>
       )}
 
       {testStep === "exam" && activeQuestion && (
